@@ -1,0 +1,1581 @@
+#!/usr/bin/env python3
+"""
+Olin Credit Scoring — Analyst Review Interface
+
+Run:
+    cd /Users/pc/Downloads/olin_scoring_mvp_1
+    python3 -m olin.server
+    python3 -m olin.server --db path/to/olin_scoring.db --port 8080 --no-seed
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import hmac
+import json
+import sqlite3
+import threading
+import time
+import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except ImportError:
+    pass
+
+from .config import (
+    analyst_token, default_db_path, is_production, runtime_mode, webhook_secret,
+)
+
+# Set by main() before server starts
+DB_PATH: str = ""
+
+# ---------------------------------------------------------------------------
+# Embedded HTML page
+# ---------------------------------------------------------------------------
+HTML_PAGE = r"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Olin · Analyst Review</title>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surf:     #161b22;
+  --surf2:    #21262d;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --green:    #238636;
+  --green-hi: #3fb950;
+  --amber:    #9a6700;
+  --amber-hi: #e3b341;
+  --red:      #a12424;
+  --red-hi:   #f85149;
+  --blue:     #1f6feb;
+  --radius:   8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+
+/* ── Top bar ──────────────────────────────────────────────────────── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(13,17,23,.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 24px;
+  display:flex;align-items:center;gap:16px;height:56px;
+}
+.logo{font-size:16px;font-weight:600;letter-spacing:-.3px;color:var(--text)}
+.logo span{color:var(--muted);font-weight:400}
+.stats-chips{display:flex;gap:8px;margin-left:auto}
+.chip{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surf2);cursor:default}
+.chip.active{border-color:var(--blue);color:#58a6ff;background:rgba(31,111,235,.12)}
+
+/* ── Filter tabs ──────────────────────────────────────────────────── */
+.filter-bar{
+  display:flex;gap:4px;padding:16px 24px 0;
+  border-bottom:1px solid var(--border);
+  background:var(--bg);
+}
+.tab{
+  padding:8px 14px;border:none;background:none;
+  color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color .15s,border-color .15s;
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--blue)}
+.tab .count{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;
+  border-radius:9px;font-size:11px;margin-left:5px;
+  background:var(--surf2);
+}
+
+/* ── Main content ─────────────────────────────────────────────────── */
+main{max-width:1100px;margin:0 auto;padding:24px}
+.empty{color:var(--muted);text-align:center;padding:60px;font-size:15px}
+
+/* ── Card ─────────────────────────────────────────────────────────── */
+.card{
+  background:var(--surf);border:1px solid var(--border);
+  border-radius:var(--radius);margin-bottom:20px;
+  transition:border-color .15s;
+  overflow:hidden;
+}
+.card:hover{border-color:#484f58}
+.card.decided-APPROVE{border-left:3px solid var(--green)}
+.card.decided-DECLINE{border-left:3px solid var(--red)}
+.card.decided-MANUAL_REVIEW{border-left:3px solid var(--amber-hi)}
+
+/* card header */
+.card-header{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  gap:12px;padding:16px 20px 12px;
+  border-bottom:1px solid var(--border);
+}
+.merchant-name{font-size:16px;font-weight:600;line-height:1.3}
+.merchant-meta{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:4px;
+  font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;
+}
+.badge-type{background:var(--surf2);color:var(--muted);border:1px solid var(--border)}
+.badge-ae{background:rgba(35,134,54,.15);color:var(--green-hi);border:1px solid rgba(35,134,54,.4)}
+.badge-mr{background:rgba(154,103,0,.15);color:var(--amber-hi);border:1px solid rgba(154,103,0,.4)}
+.badge-dc{background:rgba(161,36,36,.15);color:var(--red-hi);border:1px solid rgba(161,36,36,.4)}
+.badge-analyst-ap{background:rgba(35,134,54,.25);color:var(--green-hi);border:1px solid var(--green);font-size:12px;padding:3px 10px}
+.badge-analyst-dc{background:rgba(161,36,36,.25);color:var(--red-hi);border:1px solid var(--red);font-size:12px;padding:3px 10px}
+.badge-analyst-mr{background:rgba(154,103,0,.2);color:var(--amber-hi);border:1px solid var(--amber-hi);font-size:12px;padding:3px 10px}
+
+.app-id{font-family:monospace;font-size:12px;color:var(--muted)}
+.colonia{font-size:12px;color:var(--muted)}
+.scored-at{font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* card body: score + signals side by side */
+.card-body{display:grid;grid-template-columns:260px 1fr;gap:0}
+@media(max-width:720px){.card-body{grid-template-columns:1fr}}
+
+/* score panel */
+.score-panel{
+  padding:20px;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:14px;
+}
+.score-big{font-size:56px;font-weight:700;line-height:1;letter-spacing:-2px;font-variant-numeric:tabular-nums}
+.score-big.green{color:var(--green-hi)}
+.score-big.amber{color:var(--amber-hi)}
+.score-big.red{color:var(--red-hi)}
+
+.ci-text{font-size:12px;color:var(--muted)}
+.ci-text strong{color:var(--text);font-variant-numeric:tabular-nums}
+
+/* score track */
+.track-wrap{display:flex;flex-direction:column;gap:4px}
+.track{
+  position:relative;height:12px;border-radius:6px;overflow:visible;
+  background:linear-gradient(to right,
+    #5c1212 0%, #7f1d1d 49.9%,
+    #78350f 50%, #a16207 74.9%,
+    #14532d 75%, #15803d 100%
+  );
+}
+.ci-band{
+  position:absolute;top:0;bottom:0;
+  background:rgba(255,255,255,.22);
+  border-left:2px solid rgba(255,255,255,.55);
+  border-right:2px solid rgba(255,255,255,.55);
+  border-radius:4px;
+}
+.score-needle{
+  position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;
+  background:#fff;border-radius:3px;
+  box-shadow:0 0 6px rgba(255,255,255,.7);
+}
+.track-labels{display:flex;position:relative;font-size:10px;color:var(--muted);height:14px}
+.track-labels span{position:absolute;transform:translateX(-50%)}
+
+.coverage-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.coverage-bar{
+  flex:1;height:4px;background:var(--surf2);border-radius:2px;overflow:hidden
+}
+.coverage-fill{height:100%;background:#388bfd;border-radius:2px}
+
+.engine-rec{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.engine-rec .label{color:var(--muted)}
+
+.loan-row{font-size:12px;color:var(--muted);line-height:1.8}
+.loan-row strong{color:var(--text);font-variant-numeric:tabular-nums}
+
+/* signals panel */
+.signals-panel{padding:16px 20px}
+.signals-panel h3{font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+
+.signals-table{width:100%;border-collapse:collapse}
+.signals-table tr:not(:last-child) td{border-bottom:1px solid var(--border)}
+.signals-table td{padding:7px 6px;vertical-align:top}
+.sig-name{font-size:12px;font-weight:500;white-space:nowrap;width:140px}
+.sig-name.missing{color:var(--muted)}
+.sig-bar-cell{width:130px}
+.sig-bar-wrap{display:flex;align-items:center;gap:6px}
+.sig-bar{width:80px;height:6px;background:var(--surf2);border-radius:3px;overflow:hidden;flex-shrink:0}
+.sig-bar-fill{height:100%;border-radius:3px}
+.sig-bar-fill.hi{background:var(--green-hi)}
+.sig-bar-fill.mid{background:var(--amber-hi)}
+.sig-bar-fill.lo{background:var(--red-hi)}
+.sig-score{font-size:12px;font-variant-numeric:tabular-nums;font-weight:600;min-width:30px}
+.sig-wt{font-size:11px;color:var(--muted);white-space:nowrap;padding-right:8px}
+.sig-expl{font-size:11px;color:var(--muted);line-height:1.4}
+.sig-tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600;margin-left:4px;background:rgba(31,111,235,.2);color:#58a6ff;border:1px solid rgba(31,111,235,.4)}
+.sig-tag.fallback{background:rgba(154,103,0,.2);color:var(--amber-hi);border-color:var(--amber)}
+.sig-missing{font-size:11px;color:var(--muted);font-style:italic}
+
+/* reasons */
+.reasons{
+  padding:10px 20px;border-top:1px solid var(--border);
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+}
+.reason-item{font-size:12px;color:var(--muted)}
+.reason-item::before{content:'•  ';color:var(--border)}
+.hard-fail{color:var(--red-hi)}
+.hard-fail::before{content:'⚠ ';color:var(--red-hi)}
+
+/* actions */
+.card-footer{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 20px;border-top:1px solid var(--border);
+  background:rgba(255,255,255,.015);
+}
+.action-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 16px;border:1px solid;border-radius:6px;
+  font-size:13px;font-weight:500;cursor:pointer;
+  transition:background .12s,opacity .12s;
+  background:transparent;
+}
+.action-btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-approve{color:var(--green-hi);border-color:var(--green)}
+.btn-approve:hover:not(:disabled){background:rgba(35,134,54,.15)}
+.btn-manual{color:var(--amber-hi);border-color:var(--amber-hi)}
+.btn-manual:hover:not(:disabled){background:rgba(154,103,0,.15)}
+.btn-decline{color:var(--red-hi);border-color:var(--red)}
+.btn-decline:hover:not(:disabled){background:rgba(161,36,36,.15)}
+.btn-disburse{color:#58a6ff;border-color:var(--blue);font-weight:600}
+.btn-disburse:hover:not(:disabled){background:rgba(31,111,235,.15)}
+.btn-disburse.disbursed-ok{color:var(--green-hi);border-color:var(--green);opacity:.6;cursor:default}
+.decision-stamp{margin-left:auto;font-size:12px;color:var(--muted)}
+
+/* ── Portfolio panel ─────────────────────────────────────────────── */
+.portfolio-bar{
+  background:var(--surf);border-bottom:1px solid var(--border);
+  padding:10px 24px;display:flex;gap:24px;align-items:center;flex-wrap:wrap;
+}
+.pf-stat{display:flex;flex-direction:column;align-items:center;gap:1px}
+.pf-label{font-size:10px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.pf-value{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
+.pf-value.warn{color:var(--amber-hi)}
+.pf-value.bad{color:var(--red-hi)}
+.pf-sep{width:1px;height:32px;background:var(--border)}
+.grad-badge{
+  font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;
+  background:rgba(31,111,235,.2);color:#58a6ff;border:1px solid rgba(31,111,235,.4);
+  margin-left:6px;
+}
+.tier-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:54px;padding:3px 9px;border-radius:10px;font-size:12px;font-weight:700;
+  letter-spacing:.2px;
+}
+.tier-badge.t1{background:rgba(35,134,54,.2);color:var(--green-hi);border:1px solid rgba(35,134,54,.5)}
+.tier-badge.t2,.tier-badge.t3,.tier-badge.t4,
+.tier-badge.t5,.tier-badge.t6,.tier-badge.t7,.tier-badge.t8,
+.tier-badge.t9,.tier-badge.t10,.tier-badge.t11,.tier-badge.t12{
+  background:rgba(154,103,0,.18);color:var(--amber-hi);border:1px solid rgba(154,103,0,.45)}
+.tier-badge.t13,.tier-badge.t14{
+  background:rgba(161,36,36,.18);color:var(--red-hi);border:1px solid rgba(161,36,36,.45)}
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:24px;right:24px;
+  display:flex;flex-direction:column;gap:8px;z-index:9999;
+}
+.toast-item{
+  padding:10px 16px;border-radius:6px;font-size:13px;font-weight:500;
+  border:1px solid;animation:slideIn .2s ease;
+  box-shadow:0 4px 12px rgba(0,0,0,.4);
+}
+.toast-ok{background:rgba(35,134,54,.2);color:var(--green-hi);border-color:var(--green)}
+.toast-err{background:rgba(161,36,36,.2);color:var(--red-hi);border-color:var(--red)}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── Repayment section ───────────────────────────────────────────── */
+.repayment-section{
+  padding:12px 20px;border-top:1px solid var(--border);
+  background:rgba(255,255,255,.012);
+}
+.repayment-section h3{
+  font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;
+}
+.rep-grid{display:flex;flex-wrap:wrap;gap:12px 28px}
+.rep-item{display:flex;flex-direction:column;gap:2px}
+.rep-label{font-size:10px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.rep-value{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.rep-value.green{color:var(--green-hi)}
+.rep-value.amber{color:var(--amber-hi)}
+.rep-value.red{color:var(--red-hi)}
+.rep-note{font-size:11px;color:var(--amber-hi);margin-top:6px}
+.rep-buro-ok{color:var(--green-hi)}
+.rep-buro-warn{color:var(--amber-hi)}
+.rep-buro-bad{color:var(--red-hi)}
+
+/* ── Fraud section ───────────────────────────────────────────────── */
+.fraud-section{
+  padding:12px 20px;border-top:1px solid var(--border);
+  background:rgba(255,255,255,.008);
+}
+.fraud-section h3{
+  font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;
+}
+.fraud-grid{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:flex-start}
+.fraud-score-wrap{display:flex;align-items:center;gap:8px}
+.fraud-score{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.fraud-score.clean{color:var(--green-hi)}
+.fraud-score.warn{color:var(--amber-hi)}
+.fraud-score.bad{color:var(--red-hi)}
+.fraud-checks{display:flex;gap:5px;flex-wrap:wrap}
+.fraud-check{
+  font-size:10px;padding:2px 7px;border-radius:3px;font-weight:600;
+  letter-spacing:.3px;text-transform:uppercase;
+}
+.fraud-check.ok{background:rgba(35,134,54,.15);color:var(--green-hi);border:1px solid rgba(35,134,54,.3)}
+.fraud-check.fail{background:rgba(161,36,36,.15);color:var(--red-hi);border:1px solid rgba(161,36,36,.3)}
+.fraud-flag{font-size:11px;color:var(--amber-hi);margin-top:4px}
+.fraud-block{font-size:11px;color:var(--red-hi);font-weight:500;margin-top:4px}
+
+/* ── Counter-offer banner ────────────────────────────────────────── */
+.counter-offer-banner{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:12px 20px;
+  background:rgba(154,103,0,.12);
+  border-left:3px solid var(--amber-hi);
+  border-top:1px solid rgba(154,103,0,.3);
+}
+.co-icon{font-size:18px;margin-top:1px;flex-shrink:0}
+.co-body{flex:1}
+.co-title{font-size:12px;font-weight:700;color:var(--amber-hi);letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px}
+.co-text{font-size:13px;color:var(--text)}
+.co-amounts{display:flex;gap:20px;margin-top:8px}
+.co-amount{display:flex;flex-direction:column;gap:1px}
+.co-amount-label{font-size:10px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.co-amount-value{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.co-amount-value.declined{color:var(--red-hi);text-decoration:line-through;opacity:.7}
+.co-amount-value.offered{color:var(--amber-hi)}
+
+/* ── Sensitivity hints ───────────────────────────────────────────── */
+.sensitivity-hints{
+  padding:8px 20px 10px;border-top:1px solid var(--border);
+  background:rgba(255,255,255,.006);
+}
+.sensitivity-hints h3{
+  font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:6px;
+}
+.sens-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:10px;font-size:11px;font-weight:500;
+  background:rgba(88,166,255,.1);color:#58a6ff;
+  border:1px solid rgba(88,166,255,.25);margin:2px 4px 2px 0;
+}
+
+/* ── Analyst note section ────────────────────────────────────────── */
+.analyst-note-section{
+  padding:12px 20px;border-top:1px solid var(--border);
+  background:rgba(255,255,255,.008);
+}
+.analyst-note-section h3{
+  font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:8px;
+}
+.analyst-note-row{display:flex;gap:10px;align-items:flex-end}
+.analyst-note-textarea{
+  flex:1;min-height:56px;max-height:120px;
+  background:var(--surf2);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-size:13px;font-family:inherit;
+  padding:8px 10px;resize:vertical;
+  transition:border-color .15s;
+}
+.analyst-note-textarea:focus{outline:none;border-color:#388bfd}
+.btn-save-note{
+  padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;white-space:nowrap;
+  background:rgba(31,111,235,.15);color:#58a6ff;
+  border:1px solid rgba(31,111,235,.4);
+  transition:background .12s;flex-shrink:0;
+}
+.btn-save-note:hover{background:rgba(31,111,235,.25)}
+
+/* ── Tier dist widget ────────────────────────────────────────────── */
+.tier-dist-widget{
+  display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;
+}
+.tier-dist-label{font-size:10px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+.tier-bars{display:flex;gap:2px;align-items:flex-end;height:30px}
+.tier-bar-col{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  cursor:default;position:relative;
+}
+.tier-bar-fill{
+  width:14px;border-radius:2px 2px 0 0;min-height:3px;
+  transition:opacity .15s;
+}
+.tier-bar-col:hover .tier-bar-fill{opacity:.7}
+.tier-bar-col:hover .tier-tooltip{display:block}
+.tier-bar-lbl{font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tier-tooltip{
+  display:none;position:absolute;bottom:calc(100% + 4px);left:50%;
+  transform:translateX(-50%);
+  background:var(--surf2);border:1px solid var(--border);
+  border-radius:4px;padding:4px 8px;font-size:10px;
+  white-space:nowrap;z-index:50;color:var(--text);
+}
+
+/* ── CSV export button ───────────────────────────────────────────── */
+.btn-export{
+  padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;
+  cursor:pointer;text-decoration:none;
+  background:rgba(255,255,255,.06);color:var(--muted);
+  border:1px solid var(--border);
+  transition:background .12s,color .12s;white-space:nowrap;flex-shrink:0;
+}
+.btn-export:hover{background:rgba(255,255,255,.12);color:var(--text)}
+.action-btn:focus-visible,.tab:focus-visible,.btn-export:focus-visible,.btn-save-note:focus-visible{
+  outline:2px solid #58a6ff;outline-offset:2px;
+}
+.mode-banner{
+  display:none;padding:8px 24px;border-bottom:1px solid var(--border);
+  font-size:12px;font-weight:600;letter-spacing:.2px;
+}
+.mode-banner.demo{display:block;background:rgba(154,103,0,.15);color:var(--amber-hi)}
+.mode-banner.production{display:block;background:rgba(35,134,54,.12);color:var(--green-hi)}
+.provenance{
+  padding:10px 20px;border-top:1px solid var(--border);display:flex;
+  flex-wrap:wrap;gap:8px;align-items:center;background:rgba(255,255,255,.012);
+}
+.source-pill{font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);color:var(--muted)}
+.source-pill.verified{color:var(--green-hi);border-color:rgba(35,134,54,.55);background:rgba(35,134,54,.1)}
+.source-pill.synthetic{color:var(--amber-hi);border-color:rgba(154,103,0,.55);background:rgba(154,103,0,.1)}
+.decision-rationale{font-size:11px;color:var(--muted);margin-left:auto;max-width:52ch;text-align:right}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="logo">Olin <span>· Analyst Review</span></span>
+  <div class="stats-chips" id="stats-chips"></div>
+</header>
+<div class="mode-banner" id="mode-banner" role="status"></div>
+
+<div class="portfolio-bar" id="portfolio-bar"></div>
+
+<nav class="filter-bar" id="filter-bar"></nav>
+
+<main>
+  <div id="app-grid"><p class="empty">Loading…</p></div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+const SIG_LABELS = {
+  fmcg_purchase_history: 'FMCG Purchases',
+  bank_cash_flow:        'Bank Cash Flow',
+  business_tenure:       'Business Tenure',
+  pos_transaction_volume:'POS Volume',
+  google_maps_rating:    'Google Maps',
+  imss_payroll:          'IMSS Payroll',
+};
+
+const ENG_LABEL = {
+  AUTO_APPROVE:  {text:'AUTO APPROVE',  cls:'ae'},
+  COMMITTEE:     {text:'COMMITTEE',     cls:'mr'},
+  MANUAL_REVIEW: {text:'MANUAL REVIEW', cls:'mr'},
+  DECLINE:       {text:'DECLINE',       cls:'dc'},
+};
+
+const ANALYST_LABEL = {
+  APPROVE:       {text:'✓ Approved',          cls:'analyst-ap'},
+  MANUAL_REVIEW: {text:'↩ Routed to Review',  cls:'analyst-mr'},
+  DECLINE:       {text:'✗ Declined',          cls:'analyst-dc'},
+};
+
+let allApps = [];
+let activeFilter = 'all';
+
+async function apiFetch(url, options={}) {
+  const headers = new Headers(options.headers || {});
+  const token = sessionStorage.getItem('olin_analyst_token') || '';
+  if (token) headers.set('X-Olin-Analyst-Token', token);
+  let response = await fetch(url, {...options, headers});
+  if (response.status === 401) {
+    const supplied = window.prompt('Analyst access token');
+    if (supplied) {
+      sessionStorage.setItem('olin_analyst_token', supplied.trim());
+      headers.set('X-Olin-Analyst-Token', supplied.trim());
+      response = await fetch(url, {...options, headers});
+    }
+  }
+  return response;
+}
+
+// ── Data loading ──────────────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await apiFetch('/api/apps');
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    allApps = await r.json();
+    const mode = allApps[0]?.environment || 'demo';
+    const banner = document.getElementById('mode-banner');
+    banner.className = `mode-banner ${mode === 'production' ? 'production' : 'demo'}`;
+    banner.textContent = mode === 'production'
+      ? 'PRODUCTION · verified inputs required · engine declines are locked'
+      : 'DEMO MODE · synthetic inputs may be present · never use for real disbursement';
+    renderFilterBar();
+    renderGrid();
+    renderPortfolioBar();
+  } catch(e) {
+    document.getElementById('app-grid').innerHTML =
+      `<p class="empty">Error loading data: ${e.message}</p>`;
+  }
+}
+
+// ── Filter bar ────────────────────────────────────────────────────────
+function renderFilterBar() {
+  const counts = {
+    all:            allApps.length,
+    pending:        allApps.filter(a => !a.analyst_override).length,
+    APPROVE:        allApps.filter(a => a.analyst_override === 'APPROVE').length,
+    MANUAL_REVIEW:  allApps.filter(a => a.analyst_override === 'MANUAL_REVIEW').length,
+    DECLINE:        allApps.filter(a => a.analyst_override === 'DECLINE').length,
+  };
+
+  // stats chips in topbar
+  document.getElementById('stats-chips').innerHTML = `
+    <span class="chip">${counts.all} total</span>
+    <span class="chip">${counts.pending} pending</span>
+  `;
+
+  const tabs = [
+    ['all',           'All'],
+    ['pending',       'Pending'],
+    ['APPROVE',       'Approved'],
+    ['MANUAL_REVIEW', 'Routed'],
+    ['DECLINE',       'Declined'],
+  ];
+  document.getElementById('filter-bar').innerHTML = tabs.map(([key, label]) =>
+    `<button class="tab${activeFilter===key?' active':''}" onclick="setFilter('${key}')">
+      ${label}<span class="count">${counts[key]}</span>
+    </button>`
+  ).join('');
+}
+
+function setFilter(f) {
+  activeFilter = f;
+  renderFilterBar();
+  renderGrid();
+}
+
+// ── Grid ──────────────────────────────────────────────────────────────
+function renderGrid() {
+  let apps = allApps;
+  if (activeFilter === 'pending')       apps = apps.filter(a => !a.analyst_override);
+  else if (activeFilter !== 'all')      apps = apps.filter(a => a.analyst_override === activeFilter);
+  const grid = document.getElementById('app-grid');
+  grid.innerHTML = apps.length
+    ? apps.map(cardHtml).join('')
+    : '<p class="empty">No applications in this view.</p>';
+}
+
+// ── Card rendering ────────────────────────────────────────────────────
+function cardHtml(app) {
+  const decided = app.analyst_override;
+  const scoreColor = app.score >= 75 ? 'green' : app.score >= 50 ? 'amber' : 'red';
+  const eng = ENG_LABEL[app.decision] || {text: app.decision, cls:'mr'};
+  const dt = new Date(app.scored_at + (app.scored_at.includes('Z')?'':'Z'));
+  const dateStr = isNaN(dt) ? app.scored_at : dt.toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'});
+  const analystApproved = app.analyst_override === 'APPROVE';
+  const declined = app.decision === 'DECLINE' || app.analyst_override === 'DECLINE';
+  const amountLabel = analystApproved ? 'Aprobado' : (declined ? 'No aprobado' : 'Monto evaluado');
+  const amountValue = declined ? 0 : app.approved_mxn;
+  const costLabel = analystApproved ? 'Costo fijo' : 'Costo estimado';
+  const costValue = declined ? 0 : app.pricing_fixed_cost_mxn;
+
+  return `
+<article class="card${decided?' decided-'+decided:''}" data-app-id="${app.application_id}">
+
+  <div class="card-header">
+    <div>
+      <div class="merchant-name">${esc(app.merchant_name)}</div>
+      <div class="merchant-meta">
+        <span class="badge badge-type">${esc(app.business_type)}</span>
+        ${app.colonia ? `<span class="colonia">${esc(app.colonia)}</span>` : ''}
+        <span class="app-id">app ${app.application_id}</span>
+        ${app.tier > 0 ? `<span class="tier-badge t${app.tier}" title="Credit tier from Círculo×DSCR×Score matrix">Tier ${app.tier}</span>` : ''}
+        ${app.buro_score != null ? `<span class="badge badge-type" title="Círculo de Crédito score">Círculo ${app.buro_score}</span>` : ''}
+        ${app.graduation_tier > 0 ? `<span class="grad-badge">Grad ${app.graduation_tier}</span>` : ''}
+        ${app.is_demo ? `<span class="source-pill synthetic">DEMO DATA</span>` : `<span class="source-pill verified">PRODUCTION</span>`}
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+      <span class="scored-at">${dateStr}</span>
+      ${decided ? `<span class="badge badge-${ANALYST_LABEL[decided].cls}">${ANALYST_LABEL[decided].text}</span>` : ''}
+    </div>
+  </div>
+
+  <div class="card-body">
+
+    <!-- LEFT: Score panel -->
+    <div class="score-panel">
+      <div>
+        <div class="score-big ${scoreColor}">${app.score.toFixed(1)}</div>
+        <div class="ci-text" style="margin-top:4px">
+          CI <strong>[${app.ci_low.toFixed(1)} – ${app.ci_high.toFixed(1)}]</strong>
+        </div>
+      </div>
+
+      <div class="track-wrap">
+        <div class="track">
+          <div class="ci-band" style="left:${app.ci_low}%;width:${Math.max(app.ci_high-app.ci_low,1)}%"></div>
+          <div class="score-needle" style="left:${app.score}%"></div>
+        </div>
+        <div class="track-labels">
+          <span style="left:0%">0</span>
+          <span style="left:50%">50</span>
+          <span style="left:75%">75</span>
+          <span style="left:100%">100</span>
+        </div>
+      </div>
+
+      <div class="coverage-row">
+        <span>Coverage</span>
+        <div class="coverage-bar"><div class="coverage-fill" style="width:${(app.data_coverage*100).toFixed(0)}%"></div></div>
+        <span>${(app.data_coverage*100).toFixed(0)}%</span>
+      </div>
+
+      <div class="engine-rec">
+        <span class="label">Engine:</span>
+        <span class="badge badge-${eng.cls}">${eng.text}</span>
+      </div>
+
+      <div class="loan-row">
+        Solicitado <strong>MXN ${fmt(app.requested_mxn)}</strong><br>
+        ${amountLabel}&nbsp;&nbsp; <strong>MXN ${fmt(amountValue)}</strong><br>
+        ${costLabel}&nbsp; <strong>MXN ${fmt(costValue)}</strong>
+        <span style="color:var(--muted)"> (60 días)</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: Signals panel -->
+    <div class="signals-panel">
+      <h3>Señales</h3>
+      <table class="signals-table">
+        <tbody>
+          ${app.signals.map(sigRow).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  ${counterOfferHtml(app)}
+
+  ${(app.decision_reasons.length || app.hard_filter_failures.length) ? `
+  <div class="reasons">
+    ${app.hard_filter_failures.map(r =>
+      `<span class="reason-item hard-fail">${esc(r)}</span>`).join('')}
+    ${app.decision_reasons.map(r =>
+      `<span class="reason-item">${esc(r)}</span>`).join('')}
+  </div>` : ''}
+
+  ${provenanceHtml(app)}
+
+  ${sensitivityHintsHtml(app)}
+
+  ${fraudHtml(app.fraud_assessment)}
+
+  ${repaymentHtml(app.repayment)}
+
+  ${collectionCalendarHtml(app)}
+
+  ${analystNoteHtml(app)}
+
+  <div class="card-footer">
+    <button class="action-btn btn-approve" onclick="decide('${app.application_id}','APPROVE')"
+      ${(decided || app.decision === 'DECLINE')?'disabled':''}
+      title="${app.decision === 'DECLINE' ? 'Pilot policy: engine declines cannot be overridden' : 'Approve application'}">✓ Approve</button>
+    <button class="action-btn btn-manual"  onclick="decide('${app.application_id}','MANUAL_REVIEW')"
+      ${decided?'disabled':''}>↩ Route to Review</button>
+    <button class="action-btn btn-decline" onclick="decide('${app.application_id}','DECLINE')"
+      ${decided?'disabled':''}>✗ Decline</button>
+    ${app.analyst_override === 'APPROVE'
+      ? app.disbursed
+        ? `<button class="action-btn btn-disburse disbursed-ok" disabled>✓ Disbursed</button>`
+        : `<button class="action-btn btn-disburse" onclick="disburse('${app.application_id}',${app.approved_mxn})">💸 Send MXN</button>`
+      : ''}
+    ${decided
+      ? `<span class="decision-stamp">Analyst decision recorded</span>`
+      : `<span class="decision-stamp" style="color:var(--muted)">Awaiting analyst decision</span>`}
+  </div>
+
+</article>`;
+}
+
+function sigRow(s) {
+  const label = SIG_LABELS[s.name] || s.name;
+  if (!s.available) {
+    return `<tr>
+      <td class="sig-name missing">${esc(label)}</td>
+      <td colspan="3"><span class="sig-missing">${esc(s.explanation)}</span></td>
+    </tr>`;
+  }
+  const score = s.raw_score;
+  const barCls = score >= 70 ? 'hi' : score >= 40 ? 'mid' : 'lo';
+  const tag = s.fallback_used
+    ? `<span class="sig-tag fallback">${esc(s.fallback_used)}</span>`
+    : s.name === 'bank_cash_flow'
+      ? '<span class="sig-tag">Syncfy</span>'
+      : s.name === 'google_maps_rating'
+        ? '<span class="sig-tag">Places</span>'
+        : '';
+  return `<tr>
+    <td class="sig-name">${esc(label)}${tag}</td>
+    <td class="sig-bar-cell">
+      <div class="sig-bar-wrap">
+        <div class="sig-bar"><div class="sig-bar-fill ${barCls}" style="width:${score}%"></div></div>
+        <span class="sig-score">${score.toFixed(1)}</span>
+      </div>
+    </td>
+    <td class="sig-wt">w=${s.effective_weight.toFixed(2)}</td>
+    <td class="sig-expl">${esc(s.explanation)}</td>
+  </tr>`;
+}
+
+function provenanceHtml(app) {
+  const src = app.data_sources || {};
+  const pill = (label, source, verified) => {
+    const synthetic = String(source || '').startsWith('mock');
+    const cls = verified ? 'verified' : (synthetic ? 'synthetic' : '');
+    const state = verified ? 'verified' : (synthetic ? 'synthetic' : 'unverified');
+    return `<span class="source-pill ${cls}">${esc(label)}: ${esc(source || 'missing')} · ${state}</span>`;
+  };
+  const rationale = app.analyst_reason
+    ? `<span class="decision-rationale">Analyst rationale: ${esc(app.analyst_reason)}</span>` : '';
+  return `<div class="provenance">
+    ${pill('Bank', src.bank, src.bank_verified)}
+    ${pill('FMCG', src.fmcg, src.fmcg_verified)}
+    <span class="source-pill">Outcome: ${esc(app.outcome_status || 'not_disbursed')}</span>
+    ${rationale}
+  </div>`;
+}
+
+// ── Counter-offer banner ──────────────────────────────────────────────
+function counterOfferHtml(app) {
+  const reasons = app.decision_reasons || [];
+  const coNote = reasons.find(r => r.startsWith('Requested MXN'));
+  if (!coNote) return '';
+  return `
+  <div class="counter-offer-banner">
+    <div class="co-icon">⚡</div>
+    <div class="co-body">
+      <div class="co-title">Counter-offer — Loan amount adjusted</div>
+      <div class="co-text">${esc(coNote)}</div>
+      <div class="co-amounts">
+        <div class="co-amount">
+          <span class="co-amount-label">Solicitado</span>
+          <span class="co-amount-value declined">MXN ${fmt(app.requested_mxn)}</span>
+        </div>
+        <div class="co-amount">
+          <span class="co-amount-label">Contraoferta</span>
+          <span class="co-amount-value offered">MXN ${fmt(app.approved_mxn)}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Sensitivity hints ─────────────────────────────────────────────────
+function sensitivityHintsHtml(app) {
+  const sens = app.tier_sensitivity || {};
+  const path = sens.path || '';
+  if (!path || path === 'Optimal — no upgrade path needed') return '';
+  const chips = path.split(' · ').map(p =>
+    `<span class="sens-chip">↑ ${esc(p)}</span>`
+  ).join('');
+  return `
+  <div class="sensitivity-hints">
+    <h3>Upgrade path</h3>
+    <div>${chips}</div>
+  </div>`;
+}
+
+// ── Analyst note ──────────────────────────────────────────────────────
+function analystNoteHtml(app) {
+  const existing = app.analyst_note || '';
+  return `
+  <div class="analyst-note-section">
+    <h3>Analyst note</h3>
+    <div class="analyst-note-row">
+      <textarea class="analyst-note-textarea" id="note-${app.application_id}"
+        placeholder="Add analysis, rationale, or follow-up...">${esc(existing)}</textarea>
+      <button class="btn-save-note" onclick="saveNote('${app.application_id}')">Save</button>
+    </div>
+  </div>`;
+}
+
+// ── Fraud section ─────────────────────────────────────────────────────
+function fraudHtml(fa) {
+  if (!fa) return '';
+  const score = fa.risk_score ?? 0;
+  const scoreCls = score < 20 ? 'clean' : score < 50 ? 'warn' : 'bad';
+  const checks = fa.checks || {};
+  const CHECK_LABELS = {
+    phone: 'Phone', rfc: 'RFC', curp: 'CURP',
+    address: 'Address', clabe: 'CLABE', ine: 'INE'
+  };
+  const checkBadges = Object.entries(CHECK_LABELS).map(([k, label]) => {
+    const ok = checks[k];
+    return `<span class="fraud-check ${ok?'ok':'fail'}">${label}</span>`;
+  }).join('');
+  const blocks = (fa.hard_blocks||[]).map(b =>
+    `<div class="fraud-block">🔴 ${esc(b)}</div>`).join('');
+  const flags = (fa.flags||[]).map(f =>
+    `<div class="fraud-flag">⚠ ${esc(f)}</div>`).join('');
+
+  return `
+  <div class="fraud-section">
+    <h3>Fraud screening</h3>
+    <div class="fraud-grid">
+      <div class="fraud-score-wrap">
+        <span class="fraud-score ${scoreCls}">${score.toFixed(0)}<span style="font-size:11px;font-weight:400;color:var(--muted)">/100</span></span>
+      </div>
+      <div class="fraud-checks">${checkBadges}</div>
+    </div>
+    ${blocks}${flags}
+  </div>`;
+}
+
+// ── Repayment section ─────────────────────────────────────────────────
+function repaymentHtml(rep) {
+  if (!rep) return '';
+
+  function dscrEl(v) {
+    if (v == null) return '<span class="rep-value" style="color:var(--muted)">—</span>';
+    const cls = v >= 2.5 ? 'green' : v >= 1.5 ? 'amber' : 'red';
+    return `<span class="rep-value ${cls}">${v.toFixed(2)}</span>`;
+  }
+  function burdenEl(v) {
+    if (v == null) return '<span class="rep-value" style="color:var(--muted)">—</span>';
+    const cls = v <= 0.25 ? 'green' : v <= 0.40 ? 'amber' : 'red';
+    return `<span class="rep-value ${cls}">${(v*100).toFixed(1)}%</span>`;
+  }
+  function bufferEl(v) {
+    if (v == null) return '<span class="rep-value" style="color:var(--muted)">—</span>';
+    const cls = v >= 1.0 ? 'green' : 'red';
+    return `<span class="rep-value ${cls}">${v.toFixed(2)}x</span>`;
+  }
+  function buroEl(rep) {
+    if ((rep.notes||[]).some(n => n.includes('Buro')))
+      return '<span class="rep-value rep-buro-warn">NOT CHECKED</span>';
+    if ((rep.hard_declines||[]).some(d => d.includes('Buro')))
+      return '<span class="rep-value rep-buro-bad">DELINQUENT</span>';
+    if ((rep.downgrades||[]).some(d => d.includes('Buro')))
+      return '<span class="rep-value rep-buro-warn">MULTI-LENDING</span>';
+    return '<span class="rep-value rep-buro-ok">OK</span>';
+  }
+
+  const notes = (rep.notes||[]).map(n =>
+    `<div class="rep-note">⚠ ${esc(n)}</div>`).join('');
+
+  return `
+  <div class="repayment-section">
+    <h3>Repayment</h3>
+    <div class="rep-grid">
+      <div class="rep-item">
+        <span class="rep-label">DSCR</span>
+        ${dscrEl(rep.dscr)}
+      </div>
+      <div class="rep-item">
+        <span class="rep-label">Burden</span>
+        ${burdenEl(rep.burden_ratio)}
+      </div>
+      <div class="rep-item">
+        <span class="rep-label">Stress buffer</span>
+        ${bufferEl(rep.stress_buffer_ratio)}
+      </div>
+      <div class="rep-item">
+        <span class="rep-label">Buro</span>
+        ${buroEl(rep)}
+      </div>
+      ${rep.estimated_monthly_net_mxn != null ? `
+      <div class="rep-item">
+        <span class="rep-label">Net / mo</span>
+        <span class="rep-value">MXN ${fmt(rep.estimated_monthly_net_mxn)}</span>
+      </div>` : ''}
+    </div>
+    ${notes}
+  </div>`;
+}
+
+// ── Collection calendar ───────────────────────────────────────────────
+function collectionCalendarHtml(app) {
+  const cal = app.recommended_collection_days;
+  if (!cal) return '';
+  const dow = (cal.best_days_of_week || []);
+  const dom = (cal.best_days_of_month || []);
+  const conf = cal.pattern_confidence ?? null;
+  if (!dow.length && !dom.length) return '';
+  const confCls = conf == null ? '' : conf >= 0.6 ? 'green' : conf >= 0.3 ? 'amber' : 'red';
+  const confStr = conf != null ? `<span class="rep-value ${confCls}" title="Pattern confidence">${(conf*100).toFixed(0)}%</span>` : '';
+  const dowPills = dow.map(d => `<span class="sens-chip">${esc(d)}</span>`).join('');
+  const domPills = dom.map(d => `<span class="sens-chip">day&nbsp;${esc(String(d))}</span>`).join('');
+  return `
+  <div class="repayment-section">
+    <h3>Calendario de cobranza recomendado</h3>
+    <div class="rep-grid">
+      ${dow.length ? `<div class="rep-item" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <span class="rep-label">Días de semana</span>
+        <div>${dowPills}</div>
+      </div>` : ''}
+      ${dom.length ? `<div class="rep-item" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <span class="rep-label">Días del mes</span>
+        <div>${domPills}</div>
+      </div>` : ''}
+      ${confStr ? `<div class="rep-item">
+        <span class="rep-label">Confianza</span>
+        ${confStr}
+      </div>` : ''}
+    </div>
+    <div class="rep-note" style="color:var(--muted);font-size:11px">
+      Basado en patrones de depósito Syncfy (${esc(cal.basis || 'open banking')}) · no modifica la calificación
+    </div>
+  </div>`;
+}
+
+// ── Portfolio bar ─────────────────────────────────────────────────────
+async function renderPortfolioBar() {
+  try {
+    const r = await apiFetch('/api/portfolio');
+    const pf = await r.json();
+    const bar = document.getElementById('portfolio-bar');
+    if (!bar) return;
+    const dr = pf.default_rate ?? 0;
+    const drCls = dr < 0.10 ? '' : dr < 0.15 ? 'warn' : 'bad';
+    bar.innerHTML = `
+      <div class="pf-stat"><span class="pf-label">Activos</span><span class="pf-value">${pf.active_loans ?? 0}</span></div>
+      <div class="pf-sep"></div>
+      <div class="pf-stat"><span class="pf-label">Expuesto</span><span class="pf-value">MXN ${fmt(pf.active_mxn ?? 0)}</span></div>
+      <div class="pf-sep"></div>
+      <div class="pf-stat"><span class="pf-label">Desembolsados</span><span class="pf-value">${pf.total_disbursed ?? 0}</span></div>
+      <div class="pf-sep"></div>
+      <div class="pf-stat"><span class="pf-label">Repagados</span><span class="pf-value">${pf.repaid ?? 0}</span></div>
+      <div class="pf-sep"></div>
+      <div class="pf-stat"><span class="pf-label">Default rate</span><span class="pf-value ${drCls}">${(dr*100).toFixed(1)}%</span></div>
+      <div class="pf-sep"></div>
+      ${tierDistWidget(pf.by_tier || [])}
+      <button class="btn-export" onclick="exportCsv()" title="Export all applications as CSV">↓ CSV</button>
+    `;
+  } catch(e) { /* portfolio bar is non-critical */ }
+}
+
+async function exportCsv() {
+  try {
+    const response = await apiFetch('/api/export');
+    if (!response.ok) throw new Error(response.statusText);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'olin_scoring.csv'; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Export error: ' + e.message, 'err'); }
+}
+
+function tierDistWidget(byTier) {
+  if (!byTier.length) return '';
+  const totals = {};
+  for (const r of byTier) {
+    totals[r.tier] = (totals[r.tier] || 0) + r.count;
+  }
+  const tierNums = Object.keys(totals).map(Number).sort((a,b)=>a-b);
+  if (!tierNums.length) return '';
+  const maxVal = Math.max(...Object.values(totals));
+  const MAX_H = 22;
+  const tierColor = t => t === 1 ? '#3fb950' : t <= 12 ? '#e3b341' : '#f85149';
+  const tierDecision = t => t === 1 ? 'AUTO' : t <= 12 ? 'COMM' : 'DECL';
+  const bars = tierNums.map(t => {
+    const n = totals[t];
+    const h = Math.max(3, Math.round((n / maxVal) * MAX_H));
+    return `<div class="tier-bar-col">
+      <div class="tier-bar-fill" style="height:${h}px;background:${tierColor(t)}"></div>
+      <div class="tier-bar-lbl">${t}</div>
+      <div class="tier-tooltip">Tier ${t} · ${tierDecision(t)} · n=${n}</div>
+    </div>`;
+  }).join('');
+  return `<div class="tier-dist-widget">
+    <span class="tier-dist-label">Tier dist</span>
+    <div class="tier-bars">${bars}</div>
+  </div>`;
+}
+
+// ── Disburse ──────────────────────────────────────────────────────────
+async function disburse(appId, amount) {
+  const btn = document.querySelector(`[data-app-id="${appId}"] .btn-disburse`);
+  if (btn) btn.disabled = true;
+  try {
+    const res = await apiFetch(`/api/apps/${appId}/disburse`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    const sched = data.payment_schedule || {};
+    const p1 = sched.payment_1 || {};
+    const p2 = sched.payment_2 || {};
+    toast(
+      `MXN ${fmt(amount)} enviado · Ref: ${data.collection_reference} · ` +
+      `Pago 1: ${p1.due_date||'?'} (${fmt(p1.amount_mxn||0)}) · Pago 2: ${p2.due_date||'?'}`,
+      'ok'
+    );
+    await load();
+  } catch(e) {
+    toast('Disbursement error: ' + e.message, 'err');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── Decision action ───────────────────────────────────────────────────
+async function decide(appId, decision) {
+  const card = document.querySelector(`[data-app-id="${appId}"]`);
+  const btns = card.querySelectorAll('.action-btn');
+  btns.forEach(b => b.disabled = true);
+
+  try {
+    const promptLabel = decision === 'APPROVE' ? 'approval' :
+      (decision === 'DECLINE' ? 'decline' : 'review routing');
+    const reason = window.prompt(`Reason for ${promptLabel} (required)`);
+    if (!reason || reason.trim().length < 5) {
+      throw new Error('A decision reason of at least 5 characters is required');
+    }
+    const res = await apiFetch(`/api/apps/${appId}/decision`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({decision, reason: reason.trim()}),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || res.statusText);
+    }
+    const label = {APPROVE:'Approved ✓', MANUAL_REVIEW:'Routed to Review ↩', DECLINE:'Declined ✗'}[decision];
+    toast(label, 'ok');
+    await load();
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
+// ── Save analyst note ─────────────────────────────────────────────────
+async function saveNote(appId) {
+  const ta = document.getElementById(`note-${appId}`);
+  if (!ta) return;
+  const note = ta.value.trim();
+  try {
+    const res = await apiFetch(`/api/apps/${appId}/note`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({note}),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
+    toast('Note saved', 'ok');
+  } catch(e) {
+    toast('Error saving note: ' + e.message, 'err');
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = `toast-item toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmt(n) {
+  return Number(n || 0).toLocaleString('es-MX', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+
+load();
+</script>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# HTTP handler
+# ---------------------------------------------------------------------------
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        pass  # silence access log
+
+    def _send(self, body: bytes, ctype: str = "text/html; charset=utf-8", status: int = 200):
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", len(body))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+            "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+        )
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _json(self, data, status: int = 200):
+        body = json.dumps(data, ensure_ascii=False, default=str).encode()
+        self._send(body, "application/json; charset=utf-8", status)
+
+    def _require_analyst_auth(self) -> bool:
+        if not is_production():
+            return True
+        expected = analyst_token()
+        if not expected:
+            self._json({"error": "OLIN_ANALYST_TOKEN is not configured"}, 503)
+            return False
+        supplied = self.headers.get("X-Olin-Analyst-Token", "").strip()
+        if not hmac.compare_digest(supplied, expected):
+            self._json({"error": "Analyst authentication required"}, 401)
+            return False
+        return True
+
+    def _read_json(self, max_bytes: int = 65_536) -> tuple[dict | None, bytes]:
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self._json({"error": "invalid Content-Length"}, 400)
+            return None, b""
+        if length <= 0 or length > max_bytes:
+            self._json({"error": "request body must be between 1 byte and 64 KB"}, 413)
+            return None, b""
+        raw = self.rfile.read(length)
+        try:
+            body = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._json({"error": "invalid JSON"}, 400)
+            return None, raw
+        if not isinstance(body, dict):
+            self._json({"error": "JSON body must be an object"}, 400)
+            return None, raw
+        return body, raw
+
+    def _verify_webhook(self, raw: bytes) -> bool:
+        if not is_production():
+            return True
+        secret = webhook_secret()
+        if not secret:
+            self._json({"error": "OLIN_STP_WEBHOOK_SECRET is not configured"}, 503)
+            return False
+        supplied = self.headers.get("X-Olin-Signature", "").strip()
+        if supplied.startswith("sha256="):
+            supplied = supplied[7:]
+        expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(supplied, expected):
+            self._json({"error": "invalid webhook signature"}, 401)
+            return False
+        return True
+
+    def do_GET(self):
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path == "/":
+            self._send(HTML_PAGE.encode())
+        elif not self._require_analyst_auth():
+            return
+        elif path == "/api/apps":
+            self._json(self._load_apps())
+        elif path == "/api/portfolio":
+            from .store import ScoringLog
+            with ScoringLog(DB_PATH) as _sl:
+                snap = _sl.portfolio_snapshot()
+            self._json(snap)
+        elif path == "/api/export":
+            self._csv_export()
+        else:
+            self._json({"error": "not found"}, 404)
+
+    def _csv_export(self):
+        import csv, io
+        from .store import ScoringLog
+        cols = ["application_id", "merchant_name", "business_type", "colonia",
+                "requested_mxn", "approved_mxn", "score", "ci_low", "ci_high",
+                "data_coverage", "decision", "tier", "buro_score", "scored_at",
+                "analyst_override", "disbursed", "repaid_on_time", "defaulted",
+                "outcome_status", "is_demo", "analyst_reason", "analyst_decision_at",
+                "payment_1_amount_mxn", "payment_2_amount_mxn", "analyst_note"]
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(cols)
+        with ScoringLog(DB_PATH) as sl:
+            sl.conn.row_factory = sqlite3.Row
+            rows = sl.conn.execute(
+                f"SELECT {','.join(cols)} FROM scoring_log ORDER BY scored_at DESC"
+            ).fetchall()
+            sl.conn.row_factory = None
+        for row in rows:
+            w.writerow([row[c] for c in cols])
+        body = buf.getvalue().encode("utf-8-sig")  # BOM for Excel
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", 'attachment; filename="olin_scoring.csv"')
+        self.send_header("Content-Length", len(body))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        parts = urlparse(self.path).path.strip("/").split("/")
+
+        is_webhook = (
+            len(parts) == 3 and parts[0] == "api"
+            and parts[1] == "webhook" and parts[2] == "stp"
+        )
+        if not is_webhook and not self._require_analyst_auth():
+            return
+
+        # POST /api/apps/{id}/disburse
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "disburse":
+            app_id = parts[2]
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT application_id, merchant_name, clabe, approved_mxn, decision, "
+                    "analyst_override, disbursed, is_demo, raw_result "
+                    "FROM scoring_log WHERE application_id=?", (app_id,)
+                ).fetchone()
+            if not row:
+                self._json({"error": "not found"}, 404); return
+            row = dict(row)
+            if row["analyst_override"] != "APPROVE":
+                self._json({"error": "Analyst has not approved this application"}, 400); return
+            if row["decision"] == "DECLINE":
+                self._json({"error": "Engine declines cannot be disbursed during the pilot"}, 400); return
+            if is_production() and row["is_demo"]:
+                self._json({"error": "Demo applications cannot be disbursed in production"}, 400); return
+            if not is_production() and not row["is_demo"]:
+                self._json({"error": "Production applications cannot be disbursed in demo mode"}, 400); return
+            result_json = json.loads(row.get("raw_result") or "{}")
+            approved_mxn = row["approved_mxn"] or 0
+            if approved_mxn <= 0:
+                self._json({"error": "Approved amount must be greater than zero"}, 400); return
+            pricing_cost = result_json.get("pricing_fixed_cost_mxn", 0)
+            clabe = row["clabe"] or ""
+            merchant_name = row["merchant_name"] or ""
+            from .stp import disburse as stp_disburse, DisbursementError
+            from .collection import make_collection_ref, payment_schedule as col_schedule
+            from .store import ScoringLog
+            with ScoringLog(DB_PATH) as sl:
+                # Write-first: claim the disbursement slot atomically before calling STP.
+                # If the process crashes after STP succeeds but before log_disbursement,
+                # disbursed=1 + outcome_status='disburse_pending' prevents a double-send
+                # on retry. rollback_disbursement() resets the row if STP itself fails.
+                if not sl.claim_disbursement(app_id):
+                    self._json({"error": "Already disbursed"}, 400); return
+                try:
+                    dis = stp_disburse(app_id, approved_mxn, clabe, merchant_name,
+                                       concepto=f"Prestamo Olin {app_id[:8].upper()}")
+                except DisbursementError as e:
+                    sl.rollback_disbursement(app_id, str(e))
+                    self._json({"error": str(e)}, 400); return
+                if dis.status not in ("sandbox", "sent", "confirmed"):
+                    err = dis.error or "STP transfer failed"
+                    sl.rollback_disbursement(app_id, err)
+                    self._json({"error": err, "status": dis.status}, 502); return
+                col_ref = make_collection_ref(app_id)
+                sl.log_disbursement(app_id, dis.folio_stp or dis.folio_origen, col_ref)
+            sched = col_schedule(app_id, approved_mxn, pricing_cost, dis.timestamp)
+            self._json({
+                "ok": True, "status": dis.status,
+                "folio_stp": dis.folio_stp, "folio_origen": dis.folio_origen,
+                "collection_reference": col_ref, "payment_schedule": sched,
+            }); return
+
+        # POST /api/webhook/stp
+        if len(parts) == 3 and parts[0] == "api" and parts[1] == "webhook" and parts[2] == "stp":
+            body, raw = self._read_json()
+            if body is None or not self._verify_webhook(raw):
+                return
+            from .collection import process_incoming_payment
+            self._json(process_incoming_payment(body, DB_PATH)); return
+
+        # POST /api/apps/{id}/note
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "note":
+            body, _ = self._read_json()
+            if body is None:
+                return
+            app_id = parts[2]
+            note = str(body.get("note", ""))[:2000]  # cap length
+            from .store import ScoringLog
+            with ScoringLog(DB_PATH) as sl:
+                sl.record_analyst_note(app_id, note)
+            self._json({"ok": True}); return
+
+        # POST /api/apps/{id}/decision
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "decision":
+            body, _ = self._read_json()
+            if body is None:
+                return
+            decision = body.get("decision", "").upper()
+            if decision not in ("APPROVE", "MANUAL_REVIEW", "DECLINE"):
+                self._json({"error": "decision must be APPROVE | MANUAL_REVIEW | DECLINE"}, 400)
+                return
+            app_id = parts[2]
+            try:
+                from .store import ScoringLog
+                consent_warning = None
+                with ScoringLog(DB_PATH) as sl:
+                    if decision == "APPROVE":
+                        consent_row = sl.conn.execute(
+                            "SELECT consent_timestamp FROM scoring_log WHERE application_id=?",
+                            (app_id,),
+                        ).fetchone()
+                        if not consent_row:
+                            raise LookupError("Application not found")
+                        if not consent_row[0]:
+                            consent_warning = "Círculo consent has not been recorded"
+                            if is_production():
+                                self._json({"error": consent_warning}, 400)
+                                return
+                    sl.record_analyst_decision(
+                        app_id, decision, str(body.get("reason", ""))[:2000]
+                    )
+            except LookupError as e:
+                self._json({"error": str(e)}, 404)
+                return
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
+                return
+            response = {"ok": True}
+            if consent_warning:
+                response["warning"] = consent_warning
+            self._json(response)
+        else:
+            self._json({"error": "not found"}, 404)
+
+    def _load_apps(self) -> list:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT application_id, merchant_name, business_type, colonia,
+                       requested_mxn, approved_mxn, score, ci_low, ci_high,
+                       data_coverage, decision, scored_at,
+                       analyst_override, analyst_reason, analyst_decision_at,
+                       disbursed, graduation_tier, tier, analyst_note, buro_score,
+                       is_demo, outcome_status, payment_1_amount_mxn,
+                       payment_2_amount_mxn, raw_application, raw_result
+                FROM scoring_log
+                ORDER BY scored_at DESC
+            """).fetchall()
+        apps = []
+        for row in rows:
+            app = dict(row)
+            result = json.loads(app.pop("raw_result", "{}"))
+            raw_app = json.loads(app.pop("raw_application", "{}"))
+            app["signals"]              = result.get("signals", [])
+            app["decision_reasons"]     = result.get("decision_reasons", [])
+            app["hard_filter_failures"] = result.get("hard_filter_failures", [])
+            app["pricing_fixed_cost_mxn"] = result.get("pricing_fixed_cost_mxn", 0)
+            app["max_ticket_mxn"]       = result.get("max_ticket_mxn", 0)
+            app["repayment"]            = result.get("repayment")
+            app["fraud_assessment"]     = result.get("fraud_assessment")
+            app["tier_sensitivity"]     = result.get("tier_sensitivity", {})
+            app["environment"]          = result.get("environment", raw_app.get("environment", "unspecified"))
+            app["production_blocks"]    = result.get("production_blocks", [])
+            app["data_sources"] = {
+                "bank": (raw_app.get("bank") or {}).get("source", "missing"),
+                "bank_verified": bool((raw_app.get("bank") or {}).get("verified", False)),
+                "fmcg": (raw_app.get("fmcg") or {}).get("source", "missing"),
+                "fmcg_verified": bool((raw_app.get("fmcg") or {}).get("verified", False)),
+            }
+            app["recommended_collection_days"] = (
+                (raw_app.get("bank") or {}).get("recommended_collection_days")
+            )
+            if not app.get("tier"):
+                app["tier"] = result.get("tier", 0)
+            # buro_score is already set from the SELECT column; keep as-is
+            apps.append(app)
+        return apps
+
+
+# ---------------------------------------------------------------------------
+# Demo seed (3 canonical test profiles)
+# ---------------------------------------------------------------------------
+def seed_demo(db_path: str) -> int:
+    """Populate db_path with the 3 demo profiles. Returns number of rows inserted."""
+    from .models import (
+        Application, BusinessType, BuroData, FraudData,
+        FMCGData, BankData, TenureData, POSData, MapsRatingData, IMSSPayrollData,
+    )
+    from .scorecard import score_application
+    from .store import ScoringLog
+
+    cases = [
+        Application(
+            merchant_name="Maria — Abarrotes Don Chuy",
+            business_type=BusinessType.ABARROTES,
+            requested_amount_mxn=40_000,
+            colonia="Iztapalapa Centro",
+            fmcg=FMCGData(months_of_history=18, weekly_purchase_rate=0.96,
+                          missed_weeks_last_12=0, avg_weekly_purchase_mxn=8_500,
+                          distributor_confirmed=True, trend_3m=0.15),
+            bank=BankData(months_connected=3, avg_daily_balance_mxn=22_000,
+                          monthly_deposit_count=24,
+                          monthly_deposit_volume_mxn=95_000,
+                          monthly_outflow_volume_mxn=52_000,
+                          deposit_regularity=0.88, overdrafts_90d=0,
+                          balance_trend_90d=0.10, min_daily_balance_mxn=9_000),
+            tenure=TenureData(years_on_google_maps=11, years_in_imss=8, address_consistent=True),
+            pos=POSData(months_of_history=14, avg_monthly_volume_mxn=38_000,
+                        volume_consistency=0.82, trend_3m=0.08),
+            maps=MapsRatingData(rating=4.6, review_count=132, review_velocity_6m=9),
+            imss=None,
+            buro=BuroData(checked=True, active_delinquencies=0, active_loans_count=1, score=720),
+            fraud=FraudData(phone_mx="5512345678", rfc="CHGU850101AB2",
+                            ine_checked=True, address_stated="Iztapalapa Centro CDMX"),
+        ),
+        Application(
+            merchant_name="Roberto — Taqueria El Güero",
+            business_type=BusinessType.TAQUERIA,
+            requested_amount_mxn=25_000,
+            colonia="Doctores",
+            fmcg=FMCGData(months_of_history=10, weekly_purchase_rate=0.85,
+                          missed_weeks_last_12=2, avg_weekly_purchase_mxn=5_200,
+                          distributor_confirmed=True, trend_3m=0.0),
+            bank=BankData(months_connected=3, avg_daily_balance_mxn=9_000,
+                          monthly_deposit_count=15,
+                          monthly_deposit_volume_mxn=38_000,
+                          monthly_outflow_volume_mxn=22_000,
+                          deposit_regularity=0.70, overdrafts_90d=1,
+                          balance_trend_90d=0.0, min_daily_balance_mxn=2_500,
+                          source="manual_upload"),
+            tenure=TenureData(years_on_google_maps=7, years_in_imss=0, address_consistent=True),
+            pos=None,
+            maps=MapsRatingData(rating=4.3, review_count=58, review_velocity_6m=4),
+            imss=None,
+            buro=None,   # no Buró on file → B2, ceiling = COMMITTEE
+            fraud=FraudData(phone_mx="8112345678", rfc="GURE900215CD3",
+                            ine_checked=True, address_stated="Doctores CDMX"),
+        ),
+        Application(
+            merchant_name="Jugueria La Esquina — 14 meses",
+            business_type=BusinessType.JUGUERIA,
+            requested_amount_mxn=20_000,
+            colonia="Narvarte",
+            fmcg=FMCGData(months_of_history=4, weekly_purchase_rate=0.55,
+                          missed_weeks_last_12=5, distributor_confirmed=False),
+            bank=None,
+            tenure=TenureData(years_on_google_maps=1.2, years_in_imss=0),
+            pos=None,
+            maps=MapsRatingData(rating=4.0, review_count=6, review_velocity_6m=3),
+            imss=None,
+            buro=None,
+            fraud=FraudData(phone_mx="5587654321", rfc="LENA010115MH0",
+                            ine_checked=True, address_stated="Narvarte CDMX"),
+        ),
+    ]
+
+    with ScoringLog(db_path) as log:
+        if log.conn.execute("SELECT COUNT(*) FROM scoring_log").fetchone()[0] > 0:
+            return 0
+        inserted = 0
+        for app in cases:
+            result = score_application(app)
+            log.log(app, result)
+            inserted += 1
+        log.record_outcome(cases[0].application_id, repaid_on_time=True, days_to_repay=58)
+    return inserted
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+def main():
+    global DB_PATH
+
+    parser = argparse.ArgumentParser(description="Olin Analyst Review Interface")
+    project_root = Path(__file__).parent.parent
+    parser.add_argument("--db",      default=str(default_db_path(project_root)),
+                        help="Path to SQLite database")
+    parser.add_argument("--port",    type=int, default=8080, help="HTTP port (default 8080)")
+    parser.add_argument("--host",    default="127.0.0.1", help="Bind host (default localhost only)")
+    parser.add_argument("--seed-demo", action="store_true", help="Seed demo applications into an empty demo DB")
+    parser.add_argument("--no-seed", action="store_true", help="Don't auto-seed demo data")
+    parser.add_argument("--no-open", action="store_true", help="Do not open a browser window")
+    args = parser.parse_args()
+
+    DB_PATH = args.db
+
+    if is_production() and (not analyst_token() or not webhook_secret()):
+        raise RuntimeError(
+            "Production requires OLIN_ANALYST_TOKEN and OLIN_STP_WEBHOOK_SECRET"
+        )
+
+    from .store import ScoringLog
+    with ScoringLog(DB_PATH) as log:  # create/migrate before the first query
+        if is_production():
+            demo_rows = log.conn.execute(
+                "SELECT COUNT(*) FROM scoring_log WHERE is_demo=1"
+            ).fetchone()[0]
+            if demo_rows:
+                raise RuntimeError(
+                    f"Production database contains {demo_rows} demo row(s); use a clean production DB"
+                )
+        else:
+            production_rows = log.conn.execute(
+                "SELECT COUNT(*) FROM scoring_log WHERE is_demo=0"
+            ).fetchone()[0]
+            if production_rows:
+                raise RuntimeError(
+                    f"Demo mode cannot open a database containing {production_rows} "
+                    "production row(s)"
+                )
+
+    if args.seed_demo and not args.no_seed:
+        n = seed_demo(DB_PATH)
+        if n:
+            print(f"  Seeded {n} demo applications → {DB_PATH}")
+
+    # Count apps
+    with sqlite3.connect(DB_PATH) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM scoring_log").fetchone()[0]
+
+    url = f"http://{args.host}:{args.port}"
+    server = HTTPServer((args.host, args.port), Handler)
+
+    print(f"\n  ┌─────────────────────────────────────────┐")
+    print(f"  │  Olin · Analyst Review Interface        │")
+    print(f"  │  Mode: {runtime_mode():<33} │")
+    print(f"  │  {url:<39} │")
+    loaded = f"{count} application{'s' if count != 1 else ''} loaded"
+    print(f"  │  {loaded:<39} │")
+    print(f"  │  Ctrl+C to stop                         │")
+    print(f"  └─────────────────────────────────────────┘\n")
+
+    if not args.no_open:
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n  Server stopped.")
+
+
+if __name__ == "__main__":
+    main()
