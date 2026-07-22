@@ -375,6 +375,27 @@ main{max-width:1100px;margin:0 auto;padding:24px}
   border:1px solid rgba(88,166,255,.25);margin:2px 4px 2px 0;
 }
 
+/* ── Mitigation menu ─────────────────────────────────────────────── */
+.mitigation-section{
+  padding:12px 20px 14px;border-top:1px solid var(--border);
+  background:rgba(255,200,0,.028);
+}
+.mitigation-section h3{
+  font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:#e3b341;margin-bottom:6px;
+}
+.mit-intro{
+  font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4;
+}
+.mitigation-option{
+  padding:7px 10px;border-radius:6px;margin-bottom:6px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,200,0,.15);
+}
+.mit-header{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.mit-icon{font-size:13px;width:18px;text-align:center;color:#e3b341}
+.mit-label{font-size:12px;font-weight:600;color:var(--text)}
+.mit-rationale{font-size:11px;color:var(--muted);line-height:1.4;margin-left:24px}
+
 /* ── Analyst note section ────────────────────────────────────────── */
 .analyst-note-section{
   padding:12px 20px;border-top:1px solid var(--border);
@@ -599,7 +620,11 @@ function cardHtml(app) {
   const dateStr = isNaN(dt) ? app.scored_at : dt.toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'});
   const analystApproved = app.analyst_override === 'APPROVE';
   const declined = app.decision === 'DECLINE' || app.analyst_override === 'DECLINE';
-  const amountLabel = analystApproved ? 'Aprobado' : (declined ? 'No aprobado' : 'Monto evaluado');
+  const inCommittee = !analystApproved && !declined && app.decision === 'COMMITTEE';
+  const amountLabel = analystApproved ? 'Aprobado'
+    : declined ? 'No aprobado'
+    : inCommittee ? 'Monto en comité'
+    : 'Monto evaluado';
   const amountValue = declined ? 0 : app.approved_mxn;
   const costLabel = analystApproved ? 'Costo fijo' : 'Costo estimado';
   const costValue = declined ? 0 : app.pricing_fixed_cost_mxn;
@@ -699,6 +724,8 @@ function cardHtml(app) {
   ${repaymentHtml(app.repayment)}
 
   ${collectionCalendarHtml(app)}
+
+  ${mitigationHtml(app)}
 
   ${analystNoteHtml(app)}
 
@@ -916,6 +943,41 @@ function repaymentHtml(rep) {
       </div>` : ''}
     </div>
     ${notes}
+  </div>`;
+}
+
+// ── Mitigation menu (COMMITTEE only) ─────────────────────────────────
+function mitigationHtml(app) {
+  const menu = app.mitigation_menu;
+  if (!menu || !menu.length) return '';
+
+  const ICONS = {
+    reduced_amount:   '↘',
+    guarantee:        '🛡',
+    adjusted_pricing: '↑',
+    origination_fee:  '%',
+  };
+
+  const rows = menu.map(opt => {
+    const icon = ICONS[opt.type] || '·';
+    return `
+    <div class="mitigation-option">
+      <div class="mit-header">
+        <span class="mit-icon">${icon}</span>
+        <span class="mit-label">${esc(opt.label)}</span>
+      </div>
+      <div class="mit-rationale">${esc(opt.rationale)}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="mitigation-section">
+    <h3>Opciones de mitigación · comité</h3>
+    <div class="mit-intro">
+      Opciones estructurales para el comité — no modifican la calificación.
+      Documenta la estructura elegida en la nota de analista antes de decidir.
+    </div>
+    ${rows}
   </div>`;
 }
 
@@ -1369,7 +1431,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json({"error": "not found"}, 404)
 
-    def _load_apps(self) -> list:
+    def _load_apps(self) -> list:  # noqa: C901
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
@@ -1410,8 +1472,137 @@ class Handler(BaseHTTPRequestHandler):
             if not app.get("tier"):
                 app["tier"] = result.get("tier", 0)
             # buro_score is already set from the SELECT column; keep as-is
+            # Show mitigation menu for all COMMITTEE files not yet finally decided.
+            # MANUAL_REVIEW means "sent to committee" — that's when options are needed.
+            if (app["decision"] == "COMMITTEE"
+                    and app.get("analyst_override") not in ("APPROVE", "DECLINE")):
+                app["mitigation_menu"] = _build_mitigation_menu(result, raw_app, app)
+            else:
+                app["mitigation_menu"] = None
             apps.append(app)
         return apps
+
+
+# ---------------------------------------------------------------------------
+# Mitigation menu (COMMITTEE-band files only)
+# ---------------------------------------------------------------------------
+
+_MONTHLY_RATE_DEFAULT = 0.03   # Phase 0 baseline
+_RATE_ADJUSTED        = 0.045  # risk-premium alternative
+_ORIGINATION_FEE_PCT  = 0.02   # 2% one-time fee
+_GUARANTEE_TIERS      = {9, 10, 11, 12}   # C3 thin-file tiers — always suggest
+_GUARANTEE_MID_TIERS  = {5, 6, 7, 8}     # C2 mid-band tiers — suggest if DSCR also D2
+
+
+def _build_mitigation_menu(result: dict, raw_app: dict, app: dict) -> list:
+    """
+    Generate a menu of structural mitigation options for a COMMITTEE-band file.
+
+    This is an expediente output for the analyst — it does not auto-decide
+    anything and does not feed back into the score. The analyst reads the options,
+    documents their chosen structure in the analyst note, and records the final
+    decision via the normal Approve / Route-to-Review / Decline buttons.
+
+    Returns a list of option dicts, each with:
+        type, label, rationale, amounts (if applicable)
+    """
+    tier = app.get("tier") or 0
+    approved = app.get("approved_mxn") or 0.0
+    rep = result.get("repayment") or {}
+    bank = raw_app.get("bank") or {}
+    monthly_inflows = bank.get("monthly_deposit_volume_mxn") or 0.0
+
+    if tier < 1 or tier > 12 or approved <= 0:
+        return []
+
+    options: list[dict] = []
+
+    # ── Option A: Reduced amount ──────────────────────────────────────────────
+    # Always available for COMMITTEE files; reduces installment burden directly.
+    if approved >= 6_000:
+        reduced = max(3_000.0, round(approved * 0.70 / 1_000) * 1_000)
+        reduced_cost = round(reduced * _MONTHLY_RATE_DEFAULT * 2, 2)
+        reduced_installment = round((reduced + reduced_cost) / 2, 2)
+        options.append({
+            "type": "reduced_amount",
+            "label": f"Monto reducido — MXN {reduced:,.0f} (70% del propuesto)",
+            "rationale": (
+                "Mejora DSCR y burden ratio. "
+                f"Cuota mensual: MXN {reduced_installment:,.0f} "
+                f"· Costo total: MXN {reduced_cost:,.0f}"
+            ),
+            "amounts": {
+                "approved_mxn": reduced,
+                "cost_mxn": reduced_cost,
+                "installment_mxn": reduced_installment,
+            },
+        })
+
+    # ── Option B: Aval / garantía ─────────────────────────────────────────────
+    # Required for thin-file (C3, tiers 9-12). Strongly suggested for C2 (5-8)
+    # when DSCR is also D2 (borderline repayment).
+    dscr = rep.get("dscr")
+    dscr_borderline = dscr is not None and dscr < 2.5
+    if tier in _GUARANTEE_TIERS or (tier in _GUARANTEE_MID_TIERS and dscr_borderline):
+        reason = (
+            "Sin Círculo de Crédito en expediente" if tier in _GUARANTEE_TIERS
+            else "Buró 600-669 con DSCR borderline"
+        )
+        cost_baseline = round(approved * _MONTHLY_RATE_DEFAULT * 2, 2)
+        one_installment = round((approved + cost_baseline) / 2, 2)
+        options.append({
+            "type": "guarantee",
+            "label": "Garantía / aval — aval personal solidario requerido",
+            "rationale": (
+                f"{reason}. "
+                "El garante debe presentar comprobante de domicilio y estado de cuenta. "
+                f"Depósito de garantía alternativo: MXN {one_installment:,.0f} "
+                "(equivalente a una cuota)"
+            ),
+            "amounts": {
+                "guarantee_deposit_mxn": one_installment,
+            },
+        })
+
+    # ── Option C: Precio ajustado ─────────────────────────────────────────────
+    # Suggest when risk warrants a rate premium (D2 DSCR band, or mid/thin-file
+    # Buró). Does not change the loan amount.
+    if dscr_borderline or tier >= 5:
+        adj_cost = round(approved * _RATE_ADJUSTED * 2, 2)
+        adj_installment = round((approved + adj_cost) / 2, 2)
+        options.append({
+            "type": "adjusted_pricing",
+            "label": f"Precio ajustado — 4.5 % mensual (vs. 3 % estándar)",
+            "rationale": (
+                "Prima de riesgo por perfil comité. "
+                f"Costo total ajustado: MXN {adj_cost:,.0f} "
+                f"· Cuota: MXN {adj_installment:,.0f}"
+            ),
+            "amounts": {
+                "rate_pct": _RATE_ADJUSTED * 100,
+                "cost_mxn": adj_cost,
+                "installment_mxn": adj_installment,
+            },
+        })
+
+    # ── Option D: Comisión de apertura ────────────────────────────────────────
+    # Always available. Reduces Olin's net exposure from Day 1 without changing
+    # the credit decision or the pricing rate.
+    fee = round(approved * _ORIGINATION_FEE_PCT, 2)
+    options.append({
+        "type": "origination_fee",
+        "label": f"Comisión de apertura — 2 % sobre monto (MXN {fee:,.0f})",
+        "rationale": (
+            "Cobrada antes del desembolso. Reduce exposición neta inicial. "
+            "No modifica el monto aprobado ni la tasa."
+        ),
+        "amounts": {
+            "fee_mxn": fee,
+            "net_disbursed_mxn": round(approved - fee, 2),
+        },
+    })
+
+    return options
 
 
 # ---------------------------------------------------------------------------
@@ -1499,7 +1690,35 @@ def seed_demo(db_path: str) -> int:
             result = score_application(app)
             log.log(app, result)
             inserted += 1
+
+        # Case 0 — Maria: AUTO_APPROVE, analyst confirms, mark as repaid (historical)
+        log.record_analyst_decision(
+            cases[0].application_id, "APPROVE",
+            "Tier 1: Buró limpio 720, DSCR 3.2, score 79. Flujo Syncfy verificado. Sin observaciones.",
+        )
+        log.record_analyst_note(
+            cases[0].application_id,
+            "Préstamo 1 de la clienta. 18 meses de historial FEMSA. "
+            "Balance mínimo MXN 9,000 — sólido para su volumen. Aprobado sin condiciones.",
+        )
         log.record_outcome(cases[0].application_id, repaid_on_time=True, days_to_repay=58)
+
+        # Case 1 — Roberto: COMMITTEE, sent to manual review with sub-threshold reasoning
+        log.record_analyst_decision(
+            cases[1].application_id, "MANUAL_REVIEW",
+            "Sin Buró en expediente (C3) — techo COMMITTEE. DSCR 2.47 por debajo del umbral 2.50. "
+            "Score borderline. Pendiente validar antigüedad real del local y estados de cuenta físicos.",
+        )
+        log.record_analyst_note(
+            cases[1].application_id,
+            "Comité requerido: (1) Sin Círculo de Crédito en expediente → no puede AUTO_APPROVE. "
+            "(2) DSCR 2.47 está 0.03 por debajo del umbral D1 — un mes malo lo manda a D2. "
+            "(3) Score 62 es mid-band (S2). "
+            "Acción pendiente: solicitar estado de cuenta de los últimos 3 meses en papel "
+            "y validar que el local es propio o lleva más de 5 años en la dirección declarada.",
+        )
+
+        # Case 2 — Jugueria: DECLINE, no analyst action required for engine declines
     return inserted
 
 
