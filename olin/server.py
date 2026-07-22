@@ -1691,7 +1691,10 @@ def seed_demo(db_path: str) -> int:
             log.log(app, result)
             inserted += 1
 
-        # Case 0 — Maria: AUTO_APPROVE, analyst confirms, mark as repaid (historical)
+        # Case 0 — Maria: AUTO_APPROVE, analyst confirms, mark as repaid (historical).
+        # record_outcome runs first because it sets analyst_override=NULL (legacy coupling);
+        # record_analyst_decision then stamps APPROVE on top without being blocked.
+        log.record_outcome(cases[0].application_id, repaid_on_time=True, days_to_repay=58)
         log.record_analyst_decision(
             cases[0].application_id, "APPROVE",
             "Tier 1: Buró limpio 720, DSCR 3.2, score 79. Flujo Syncfy verificado. Sin observaciones.",
@@ -1701,7 +1704,6 @@ def seed_demo(db_path: str) -> int:
             "Préstamo 1 de la clienta. 18 meses de historial FEMSA. "
             "Balance mínimo MXN 9,000 — sólido para su volumen. Aprobado sin condiciones.",
         )
-        log.record_outcome(cases[0].application_id, repaid_on_time=True, days_to_repay=58)
 
         # Case 1 — Roberto: COMMITTEE, sent to manual review with sub-threshold reasoning
         log.record_analyst_decision(
