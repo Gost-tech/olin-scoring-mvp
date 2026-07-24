@@ -1,0 +1,30 @@
+---
+import OlinLogo from "./OlinLogo.astro";
+---
+
+<footer class="site-footer">
+  <div class="shell site-footer__top">
+    <div>
+      <a class="brand-link" href="/" aria-label="Olin, inicio"><OlinLogo inverse /></a>
+      <p>Evaluación crediticia explicable para instituciones que atienden pequeños negocios mexicanos.</p>
+    </div>
+    <div class="site-footer__nav">
+      <div>
+        <strong>Producto</strong>
+        <a href="/como-funciona/">Cómo funciona</a>
+        <a href="/#casos">Casos sintéticos</a>
+        <a href="/piloto/">Piloto en paralelo</a>
+      </div>
+      <div>
+        <strong>Olin</strong>
+        <a href="/empresa/">Empresa</a>
+        <a href="/legal/privacidad/">Privacidad</a>
+        <a href="/legal/terminos/">Términos</a>
+      </div>
+    </div>
+  </div>
+  <div class="shell site-footer__bottom">
+    <span>© {new Date().getFullYear()} Olin</span>
+    <span>Prototipo funcional · no es una oferta de crédito</span>
+  </div>
+</footer>

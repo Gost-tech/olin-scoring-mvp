@@ -1,0 +1,53 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Sobre Olin | Evaluación crediticia explicable en México"
+  description="Olin construye herramientas para que instituciones financieras evalúen pequeños negocios con más contexto y razones visibles."
+>
+  <section class="page-hero" aria-labelledby="company-title">
+    <div class="shell page-hero__inner">
+      <div><p class="eyebrow">México · etapa de piloto</p><h1 id="company-title">Más contexto antes de decidir un crédito.</h1></div>
+      <div class="page-hero__aside"><p>Olin es un prototipo B2B para equipos de crédito. No es un prestamista ni una aplicación para solicitar financiamiento.</p><a class="button button--signal" href="#que-es">Qué estamos construyendo <span aria-hidden="true">↓</span></a></div>
+    </div>
+  </section>
+
+  <section class="section section--white" id="que-es" aria-labelledby="principles-title">
+    <div class="shell">
+      <div class="section-heading"><div><p class="section-kicker">01 / Qué es Olin</p><h2 class="section-title" id="principles-title">Una segunda lectura para expedientes <em>incompletos.</em></h2></div><p class="section-lede">Olin organiza información crediticia, capacidad estimada de pago y señales de operación para que una institución pueda revisar la recomendación y sus razones.</p></div>
+      <div class="principles-grid">
+        <article class="card principle"><span class="card-index">01</span><h3>Explicar antes de automatizar</h3><p>Una recomendación debe poder reconstruirse antes de delegarse a un sistema.</p></article>
+        <article class="card principle"><span class="card-index">02</span><h3>Medir antes de prometer</h3><p>No publicamos precisión, reducción de pérdidas o aumento de aprobaciones sin resultados observados.</p></article>
+        <article class="card principle"><span class="card-index">03</span><h3>Probar antes de escalar</h3><p>La institución conserva la política, el capital y la responsabilidad crediticia.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--paper section-rule" aria-labelledby="why-title">
+      <div class="shell problem-grid">
+      <div class="problem-copy"><p class="section-kicker">02 / Enfoque inicial</p><h2 class="section-title" id="why-title">Tiendas de abarrotes primero. Más giros <em>después.</em></h2></div>
+      <div class="stack-lg"><p class="section-lede">Las tiendas de abarrotes tienen reposición frecuente y pueden dejar señales claras de compras y ventas. Empezar con un giro permite aprender a fondo antes de diseñar políticas separadas para taquerías, papelerías, ferreterías o servicios.</p><div class="notice"><span class="notice__icon">!</span><div><strong>La plataforma puede adaptarse; la política no se copia.</strong><p>Cada giro tiene márgenes, estacionalidad y fuentes diferentes. Un nuevo segmento exige su propio piloto y calibración.</p></div></div></div>
+    </div>
+  </section>
+
+  <section class="section section--dark" aria-labelledby="reality-title">
+    <div class="shell">
+      <div class="section-heading"><div><p class="section-kicker muted-dark">03 / Estado actual</p><h2 class="section-title" id="reality-title">Construido. Por validar. <em>Más adelante.</em></h2></div><p class="section-lede">Separar estas tres capas evita confundir un prototipo funcional con una operación crediticia lista para escalar.</p></div>
+      <div class="status-grid">
+        <article class="card card--dark status-column"><span class="tag tag--signal">Construido</span><h3>Motor y flujo</h3><ul><li>Matriz de 14 rutas</li><li>Flujo de analista</li><li>Registro de consentimiento</li><li>Separación entre demo y producción</li><li>Estructuras para pagos y resultados</li></ul></article>
+        <article class="card card--dark status-column"><span class="tag tag--dark">Por validar con un socio</span><h3>Datos y utilidad</h3><ul><li>Expedientes autorizados</li><li>Fuentes bancarias y de proveedores</li><li>Utilidad para el equipo de crédito</li><li>Privacidad, operación y riesgo</li></ul></article>
+        <article class="card card--dark status-column"><span class="tag tag--dark">Después de resultados</span><h3>Calibración y escala</h3><ul><li>Piloto con crédito real</li><li>Recalibración</li><li>Políticas para nuevos giros</li><li>Modelos estadísticos con cohortes maduras</li></ul></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--white" aria-labelledby="founder-title">
+    <div class="shell problem-grid">
+      <div class="problem-copy"><p class="section-kicker">04 / Quién lo construye</p><h2 class="section-title" id="founder-title">Brice Garnier.<br /><em>Producto y alianzas.</em></h2></div>
+      <div class="stack-lg"><p class="section-lede">Brice impulsa Olin como fundador y responsable de producto y desarrollo de socios. La siguiente etapa exige trabajar junto a una institución financiera y un responsable experimentado de crédito y riesgo en México.</p><div class="notice"><span class="notice__icon">MX</span><div><strong>Etapa actual: búsqueda de un piloto en paralelo.</strong><p>No se presentan clientes, créditos desembolsados, precisión ni alianzas como hechos hasta contar con evidencia verificable.</p></div></div></div>
+    </div>
+  </section>
+
+  <section class="cta-band"><div class="shell cta-band__inner"><div><p class="section-kicker">El siguiente paso</p><h2>Probar utilidad antes de hablar de escala.</h2><p>Diez expedientes autorizados pueden mostrar si Olin aporta una lectura útil al equipo de crédito.</p></div><a class="button button--dark" href="/piloto/">Conocer el piloto <span aria-hidden="true">↗</span></a></div></section>
+</BaseLayout>

@@ -1,0 +1,86 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import DecisionExplorer from "../components/DecisionExplorer";
+---
+
+<BaseLayout
+  title="Cómo funciona Olin | De la evidencia a la recomendación"
+  description="Conoce cómo Olin organiza historial crediticio, capacidad estimada de pago y señales operativas en una recomendación explicable."
+>
+  <section class="page-hero" aria-labelledby="mechanism-title">
+    <div class="shell page-hero__inner">
+      <div><p class="eyebrow">Para equipos de crédito y riesgo</p><h1 id="mechanism-title">De datos autorizados a una recomendación que se puede explicar.</h1></div>
+      <div class="page-hero__aside"><p>Olin no promete adivinar quién pagará. Organiza fuentes, estima si la cuota cabe en el flujo y muestra qué regla llevó a cada ruta.</p><a class="button button--signal" href="#recorrido">Ver el recorrido <span aria-hidden="true">↓</span></a></div>
+    </div>
+  </section>
+
+  <section class="section section--white" id="recorrido" aria-labelledby="journey-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="section-kicker">01 / El recorrido</p><h2 class="section-title" id="journey-title">Seis pasos. De la autorización al <em>resultado.</em></h2></div>
+        <p class="section-lede">Cada paso responde una pregunta distinta. Si una fuente falta, el expediente lo muestra y la política decide cómo tratar el caso.</p>
+      </div>
+      <ol class="steps-list">
+        <li class="step-row"><h3>Permiso e identidad</h3><p>El expediente vincula al negocio, el monto solicitado y la evidencia del consentimiento para consultar Círculo de Crédito.</p></li>
+        <li class="step-row"><h3>Fuentes identificadas</h3><p>La política contempla flujo bancario, compras a proveedores, antigüedad, ventas por terminal, presencia digital e IMSS cuando la institución aporta información autorizada y verificable.</p></li>
+        <li class="step-row"><h3>Capacidad estimada</h3><p>La cobertura de deuda (DSCR) compara el efectivo estimado disponible con el pago requerido. Si el dato bancario confiable falta, la capacidad no puede tratarse como favorable.</p></li>
+        <li class="step-row"><h3>Política visible</h3><p>Historial, capacidad e indicador operativo forman una de 36 combinaciones. La matriz asigna una ruta y conserva las razones.</p></li>
+        <li class="step-row"><h3>Revisión del otorgante</h3><p>Durante el piloto, el banco o prestamista registra su decisión y motivo. Una ruta no recomendada no puede convertirse en aprobación dentro del sistema.</p></li>
+        <li class="step-row"><h3>Resultado observado</h3><p>El prototipo incluye estructuras para registrar pagos, atrasos e incumplimientos. No es todavía un sistema de cobranza o conciliación en producción.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--paper section-rule" aria-labelledby="bands-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="section-kicker">02 / Las bandas</p><h2 class="section-title" id="bands-title">Tres dimensiones.<br />Límites <em>visibles.</em></h2></div>
+        <p class="section-lede">Estos límites son la hipótesis de política actual. Todavía no están calibrados con una cohorte real de pequeños negocios.</p>
+      </div>
+      <div class="band-grid">
+        <article class="card band-card">
+          <div class="band-card__head"><h3>Círculo</h3><span class="tag">4 bandas</span></div>
+          <dl><div><dt>C1</dt><dd>Score ≥ 670</dd></div><div><dt>C2</dt><dd>Score de 600 a 669</dd></div><div><dt>C3</dt><dd>Sin expediente o score no disponible</dd></div><div><dt>C4</dt><dd>Score &lt; 600 o morosidad activa</dd></div></dl>
+        </article>
+        <article class="card band-card">
+          <div class="band-card__head"><h3>DSCR</h3><span class="tag">3 bandas</span></div>
+          <dl><div><dt>D1</dt><dd>Cobertura ≥ 2,5×, sujeta a la calidad de la fuente</dd></div><div><dt>D2</dt><dd>Cobertura de 1,5× a menos de 2,5×</dd></div><div><dt>D3</dt><dd>Cobertura &lt; 1,5×, no disponible o con error crítico de validación</dd></div></dl>
+        </article>
+        <article class="card band-card">
+          <div class="band-card__head"><h3>Indicador operativo</h3><span class="tag">3 bandas</span></div>
+          <dl><div><dt>S1</dt><dd>Puntaje ≥ 75</dd></div><div><dt>S2</dt><dd>Puntaje de 50 a menos de 75</dd></div><div><dt>S3</dt><dd>Puntaje &lt; 50</dd></div></dl>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--white" aria-labelledby="tiers-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="section-kicker">03 / Las salidas</p><h2 class="section-title" id="tiers-title">14 rutas técnicas.<br />Cuatro tratamientos <em>claros.</em></h2></div>
+        <p class="section-lede">El código llama “tier” a cada ruta. Para el equipo de crédito, lo importante es el tratamiento: favorable, comité, no recomendada o bloqueo previo.</p>
+      </div>
+      <div class="tier-table">
+        <table>
+          <thead><tr><th>Ruta técnica</th><th>Recomendación</th><th>Tratamiento durante el piloto</th><th>Propósito</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tag tag--signal">Ruta 1</span></td><td>Favorable</td><td>Aprobación humana obligatoria</td><td>Probar la ruta favorable sin automatizar</td></tr>
+            <tr><td>Rutas 2–12</td><td>Comité</td><td>Revisión y motivo registrado</td><td>Resolver matices, faltantes y condiciones</td></tr>
+            <tr><td>Ruta 13</td><td>No recomendada</td><td>No puede convertirse en aprobación</td><td>Preservar el límite de riesgo de la política</td></tr>
+            <tr><td>Ruta 14</td><td>Bloqueo previo</td><td>El caso no llega a la matriz</td><td>Detener fraude, cartera o evidencia inválida</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice" style="margin-top: 1rem"><span class="notice__icon">!</span><div><strong>La ruta favorable no garantiza el pago.</strong><p>En el piloto propuesto, incluso la Ruta 1 exige revisión humana y queda sujeta a la política del otorgante.</p></div></div>
+    </div>
+  </section>
+
+  <section class="section explorer-wrap" id="caso" aria-labelledby="case-title">
+    <div class="shell">
+      <div class="explorer-head"><div><p class="section-kicker muted-dark">04 / Explorar</p><h2 class="section-title" id="case-title">Tres giros.<br />La misma lógica <em>visible.</em></h2></div><p>Los casos son sintéticos. Muestran las rutas de la matriz actual, pero no validan que una sola política funcione igual para cada giro.</p></div>
+      <DecisionExplorer client:visible />
+    </div>
+  </section>
+
+  <section class="cta-band"><div class="shell cta-band__inner"><div><p class="section-kicker">Siguiente paso</p><h2>Primero comparar. Después calibrar.</h2><p>Un piloto en paralelo permite revisar casos autorizados sin cambiar la decisión oficial ni mover dinero.</p></div><a class="button button--dark" href="/piloto/">Ver el piloto propuesto <span aria-hidden="true">↗</span></a></div></section>
+</BaseLayout>

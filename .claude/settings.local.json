@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "WebFetch(domain:github.com)",
+      "Read(//Users/pc/.claude/**)",
+      "Read(//Users/pc/.claude/skills/**)",
+      "Bash(git clone *)",
+      "Read(//private/tmp/claude-skills-repo/**)",
+      "Bash(npm --version)",
+      "Bash(python3 *)",
+      "Bash(pkill -f \"olin.server\")",
+      "Bash(git -C /Users/pc/Downloads/olin_scoring_mvp_1 status)"
+    ]
+  }
+}

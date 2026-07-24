@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#071310"/>
+  <path d="M0 500C250 410 320 600 610 500s360-260 590-170v300H0z" fill="#10241f"/>
+  <g transform="translate(80 76)" fill="none" stroke="#CEFF64" stroke-width="9" stroke-linecap="round">
+    <path d="M0 0h48c19 0 28 10 36 25l13 23c8 14 16 24 35 24h10"/>
+    <path d="M0 36h142"/>
+    <path d="M0 72h48c19 0 28-10 36-25l13-23C105 10 113 0 132 0h10"/>
+    <circle cx="142" cy="36" r="12" fill="#CEFF64" stroke="none"/>
+  </g>
+  <text x="80" y="260" fill="#F4F7F2" font-family="Arial, sans-serif" font-size="80" font-weight="700">Decisiones de crédito</text>
+  <text x="80" y="350" fill="#F4F7F2" font-family="Arial, sans-serif" font-size="80" font-weight="700">que dejan rastro.</text>
+  <text x="80" y="438" fill="#A9B8B2" font-family="Arial, sans-serif" font-size="30">Evidencia, reglas visibles y control humano.</text>
+  <rect x="80" y="496" width="270" height="58" rx="29" fill="#CEFF64"/>
+  <text x="122" y="534" fill="#071310" font-family="Arial, sans-serif" font-size="23" font-weight="700">OLIN · MÉXICO</text>
+</svg>

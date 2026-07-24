@@ -28,7 +28,7 @@ except ImportError:
     pass
 
 from .config import (
-    analyst_token, default_db_path, is_production, runtime_mode, webhook_secret,
+    analyst_token, api_keys, default_db_path, is_production, runtime_mode, webhook_secret,
 )
 
 # Set by main() before server starts
@@ -1181,6 +1181,433 @@ load();
 
 
 # ---------------------------------------------------------------------------
+# Merchant-facing application form  (/solicitar)
+# ---------------------------------------------------------------------------
+
+APPLY_HTML = r"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solicita tu crédito — Olin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+header{background:#0f1117;border-bottom:1px solid #1e2433;padding:16px 20px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
+.logo{font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.5px}
+.logo span{color:#f59e0b}
+.badge{background:#1e2433;color:#94a3b8;font-size:11px;padding:3px 8px;border-radius:20px}
+.container{max-width:520px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:24px;font-weight:700;color:#fff;margin-bottom:6px}
+.subtitle{color:#64748b;font-size:14px;margin-bottom:28px}
+.card{background:#161b27;border:1px solid #1e2433;border-radius:12px;padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title .num{background:#1e2433;color:#f59e0b;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.field{margin-bottom:14px}
+label{display:block;font-size:12px;color:#64748b;margin-bottom:5px;font-weight:500}
+input,select,textarea{width:100%;background:#0f1117;border:1px solid #2d3748;border-radius:8px;color:#e2e8f0;padding:11px 13px;font-size:15px;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:#f59e0b}
+select option{background:#161b27}
+input::placeholder{color:#4a5568}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.toggle-row{display:flex;gap:0;background:#0f1117;border:1px solid #2d3748;border-radius:8px;overflow:hidden}
+.toggle-row label{flex:1;text-align:center;padding:10px;cursor:pointer;font-size:14px;color:#64748b;margin:0;transition:all .15s}
+.toggle-row input[type=radio]{display:none}
+.toggle-row input[type=radio]:checked+label{background:#1e2433;color:#f59e0b;font-weight:600}
+.hint{font-size:12px;color:#4a5568;margin-top:5px}
+.collapsible{display:none;padding-top:14px;border-top:1px solid #1e2433;margin-top:14px}
+.collapsible.open{display:block}
+.submit-btn{width:100%;background:#f59e0b;color:#0f1117;border:none;border-radius:10px;padding:15px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;transition:opacity .15s}
+.submit-btn:hover{opacity:0.9}
+.submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+.required{color:#f59e0b}
+.error-msg{background:#2d1515;border:1px solid #7f1d1d;color:#fca5a5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;display:none}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #0f111755;border-top-color:#0f1117;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.optional-tag{font-size:10px;color:#4a5568;font-weight:400;margin-left:4px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Olin<span>·</span></div>
+  <div class="badge">Solicitud de crédito</div>
+</header>
+<div class="container">
+  <h1>Solicita tu crédito</h1>
+  <p class="subtitle">Completa el formulario. Entre más datos, mejor será tu evaluación.</p>
+  <div class="error-msg" id="errorMsg"></div>
+
+  <form id="applyForm">
+    <!-- 1. Tu negocio -->
+    <div class="card">
+      <div class="card-title"><span class="num">1</span>Tu negocio</div>
+      <div class="field">
+        <label>Nombre del negocio <span class="required">*</span></label>
+        <input name="merchant_name" placeholder="Ej. Abarrotes La Esperanza" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Tipo de negocio <span class="required">*</span></label>
+        <select name="business_type" required>
+          <option value="">Selecciona...</option>
+          <option value="abarrotes">Abarrotes / Tienda</option>
+          <option value="taqueria">Taquería / Comida</option>
+          <option value="jugueria">Juguería / Bebidas</option>
+          <option value="other">Otro</option>
+        </select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>¿Cuánto necesitas? <span class="required">*</span></label>
+          <input name="requested_mxn" type="number" min="5000" max="500000" placeholder="MXN" required>
+        </div>
+        <div class="field">
+          <label>Años abierto <span class="optional-tag">(opcional)</span></label>
+          <input name="years_open" type="number" min="0" max="50" step="0.5" placeholder="Ej. 3.5">
+        </div>
+      </div>
+      <div class="field">
+        <label>Colonia / Municipio <span class="optional-tag">(opcional)</span></label>
+        <input name="colonia" placeholder="Ej. Doctores, CDMX">
+      </div>
+    </div>
+
+    <!-- 2. Identificación -->
+    <div class="card">
+      <div class="card-title"><span class="num">2</span>Identificación</div>
+      <div class="row">
+        <div class="field">
+          <label>Teléfono celular</label>
+          <input name="phone" type="tel" placeholder="10 dígitos" maxlength="10" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>RFC <span class="optional-tag">(opcional)</span></label>
+          <input name="rfc" placeholder="Ej. GOMA850312HDF" maxlength="13" style="text-transform:uppercase">
+        </div>
+      </div>
+      <div class="field">
+        <label>CURP <span class="optional-tag">(opcional)</span></label>
+        <input name="curp" placeholder="18 caracteres" maxlength="18" style="text-transform:uppercase">
+      </div>
+      <p class="hint">Más datos de identidad = menor riesgo percibido = mejor oferta.</p>
+    </div>
+
+    <!-- 3. Cuenta de banco -->
+    <div class="card">
+      <div class="card-title"><span class="num">3</span>Cuenta de banco</div>
+      <div class="field">
+        <label>¿Tienes cuenta de banco?</label>
+        <div class="toggle-row">
+          <input type="radio" name="has_bank" id="bank_yes" value="yes">
+          <label for="bank_yes">Sí</label>
+          <input type="radio" name="has_bank" id="bank_no" value="no" checked>
+          <label for="bank_no">No</label>
+        </div>
+      </div>
+      <div class="collapsible" id="bankFields">
+        <div class="field">
+          <label>Banco</label>
+          <input name="bank_name" placeholder="Ej. BBVA, Bancomer, Santander">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Depósitos al mes (MXN)</label>
+            <input name="avg_deposits_mxn" type="number" placeholder="Promedio">
+          </div>
+          <div class="field">
+            <label>Saldo promedio (MXN)</label>
+            <input name="avg_balance_mxn" type="number" placeholder="Promedio">
+          </div>
+        </div>
+        <div class="field">
+          <label>¿Cuántos meses llevas con esa cuenta?</label>
+          <input name="months_with_bank" type="number" min="1" placeholder="Ej. 24">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Más sobre tu negocio -->
+    <div class="card">
+      <div class="card-title"><span class="num">4</span>Más sobre tu negocio</div>
+      <div class="field">
+        <label>¿Tienes empleados registrados en IMSS?</label>
+        <div class="toggle-row">
+          <input type="radio" name="has_imss" id="imss_yes" value="yes">
+          <label for="imss_yes">Sí</label>
+          <input type="radio" name="has_imss" id="imss_no" value="no" checked>
+          <label for="imss_no">No</label>
+        </div>
+      </div>
+      <div class="collapsible" id="imssFields">
+        <div class="field">
+          <label>¿Cuántos empleados tienes en IMSS?</label>
+          <input name="imss_employees" type="number" min="1" placeholder="Número de empleados">
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>¿Tienes terminal punto de venta (tarjetas)?</label>
+        <div class="toggle-row">
+          <input type="radio" name="has_pos" id="pos_yes" value="yes">
+          <label for="pos_yes">Sí</label>
+          <input type="radio" name="has_pos" id="pos_no" value="no" checked>
+          <label for="pos_no">No</label>
+        </div>
+      </div>
+      <div class="collapsible" id="posFields">
+        <div class="field">
+          <label>Ventas con tarjeta al mes (MXN)</label>
+          <input name="pos_monthly_mxn" type="number" placeholder="Promedio mensual">
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">Solicitar crédito →</button>
+  </form>
+</div>
+
+<script>
+function toggle(radioName, containerId) {
+  document.querySelectorAll('input[name="'+radioName+'"]').forEach(r => {
+    r.addEventListener('change', () => {
+      var c = document.getElementById(containerId);
+      c.classList.toggle('open', r.value === 'yes' && r.checked);
+    });
+  });
+}
+toggle('has_bank', 'bankFields');
+toggle('has_imss', 'imssFields');
+toggle('has_pos', 'posFields');
+
+document.getElementById('applyForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('submitBtn');
+  var errEl = document.getElementById('errorMsg');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Evaluando...';
+
+  var fd = new FormData(this);
+  var body = {};
+  fd.forEach((v, k) => { body[k] = v.trim(); });
+
+  try {
+    var resp = await fetch('/solicitar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    var data = await resp.json();
+    if (!resp.ok) {
+      errEl.textContent = data.error || 'Error al procesar la solicitud.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = 'Solicitar crédito →';
+      return;
+    }
+    window.location.href = '/solicitar/resultado/' + data.application_id;
+  } catch(ex) {
+    errEl.textContent = 'Error de red. Verifica tu conexión e intenta de nuevo.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = 'Solicitar crédito →';
+  }
+});
+</script>
+</body>
+</html>"""
+
+
+def _render_apply_result(app_id: str, result) -> str:
+    from .models import Decision
+    decision = result.decision
+    approved = result.approved_amount_mxn
+    score = result.score
+    cost = result.pricing_fixed_cost_mxn
+    reasons = result.decision_reasons or []
+    coverage = int(result.data_coverage * 100)
+    tier = result.tier
+
+    if decision == Decision.AUTO_APPROVE:
+        icon = "✓"
+        title = "¡Felicidades, pre-aprobado!"
+        color = "#10b981"
+        bg = "#052e1a"
+        border = "#065f46"
+        subtitle = f"Monto aprobado: <strong>MXN {approved:,.0f}</strong>"
+        next_steps = [
+            "Un ejecutivo de Olin te contactará en menos de 24 horas.",
+            "Ten a la mano tu INE y los datos de tu cuenta CLABE.",
+            f"Costo estimado del crédito: MXN {cost:,.0f} (60 días).",
+        ]
+    elif decision == Decision.DECLINE:
+        icon = "✗"
+        title = "Solicitud no aprobada"
+        color = "#ef4444"
+        bg = "#2d0f0f"
+        border = "#7f1d1d"
+        subtitle = "En este momento no podemos ofrecerte un crédito."
+        next_steps = [
+            "Puedes volver a solicitar en 90 días.",
+            "Agregar datos de banco o punto de venta mejora tu evaluación.",
+            "Para más información escríbenos a hola@olin.mx",
+        ]
+    else:  # COMMITTEE
+        icon = "⏳"
+        title = "En revisión"
+        color = "#f59e0b"
+        bg = "#1f1208"
+        border = "#78350f"
+        subtitle = "Tu solicitud está siendo revisada por un analista."
+        next_steps = [
+            "Te contactaremos en menos de 48 horas hábiles.",
+            "Asegúrate de tener disponible tu INE y CURP.",
+            "Guarda tu número de folio para cualquier consulta.",
+        ]
+
+    reasons_html = "".join(
+        f'<li style="color:#94a3b8;font-size:13px;margin-bottom:6px">{r}</li>'
+        for r in reasons[:4]
+    )
+    steps_html = "".join(
+        f'<li style="margin-bottom:10px;color:#e2e8f0;font-size:14px">{s}</li>'
+        for s in next_steps
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resultado — Olin</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}}
+header{{background:#0f1117;border-bottom:1px solid #1e2433;padding:16px 20px;display:flex;align-items:center;gap:10px}}
+.logo{{font-size:20px;font-weight:700;color:#fff}}.logo span{{color:#f59e0b}}
+.container{{max-width:480px;margin:0 auto;padding:32px 16px 60px}}
+.result-card{{background:{bg};border:1px solid {border};border-radius:16px;padding:28px 24px;text-align:center;margin-bottom:20px}}
+.icon{{font-size:48px;color:{color};margin-bottom:12px}}
+.result-title{{font-size:24px;font-weight:700;color:{color};margin-bottom:8px}}
+.result-sub{{font-size:16px;color:#e2e8f0;margin-bottom:4px}}
+.folio{{font-size:12px;color:#4a5568;margin-top:12px}}
+.folio strong{{color:#64748b}}
+.card{{background:#161b27;border:1px solid #1e2433;border-radius:12px;padding:20px;margin-bottom:16px}}
+.card h3{{font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px}}
+.stat-row{{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1e2433}}
+.stat-row:last-child{{border-bottom:none}}
+.stat-label{{font-size:13px;color:#64748b}}
+.stat-val{{font-size:14px;color:#e2e8f0;font-weight:600}}
+ul{{list-style:none;padding:0}}
+.btn{{display:block;width:100%;background:#1e2433;color:#e2e8f0;border:1px solid #2d3748;border-radius:10px;padding:13px;text-align:center;text-decoration:none;font-size:14px;font-weight:600;margin-top:8px}}
+</style>
+</head>
+<body>
+<header><div class="logo">Olin<span>·</span></div></header>
+<div class="container">
+  <div class="result-card">
+    <div class="icon">{icon}</div>
+    <div class="result-title">{title}</div>
+    <div class="result-sub">{subtitle}</div>
+    <div class="folio">Folio: <strong>{app_id}</strong></div>
+  </div>
+
+  <div class="card">
+    <h3>Detalles de tu evaluación</h3>
+    <div class="stat-row"><span class="stat-label">Puntaje</span><span class="stat-val">{score:.1f} / 100</span></div>
+    <div class="stat-row"><span class="stat-label">Nivel</span><span class="stat-val">Tier {tier}</span></div>
+    <div class="stat-row"><span class="stat-label">Cobertura de datos</span><span class="stat-val">{coverage}%</span></div>
+    {"<div class='stat-row'><span class='stat-label'>Monto aprobado</span><span class='stat-val' style='color:#10b981'>MXN {:,.0f}</span></div>".format(approved) if approved > 0 else ""}
+  </div>
+
+  {"<div class='card'><h3>Notas del análisis</h3><ul>" + reasons_html + "</ul></div>" if reasons_html else ""}
+
+  <div class="card">
+    <h3>Próximos pasos</h3>
+    <ul>{steps_html}</ul>
+  </div>
+
+  <a href="/solicitar" class="btn">← Nueva solicitud</a>
+</div>
+</body>
+</html>"""
+
+
+def _parse_apply_form(body: dict) -> dict:
+    """Map merchant form fields to _build_application payload."""
+    app_body: dict = {
+        "merchant_name": body.get("merchant_name", "").strip(),
+        "business_type": body.get("business_type", "other").strip(),
+        "requested_mxn": float(body.get("requested_mxn") or 0),
+        "colonia": body.get("colonia", "").strip(),
+    }
+
+    # Identity / fraud
+    fraud: dict = {}
+    phone = body.get("phone", "").strip().replace(" ", "").replace("-", "")
+    if phone:
+        if not phone.startswith("+"):
+            phone = "+52" + phone.lstrip("0")
+        fraud["phone_mx"] = phone
+    rfc = body.get("rfc", "").strip().upper()
+    if rfc:
+        fraud["rfc"] = rfc
+    curp = body.get("curp", "").strip().upper()
+    if curp:
+        fraud["curp"] = curp
+    if fraud:
+        app_body["fraud"] = fraud
+
+    # Bank
+    if body.get("has_bank") == "yes":
+        monthly_dep = float(body.get("avg_deposits_mxn") or 0)
+        avg_bal = float(body.get("avg_balance_mxn") or 0)
+        months = float(body.get("months_with_bank") or 0)
+        if monthly_dep or avg_bal:
+            app_body["bank"] = {
+                "months_connected": months or 6,
+                "avg_daily_balance_mxn": avg_bal,
+                "monthly_deposit_count": max(1, monthly_dep / 4000),
+                "monthly_deposit_volume_mxn": monthly_dep,
+                "monthly_outflow_volume_mxn": monthly_dep * 0.85,
+                "deposit_regularity": 0.70,
+                "overdrafts_90d": 0,
+                "balance_trend_90d": 0.0,
+                "min_daily_balance_mxn": avg_bal * 0.25,
+                "source": "agent_form",
+                "verified": False,
+                "evidence_reference": "",
+                "observed_at": "",
+            }
+
+    # Tenure
+    years = body.get("years_open", "").strip()
+    if years:
+        app_body["tenure"] = {
+            "years_on_google_maps": float(years),
+            "years_in_imss": float(years),
+            "address_consistent": True,
+        }
+
+    # IMSS
+    if body.get("has_imss") == "yes":
+        emp = body.get("imss_employees", "").strip()
+        if emp and emp != "0":
+            app_body["imss"] = {"registered_employees": int(emp)}
+
+    # POS
+    if body.get("has_pos") == "yes":
+        pos_vol = float(body.get("pos_monthly_mxn") or 0)
+        if pos_vol:
+            app_body["pos"] = {
+                "months_of_history": 6,
+                "avg_monthly_volume_mxn": pos_vol,
+                "volume_consistency": 0.70,
+                "trend_3m": 0.0,
+            }
+
+    return app_body
+
+
+# ---------------------------------------------------------------------------
 # POST /api/applications helpers
 # ---------------------------------------------------------------------------
 
@@ -1373,12 +1800,13 @@ class Handler(BaseHTTPRequestHandler):
     def _require_analyst_auth(self) -> bool:
         if not is_production():
             return True
-        expected = analyst_token()
-        if not expected:
+        from .config import api_keys
+        keys = api_keys()
+        if not keys:
             self._json({"error": "OLIN_ANALYST_TOKEN is not configured"}, 503)
             return False
         supplied = self.headers.get("X-Olin-Analyst-Token", "").strip()
-        if not hmac.compare_digest(supplied, expected):
+        if not supplied or not any(hmac.compare_digest(supplied, t) for t in keys.values()):
             self._json({"error": "Analyst authentication required"}, 401)
             return False
         return True
@@ -1423,6 +1851,34 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path.rstrip("/") or "/"
         if path == "/":
             self._send(HTML_PAGE.encode())
+        elif path == "/solicitar":
+            self._send(APPLY_HTML.encode())
+        elif path.startswith("/solicitar/resultado/"):
+            app_id = path.split("/solicitar/resultado/")[1].strip("/")
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT raw_result FROM scoring_log WHERE application_id=?", (app_id,)
+                ).fetchone()
+            if not row:
+                self._send(b"<h1>No encontrado</h1>", status=404)
+                return
+            import json as _j
+            from .models import ScoreResult, Decision
+            raw = _j.loads(row["raw_result"] or "{}")
+            # Reconstruct a minimal result-like object for the renderer
+            class _R:
+                pass
+            r = _R()
+            r.application_id = app_id
+            r.decision = Decision(raw.get("decision", "DECLINE"))
+            r.approved_amount_mxn = raw.get("approved_amount_mxn", 0)
+            r.score = raw.get("score", 0)
+            r.pricing_fixed_cost_mxn = raw.get("pricing_fixed_cost_mxn", 0)
+            r.decision_reasons = raw.get("decision_reasons", [])
+            r.data_coverage = raw.get("data_coverage", 0)
+            r.tier = raw.get("tier", 14)
+            self._send(_render_apply_result(app_id, r).encode())
         elif not self._require_analyst_auth():
             return
         elif path == "/api/apps":
@@ -1504,7 +1960,32 @@ class Handler(BaseHTTPRequestHandler):
             len(parts) == 3 and parts[0] == "api"
             and parts[1] == "webhook" and parts[2] == "stp"
         )
-        if not is_webhook and not self._require_analyst_auth():
+        is_apply = parts == ["solicitar"]
+        if not is_webhook and not is_apply and not self._require_analyst_auth():
+            return
+
+        # POST /solicitar — public merchant application form submission
+        if is_apply:
+            body, _ = self._read_json()
+            if body is None:
+                return
+            try:
+                app_body = _parse_apply_form(body)
+                app = _build_application(app_body)
+            except (KeyError, ValueError) as exc:
+                self._json({"error": str(exc)}, 400)
+                return
+            from .scorecard import score_application
+            from .portfolio import check_portfolio
+            from .graduation import get_graduation_offer
+            from .store import ScoringLog
+            port = check_portfolio(app, DB_PATH)
+            grad = get_graduation_offer(app.clabe or "", DB_PATH)
+            result = score_application(app, portfolio_block=port, graduation=grad)
+            with ScoringLog(DB_PATH) as sl:
+                sl.log(app, result)
+            self._json({"application_id": result.application_id,
+                        "redirect": f"/solicitar/resultado/{result.application_id}"}, 201)
             return
 
         # POST /api/applications  — submit a new merchant application for scoring
@@ -1960,9 +2441,9 @@ def main():
 
     DB_PATH = args.db
 
-    if is_production() and (not analyst_token() or not webhook_secret()):
+    if is_production() and (not api_keys() or not webhook_secret()):
         raise RuntimeError(
-            "Production requires OLIN_ANALYST_TOKEN and OLIN_STP_WEBHOOK_SECRET"
+            "Production requires OLIN_ANALYST_TOKEN (or OLIN_API_KEYS) and OLIN_STP_WEBHOOK_SECRET"
         )
 
     from .store import ScoringLog

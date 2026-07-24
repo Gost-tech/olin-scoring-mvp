@@ -1,0 +1,294 @@
+{
+  "typography": [
+    {
+      "role": "heading",
+      "fontFamily": "-apple-system",
+      "fontSize": "11px",
+      "fontWeight": "600",
+      "lineHeight": "17.6px",
+      "letterSpacing": "0.6px",
+      "color": "#8B949E",
+      "sampleText": "Señales"
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "-apple-system",
+      "fontSize": "10px",
+      "fontWeight": "600",
+      "lineHeight": "16px",
+      "letterSpacing": "0.6px",
+      "color": "#8B949E",
+      "sampleText": "Upgrade path"
+    },
+    {
+      "role": "label",
+      "fontFamily": "-apple-system",
+      "fontSize": "10px",
+      "fontWeight": "400",
+      "lineHeight": "16px",
+      "letterSpacing": "0.3px",
+      "color": "#8B949E",
+      "sampleText": "Activos"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      12,
+      14,
+      16,
+      20,
+      24
+    ],
+    "baseUnit": 4
+  },
+  "radius": [
+    "3px",
+    "4px",
+    "6px",
+    "8px",
+    "10px",
+    "12px"
+  ],
+  "shadows": [],
+  "buttons": [
+    {
+      "label": "↓ CSV",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#8B949E",
+      "padding": "5px 12px",
+      "borderRadius": "5px",
+      "border": "1px solid rgb(48, 54, 61)",
+      "boxShadow": "none",
+      "fontSize": "11px",
+      "fontWeight": "600",
+      "height": "24px"
+    },
+    {
+      "label": "Save",
+      "background": "#1F6FEB",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#58A6FF",
+      "padding": "7px 14px",
+      "borderRadius": "6px",
+      "border": "1px solid rgba(31, 111, 235, 0.4)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "height": "30px"
+    },
+    {
+      "label": "✓ Approve",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#3FB950",
+      "padding": "7px 16px",
+      "borderRadius": "6px",
+      "border": "1px solid rgb(35, 134, 54)",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "height": "32px"
+    },
+    {
+      "label": "↩ Route to Review",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E3B341",
+      "padding": "7px 16px",
+      "borderRadius": "6px",
+      "border": "1px solid rgb(227, 179, 65)",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "height": "32px"
+    },
+    {
+      "label": "✗ Decline",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#F85149",
+      "padding": "7px 16px",
+      "borderRadius": "6px",
+      "border": "1px solid rgb(161, 36, 36)",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "height": "31px"
+    }
+  ],
+  "cards": [
+    {
+      "label": "card",
+      "background": "#161B22",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E6EDF3",
+      "padding": "0px",
+      "borderRadius": "8px",
+      "border": "1px solid rgb(48, 54, 61)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "990.641px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E6EDF3",
+      "padding": "16px 20px 12px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "80.9844px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E6EDF3",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(230, 237, 243)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "312.75px"
+    },
+    {
+      "label": "card",
+      "background": "#161B22",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E6EDF3",
+      "padding": "0px",
+      "borderRadius": "8px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "1452.75px"
+    }
+  ],
+  "nav": {
+    "label": "navigation",
+    "background": "#0D1117",
+    "backgroundImage": "",
+    "backdropFilter": "blur(12px)",
+    "color": "#E6EDF3",
+    "padding": "0px 24px",
+    "borderRadius": "0px",
+    "border": "",
+    "boxShadow": "none",
+    "fontSize": "14px",
+    "fontWeight": "400",
+    "height": "56px"
+  },
+  "chips": [
+    {
+      "label": "3 total\n    1 pending",
+      "background": "transparent",
+      "color": "#E6EDF3",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(230, 237, 243)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "27.1875px"
+    },
+    {
+      "label": "3 total",
+      "background": "#21262D",
+      "color": "#E6EDF3",
+      "padding": "3px 10px",
+      "borderRadius": "12px",
+      "border": "1px solid rgb(48, 54, 61)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "500",
+      "height": "27.1875px"
+    },
+    {
+      "label": "jugueria",
+      "background": "#21262D",
+      "color": "#8B949E",
+      "padding": "2px 8px",
+      "borderRadius": "4px",
+      "border": "1px solid rgb(48, 54, 61)",
+      "boxShadow": "none",
+      "fontSize": "11px",
+      "fontWeight": "600",
+      "height": "23.5938px"
+    },
+    {
+      "label": "Tier 13",
+      "background": "#A12424",
+      "color": "#F85149",
+      "padding": "3px 9px",
+      "borderRadius": "10px",
+      "border": "1px solid rgba(161, 36, 36, 0.45)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "700",
+      "height": "27.1875px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [
+    {
+      "label": "All3",
+      "background": "transparent",
+      "color": "#E6EDF3",
+      "padding": "8px 14px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "height": "36px"
+    },
+    {
+      "label": "Pending1",
+      "background": "transparent",
+      "color": "#8B949E",
+      "padding": "8px 14px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "height": "36px"
+    }
+  ],
+  "backgrounds": [],
+  "glass": [
+    {
+      "backdropFilter": "blur(12px)",
+      "background": "rgba(13, 17, 23, 0.92)",
+      "border": "",
+      "borderRadius": "0px",
+      "boxShadow": "",
+      "area": 107520
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.astro/
+public/config.js
+demo-output/segments/
+demo-output/qa/
+demo-output/narration/*.aiff

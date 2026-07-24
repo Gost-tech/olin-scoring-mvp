@@ -1,0 +1,139 @@
+{
+  "summary": {
+    "webAnimations": 3,
+    "cssDeclarations": 35,
+    "scrollTargets": 13,
+    "cdpAnimations": 60,
+    "canvases": 0
+  },
+  "namedAnimations": [
+    "olin-enter",
+    "olin-stage-enter"
+  ],
+  "scrollTriggeredElements": 13,
+  "representativeAnimations": [
+    {
+      "type": "CSSAnimation",
+      "playState": "finished",
+      "animationName": "olin-ambient-enter",
+      "targetSelector": "section.hero",
+      "targetRect": {
+        "x": 0,
+        "y": -582,
+        "width": 1920,
+        "height": 1199.46875,
+        "top": -582,
+        "right": 1920,
+        "bottom": 617.46875,
+        "left": 0
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "composite": "auto",
+          "transform": "scale(0.86)",
+          "opacity": "0",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "composite": "auto",
+          "transform": "scale(1)",
+          "opacity": "1",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 900,
+        "delay": 150,
+        "iterations": 1,
+        "easing": "linear",
+        "direction": "normal"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "finished",
+      "animationName": "olin-enter",
+      "targetSelector": "div.hero__copy",
+      "targetRect": {
+        "x": 300,
+        "y": -430,
+        "width": 519.4375,
+        "height": 983.46875,
+        "top": -430,
+        "right": 819.4375,
+        "bottom": 553.46875,
+        "left": 300
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "composite": "auto",
+          "transform": "translateY(20px)",
+          "opacity": "0",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "composite": "auto",
+          "transform": "translate(0px)",
+          "opacity": "1",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 580,
+        "delay": 40,
+        "iterations": 1,
+        "easing": "linear",
+        "direction": "normal"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "finished",
+      "animationName": "olin-stage-enter",
+      "targetSelector": "div.hero__product",
+      "targetRect": {
+        "x": 931.4375,
+        "y": -153.4375,
+        "width": 688.5625,
+        "height": 430.34375,
+        "top": -153.4375,
+        "right": 1620,
+        "bottom": 276.90625,
+        "left": 931.4375
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "composite": "auto",
+          "transform": "translateY(24px) scale(0.985)",
+          "opacity": "0",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "composite": "auto",
+          "transform": "translate(0px) scale(1)",
+          "opacity": "1",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 680,
+        "delay": 160,
+        "iterations": 1,
+        "easing": "linear",
+        "direction": "normal"
+      }
+    }
+  ]
+}

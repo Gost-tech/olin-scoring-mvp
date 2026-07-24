@@ -1,0 +1,88 @@
+---
+import OlinLogo from "./OlinLogo.astro";
+
+const currentPath = Astro.url.pathname;
+const nav = [
+  { href: "/demo/", label: "Demo" },
+  { href: "/analyst-demo/", label: "Analyst" },
+  { href: "/como-funciona/", label: "Cómo funciona" },
+  { href: "/piloto/", label: "Piloto" },
+  { href: "/empresa/", label: "Empresa" }
+];
+---
+
+<header class="site-header" data-site-header>
+  <div class="site-header__inner shell">
+    <a class="brand-link" href="/" aria-label="Olin, inicio">
+      <OlinLogo />
+    </a>
+
+    <nav class="desktop-nav" aria-label="Navegación principal">
+      {nav.map((item) => (
+        <a class:list={{ "is-current": currentPath.startsWith(item.href) }} href={item.href} aria-current={currentPath.startsWith(item.href) ? "page" : undefined}>
+          {item.label}
+        </a>
+      ))}
+    </nav>
+
+    <div class="site-header__actions">
+      <a class="text-link desktop-only" href="/#casos">Ver un caso</a>
+      <a class="button button--small button--signal" href="/piloto/">
+        Ver piloto <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+
+    <details class="mobile-menu" data-mobile-menu>
+      <summary aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span>
+      </summary>
+      <div class="mobile-menu__panel">
+        <nav aria-label="Navegación móvil">
+          <a href="/">Inicio</a>
+          {nav.map((item) => <a href={item.href}>{item.label}</a>)}
+          <a href="/#casos">Casos sintéticos</a>
+        </nav>
+        <a class="button button--signal" href="/piloto/">Ver el piloto <span aria-hidden="true">↗</span></a>
+        <p>Sitio para instituciones · no acepta solicitudes de crédito</p>
+      </div>
+    </details>
+  </div>
+</header>
+
+<script>
+  const header = document.querySelector<HTMLElement>("[data-site-header]");
+  const menu = document.querySelector<HTMLDetailsElement>("[data-mobile-menu]");
+  const menuSummary = menu?.querySelector<HTMLElement>("summary");
+  const pageRegions = [document.querySelector<HTMLElement>("main"), document.querySelector<HTMLElement>("footer")].filter(Boolean) as HTMLElement[];
+
+  const updateHeader = () => header?.classList.toggle("is-scrolled", window.scrollY > 12);
+  updateHeader();
+  window.addEventListener("scroll", updateHeader, { passive: true });
+
+  const syncMenu = () => {
+    const isOpen = Boolean(menu?.open);
+    document.body.classList.toggle("menu-open", isOpen);
+    pageRegions.forEach((region) => region.toggleAttribute("inert", isOpen));
+    menuSummary?.setAttribute("aria-expanded", String(isOpen));
+    menuSummary?.setAttribute("aria-label", isOpen ? "Cerrar menú" : "Abrir menú");
+    if (isOpen) requestAnimationFrame(() => menu?.querySelector<HTMLElement>("a")?.focus());
+  };
+
+  menu?.addEventListener("toggle", syncMenu);
+
+  menu?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && menu.open) {
+      menu.open = false;
+      menuSummary?.focus();
+    }
+  });
+
+  menu?.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => { menu.open = false; });
+  });
+
+  const desktop = window.matchMedia("(min-width: 961px)");
+  desktop.addEventListener("change", (event) => {
+    if (event.matches && menu?.open) menu.open = false;
+  });
+</script>

@@ -1,0 +1,156 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import HeroDecision from "../components/HeroDecision";
+import DecisionExplorer from "../components/DecisionExplorer";
+---
+
+<BaseLayout
+  title="Olin | Capacidad de pago para créditos a pequeños negocios"
+  description="Olin ayuda a bancos, Sofomes y fintechs a estimar si un pequeño negocio puede pagar un crédito para un monto y plazo concretos."
+>
+  <section class="hero" aria-labelledby="home-title">
+    <div class="shell hero__grid">
+      <div class="hero__copy">
+        <p class="eyebrow">Software para equipos de crédito · prototipo funcional</p>
+        <h1 class="display" id="home-title">¿Puede este negocio <em>pagar este crédito?</em></h1>
+        <p class="hero__lede">Olin ayuda a bancos, Sofomes y fintechs a estimarlo para un monto y un plazo concretos. Reúne historial crediticio, capacidad estimada de pago y señales de operación en una recomendación que su equipo puede revisar.</p>
+        <div class="button-row hero__actions">
+          <a class="button button--signal" href="#casos">Ver cómo se evalúa un caso <span aria-hidden="true">↓</span></a>
+          <a class="button button--outline" href="/piloto/">Explorar el piloto controlado <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="hero__note">Sitio institucional · Olin no acepta solicitudes ni garantiza el pago · la institución toma la decisión final</p>
+      </div>
+
+      <div class="hero__product">
+        <HeroDecision client:load />
+      </div>
+    </div>
+  </section>
+
+  <section class="home-proof" aria-label="Qué es Olin y para quién trabaja">
+    <div class="shell audience-row">
+      <article><span>Cliente</span><strong>Institución financiera</strong><p>Banco, SOFOM o fintech que evalúa créditos.</p></article>
+      <article><span>Evalúa</span><strong>Pequeños negocios</strong><p>Con información autorizada y fuentes identificadas.</p></article>
+      <article><span>Entrega</span><strong>Recomendación + razones</strong><p>Incluye faltantes, supuestos y ruta de revisión.</p></article>
+      <article><span>Decide</span><strong>El equipo de crédito</strong><p>Olin apoya la decisión; no sustituye al otorgante.</p></article>
+    </div>
+  </section>
+
+  <section class="section section--paper" aria-labelledby="repayment-title">
+    <div class="shell problem-grid">
+      <div class="problem-copy repayment-answer">
+        <p class="section-kicker">01 / La pregunta central</p>
+        <h2 class="section-title" id="repayment-title">¿Cómo estimar si un negocio podrá <em>cumplir con sus pagos?</em></h2>
+        <p class="section-lede">No se puede saber con certeza. Ningún sistema de crédito puede garantizar que una persona pagará. Olin reduce la incertidumbre al separar tres preguntas que suelen confundirse.</p>
+        <div class="notice">
+          <span class="notice__icon">=</span>
+          <div><strong>La capacidad se estima para un monto y un plazo concretos.</strong><p>Si la cuota cambia, la evaluación también debe cambiar. La calidad y vigencia de la información condicionan el resultado.</p></div>
+        </div>
+      </div>
+
+      <div class="evidence-stack" aria-label="Tres preguntas para evaluar un crédito">
+        <article class="card evidence-card">
+          <span class="card-index">01</span>
+          <div><h3>¿Cómo ha pagado antes?</h3><p>Círculo de Crédito muestra historial, deudas y atrasos. No tener expediente no significa automáticamente pagar bien o mal.</p></div>
+          <span class="evidence-card__state">Comportamiento</span>
+        </article>
+        <article class="card evidence-card">
+          <span class="card-index">02</span>
+          <div><h3>¿La cuota cabe en su flujo?</h3><p>La cobertura de deuda compara el efectivo estimado disponible con el pago requerido. Una razón de 2,0× significa dos pesos disponibles por cada peso de cuota.</p></div>
+          <span class="evidence-card__state">Capacidad estimada</span>
+        </article>
+        <article class="card evidence-card">
+          <span class="card-index">03</span>
+          <div><h3>¿La operación es consistente?</h3><p>Antigüedad, ventas bancarias o por terminal y compras a proveedores ayudan a comprobar continuidad cuando la fuente está autorizada.</p></div>
+          <span class="evidence-card__state">Contexto operativo</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--dark" aria-labelledby="scope-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker muted-dark">02 / Alcance</p>
+          <h2 class="section-title" id="scope-title">Una plataforma.<br />Políticas distintas por <em>giro.</em></h2>
+        </div>
+        <p class="section-lede">Olin está diseñado para instituciones que evalúan pequeños negocios. La primera cohorte propuesta se concentra en tiendas de abarrotes; cada giro adicional requiere revisar sus señales y calibrar su propia política.</p>
+      </div>
+
+      <div class="business-grid" aria-label="Ejemplos de giros comerciales">
+        <article class="card card--dark business-card business-card--active"><span class="tag tag--signal">Primera cohorte</span><h3>Tiendas de abarrotes</h3><p>Reposición frecuente, ventas diarias, antigüedad y compras a distribuidores.</p><small>Política inicial por validar</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Piloto separado</span><h3>Taquerías y fondas</h3><p>Mayor variación diaria, ventas por terminal o plataforma y compras de insumos.</p><small>Requiere ajustar capacidad y estacionalidad</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Piloto separado</span><h3>Papelerías y ferreterías</h3><p>Inventario, compras a proveedores, temporadas y permanencia del establecimiento.</p><small>Requiere reglas propias del giro</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Exploración futura</span><h3>Servicios locales</h3><p>Salones, talleres y otros negocios pueden aportar ventas, citas y flujo bancario.</p><small>No dependen de las mismas señales de inventario</small></article>
+      </div>
+
+      <div class="scope-note"><strong>Importante:</strong> la arquitectura puede adaptarse; la política actual no está validada para todos los negocios y sus criterios no se trasladan automáticamente entre giros.</div>
+    </div>
+  </section>
+
+  <section class="section section--white" aria-labelledby="deliverable-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="section-kicker">03 / Lo que recibe el otorgante</p><h2 class="section-title" id="deliverable-title">Un expediente que se puede <em>revisar.</em></h2></div>
+        <p class="section-lede">El resultado no es solamente un puntaje. El equipo ve qué información entró, qué falta, qué regla se activó y por qué el caso siguió una ruta.</p>
+      </div>
+      <div class="principles-grid">
+        <article class="card principle"><span class="card-index">01</span><h3>Fuentes claras</h3><p>Origen, fecha, permiso y estado de cada dato. Lo ausente permanece visible.</p></article>
+        <article class="card principle"><span class="card-index">02</span><h3>Recomendación explicada</h3><p>Ruta favorable, comité o no recomendada, acompañada de las razones de la política.</p></article>
+        <article class="card principle"><span class="card-index">03</span><h3>Decisión registrada</h3><p>El analista conserva su justificación para comparar después la decisión con el resultado observado.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section explorer-wrap" id="casos" aria-labelledby="explorer-title">
+    <div class="shell">
+      <div class="explorer-head">
+        <div>
+          <p class="section-kicker muted-dark">04 / Casos sintéticos</p>
+          <h2 class="section-title" id="explorer-title">Tres negocios.<br />Tres rutas <em>distintas.</em></h2>
+        </div>
+        <p>Estos ejemplos muestran cómo cambia una recomendación cuando cambian el historial, la capacidad y las señales operativas. No son clientes ni prueban precisión.</p>
+      </div>
+      <DecisionExplorer client:visible />
+      <p class="explorer-disclaimer">Los valores son sintéticos y las rutas coinciden con la matriz actual. Cada giro requerirá validación y calibración antes de usarse con crédito real.</p>
+    </div>
+  </section>
+
+  <section class="pilot-bridge" aria-labelledby="pilot-bridge-title">
+    <div class="pilot-bridge__copy">
+      <p class="eyebrow eyebrow--dark">Piloto en paralelo</p>
+      <h2 id="pilot-bridge-title">10 expedientes reales. Decisión oficial intacta.</h2>
+      <p>Olin analiza casos autorizados en paralelo al proceso del otorgante. El objetivo es medir cobertura, tiempo, diferencias y utilidad antes de integrar o mover dinero.</p>
+      <a class="button button--dark" href="/piloto/">Ver la propuesta del piloto <span aria-hidden="true">↗</span></a>
+    </div>
+    <div class="pilot-bridge__visual" aria-label="Cuatro métricas alrededor de diez expedientes">
+      <div class="pilot-orbit">
+        <strong>10</strong>
+        <span>cobertura</span><span>tiempo</span><span>diferencias</span><span>faltantes</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--paper section-rule" aria-labelledby="questions-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="section-kicker">05 / Respuestas directas</p><h2 class="section-title" id="questions-title">Lo que Olin sí — y no — <em>responde.</em></h2></div>
+        <p class="section-lede">Estas son las cuatro preguntas que una institución debe resolver antes de evaluar el producto.</p>
+      </div>
+      <div class="faq-grid">
+        <details class="card faq-item" open><summary>¿Olin sabe quién va a pagar?</summary><p>No. Estima la capacidad de pago y organiza señales de riesgo para un crédito específico. Nadie puede garantizar el pago; solo los resultados reales permiten calibrar la política.</p></details>
+        <details class="card faq-item"><summary>¿Olin presta el dinero?</summary><p>No en el modelo propuesto. La institución financiera origina el crédito, define su política, aporta el capital y conserva la relación con el cliente.</p></details>
+        <details class="card faq-item"><summary>¿Funciona para cualquier negocio?</summary><p>La arquitectura admite distintos giros. La política inicial se enfoca en tiendas de abarrotes; taquerías, papelerías y servicios necesitan pilotos y reglas separados.</p></details>
+        <details class="card faq-item"><summary>¿Qué pasa cuando falta información?</summary><p>Olin no inventa el dato. Registra el faltante y aplica la ruta correspondiente: revisión adicional o caso no recomendado, según la política.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="shell cta-band__inner">
+      <div><p class="section-kicker">Para crédito, riesgo, datos y operación</p><h2>Revisemos un expediente, no una promesa.</h2><p>La propuesta comienza con diez casos autorizados y criterios claros para avanzar o detener.</p></div>
+      <a class="button button--dark" href="/piloto/">Conocer el piloto <span aria-hidden="true">↗</span></a>
+    </div>
+  </section>
+</BaseLayout>

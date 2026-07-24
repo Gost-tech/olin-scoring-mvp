@@ -1,0 +1,355 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "Inter",
+      "fontSize": "129.6px",
+      "fontWeight": "640",
+      "lineHeight": "111.456px",
+      "letterSpacing": "-9.72px",
+      "color": "#FBFDF9",
+      "sampleText": "¿Puede este negocio pagar este crédito?"
+    },
+    {
+      "role": "heading",
+      "fontFamily": "Inter",
+      "fontSize": "112px",
+      "fontWeight": "700",
+      "lineHeight": "109.76px",
+      "letterSpacing": "-5.04px",
+      "color": "#11241E",
+      "sampleText": "10 expedientes reales. Decisión oficial intacta."
+    },
+    {
+      "role": "heading-2",
+      "fontFamily": "Inter",
+      "fontSize": "92.8px",
+      "fontWeight": "610",
+      "lineHeight": "85.376px",
+      "letterSpacing": "-6.032px",
+      "color": "#11241E",
+      "sampleText": "¿Cómo estimar si un negocio podrá cumplir con sus pagos?"
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "Inter",
+      "fontSize": "40px",
+      "fontWeight": "700",
+      "lineHeight": "39.2px",
+      "letterSpacing": "-1.8px",
+      "color": "#FBFDF9",
+      "sampleText": "Tiendas de abarrotes"
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "Inter",
+      "fontSize": "35.2px",
+      "fontWeight": "700",
+      "lineHeight": "34.496px",
+      "letterSpacing": "-1.584px",
+      "color": "#11241E",
+      "sampleText": "¿Cómo ha pagado antes?"
+    },
+    {
+      "role": "body",
+      "fontFamily": "Inter",
+      "fontSize": "20.48px",
+      "fontWeight": "400",
+      "lineHeight": "31.744px",
+      "letterSpacing": "normal",
+      "color": "#A9B8B2",
+      "sampleText": "Olin ayuda a bancos, Sofomes y fintechs a estimarlo para un "
+    },
+    {
+      "role": "label",
+      "fontFamily": "Inter",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "24.8px",
+      "letterSpacing": "normal",
+      "color": "#FBFDF9",
+      "sampleText": "OL / EXPEDIENTE / 0142Caso sintéticoRepetirSLTienda de abarr"
+    },
+    {
+      "role": "link",
+      "fontFamily": "Inter",
+      "fontSize": "16px",
+      "fontWeight": "750",
+      "lineHeight": "24.8px",
+      "letterSpacing": "normal",
+      "color": "#071310",
+      "sampleText": "Saltar al contenido"
+    },
+    {
+      "role": "body-small",
+      "fontFamily": "Inter",
+      "fontSize": "10.56px",
+      "fontWeight": "400",
+      "lineHeight": "16.368px",
+      "letterSpacing": "normal",
+      "color": "#A9B8B2",
+      "sampleText": "Iztapalapa · solicitud de MXN 25,000"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      6,
+      7,
+      8,
+      10,
+      11,
+      12,
+      13,
+      16,
+      18,
+      19,
+      20,
+      22,
+      24,
+      25,
+      27
+    ],
+    "baseUnit": 8
+  },
+  "radius": [
+    "16px",
+    "24px",
+    "50%",
+    "999px"
+  ],
+  "shadows": [
+    {
+      "value": "rgba(7, 19, 16, 0.08) 0px 10px 30px 0px",
+      "count": 10
+    }
+  ],
+  "buttons": [
+    {
+      "label": "Ver piloto ↗",
+      "background": "#CEFF64",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#071310",
+      "padding": "12.8px 16px",
+      "borderRadius": "999px",
+      "border": "1px solid rgba(0, 0, 0, 0)",
+      "boxShadow": "none",
+      "fontSize": "12.8px",
+      "fontWeight": "760",
+      "height": "44px"
+    },
+    {
+      "label": "Ver cómo se evalúa un caso ↓Explorar el ",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(251, 253, 249)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "116px"
+    },
+    {
+      "label": "Explorar el piloto controlado ↗",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "12.8px 20px",
+      "borderRadius": "999px",
+      "border": "1px solid rgb(251, 253, 249)",
+      "boxShadow": "none",
+      "fontSize": "14.08px",
+      "fontWeight": "760",
+      "height": "52px"
+    },
+    {
+      "label": "Repetir",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "6.4px 10.4px",
+      "borderRadius": "999px",
+      "border": "1px solid rgba(245, 251, 246, 0.14)",
+      "boxShadow": "none",
+      "fontSize": "10.4px",
+      "fontWeight": "400",
+      "height": "44px"
+    },
+    {
+      "label": "01Abarrotes",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "16px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "12.8px",
+      "fontWeight": "720",
+      "height": "72px"
+    },
+    {
+      "label": "03Papelería",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#A9B8B2",
+      "padding": "16px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(169, 184, 178)",
+      "boxShadow": "none",
+      "fontSize": "12.8px",
+      "fontWeight": "720",
+      "height": "72px"
+    }
+  ],
+  "cards": [
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "24.8px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "178px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "24.8px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(251, 253, 249)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "178px"
+    },
+    {
+      "label": "card",
+      "background": "#FBFDF9",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#11241E",
+      "padding": "38.4px",
+      "borderRadius": "24px",
+      "border": "1px solid rgba(7, 19, 16, 0.13)",
+      "boxShadow": "rgba(7, 19, 16, 0.08) 0px 10px 30px 0px",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "190px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "linear-gradient(145deg, rgba(206, 255, 100, 0.08), rgba(255, 255, 255, 0.024))",
+      "backdropFilter": "",
+      "color": "#FBFDF9",
+      "padding": "35.2px",
+      "borderRadius": "24px",
+      "border": "1px solid rgba(206, 255, 100, 0.55)",
+      "boxShadow": "rgba(7, 19, 16, 0.08) 0px 10px 30px 0px",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "340px"
+    }
+  ],
+  "nav": {
+    "label": "navigation",
+    "background": "transparent",
+    "backgroundImage": "",
+    "backdropFilter": "",
+    "color": "#FBFDF9",
+    "padding": "0px",
+    "borderRadius": "0px",
+    "border": "0px none rgb(251, 253, 249)",
+    "boxShadow": "none",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "height": "78px"
+  },
+  "chips": [
+    {
+      "label": "Caso sintéticoRepetir",
+      "background": "transparent",
+      "color": "#A9B8B2",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(169, 184, 178)",
+      "boxShadow": "none",
+      "fontSize": "10.4px",
+      "fontWeight": "400",
+      "height": "44px"
+    },
+    {
+      "label": "Repetir",
+      "background": "#FFFFFF",
+      "color": "#FBFDF9",
+      "padding": "6.4px 10.4px",
+      "borderRadius": "999px",
+      "border": "1px solid rgba(245, 251, 246, 0.14)",
+      "boxShadow": "none",
+      "fontSize": "10.4px",
+      "fontWeight": "400",
+      "height": "44px"
+    },
+    {
+      "label": "SL",
+      "background": "#F2F5EF",
+      "color": "#071310",
+      "padding": "0px",
+      "borderRadius": "12px",
+      "border": "0px none rgb(7, 19, 16)",
+      "boxShadow": "none",
+      "fontSize": "11.52px",
+      "fontWeight": "820",
+      "height": "42px"
+    },
+    {
+      "label": "Primera cohorte",
+      "background": "#CEFF64",
+      "color": "#071310",
+      "padding": "5.6px 10.4px",
+      "borderRadius": "999px",
+      "border": "1px solid rgba(0, 0, 0, 0)",
+      "boxShadow": "none",
+      "fontSize": "10.24px",
+      "fontWeight": "760",
+      "height": "28px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [],
+  "backgrounds": [
+    {
+      "value": "radial-gradient(circle, rgba(149, 234, 196, 0.16), rgba(149, 234, 196, 0) 68%)",
+      "area": 2302980
+    },
+    {
+      "value": "linear-gradient(rgba(255, 255, 255, 0.035) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, rgba(0, 0, 0, 0) 1px)",
+      "area": 2302980
+    },
+    {
+      "value": "radial-gradient(rgba(206, 255, 100, 0.16) 1px, rgba(0, 0, 0, 0) 1px)",
+      "area": 902482
+    },
+    {
+      "value": "radial-gradient(circle at 80% 18%, rgba(206, 255, 100, 0.1), rgba(0, 0, 0, 0) 35%)",
+      "area": 296319
+    }
+  ],
+  "glass": []
+}

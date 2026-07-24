@@ -1,0 +1,55 @@
+<script>
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  const revealSelector = [
+    ".section-heading",
+    ".problem-copy",
+    ".product-scene",
+    ".video-feature",
+    ".explorer-head",
+    ".decision-explorer",
+    ".pilot-bridge__copy",
+    ".pilot-orbit",
+    ".cta-band__inner",
+    ".tier-table",
+    ".notice"
+  ].join(",");
+
+  const groupSelector = [
+    ".metric-row",
+    ".evidence-stack",
+    ".band-grid",
+    ".steps-list",
+    ".pilot-plan",
+    ".principles-grid",
+    ".status-grid",
+    ".compare-grid"
+  ].join(",");
+
+  const revealEverything = () => {
+    document.querySelectorAll<HTMLElement>(".motion-reveal, .motion-reveal-group").forEach((element) => {
+      element.classList.add("is-visible");
+    });
+  };
+
+  if (!reducedMotion.matches && "IntersectionObserver" in window) {
+    const singles = Array.from(document.querySelectorAll<HTMLElement>(revealSelector));
+    const groups = Array.from(document.querySelectorAll<HTMLElement>(groupSelector));
+
+    singles.forEach((element) => element.classList.add("motion-reveal"));
+    groups.forEach((element) => element.classList.add("motion-reveal-group"));
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: .14, rootMargin: "0px 0px -7% 0px" });
+
+    [...singles, ...groups].forEach((element) => observer.observe(element));
+    reducedMotion.addEventListener("change", (event) => {
+      if (event.matches) revealEverything();
+    }, { once: true });
+  }
+</script>

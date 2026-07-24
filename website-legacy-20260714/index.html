@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Olin convierte evidencia verificable de comercios de barrio en recomendaciones de crédito explicables para pilotos controlados.">
+  <meta name="theme-color" content="#0b1916">
+  <meta property="og:title" content="Olin — Decisiones de crédito que se pueden explicar">
+  <meta property="og:description" content="Círculo, capacidad de pago y evidencia operativa en una recomendación auditable.">
+  <title>Olin — Decisiones de crédito que se pueden explicar</title>
+  <link rel="icon" href="olin-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="config.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+  <header class="site-header" data-header>
+    <a class="brand" href="#inicio" aria-label="Olin, inicio">
+      <svg class="brand-symbol" viewBox="0 0 48 48" aria-hidden="true">
+        <path class="brand-orbit" d="M37.7 13.2A18 18 0 1 0 39.9 31"/>
+        <circle class="brand-point" cx="39" cy="11" r="4"/>
+      </svg>
+      <span class="brand-word">olin</span>
+    </a>
+
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav">
+      <span class="sr-only">Abrir menú</span>
+      <span aria-hidden="true"></span><span aria-hidden="true"></span>
+    </button>
+
+    <nav id="site-nav" class="site-nav" aria-label="Navegación principal">
+      <a href="#producto">Producto</a>
+      <a href="#expediente">Decisión</a>
+      <a href="#piloto">Piloto</a>
+      <a class="nav-cta" data-demo-link data-demo-fallback="Ver expediente" href="#expediente"><span>Abrir demo</span> <i aria-hidden="true">↗</i></a>
+    </nav>
+  </header>
+
+  <main id="contenido">
+    <section class="hero" id="inicio" aria-labelledby="hero-title">
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="hero-glow hero-glow-a" aria-hidden="true"></div>
+      <div class="hero-glow hero-glow-b" aria-hidden="true"></div>
+
+      <div class="hero-copy">
+        <div class="stage-label hero-stage"><i></i> Prototipo funcional · piloto sombra</div>
+        <h1 id="hero-title"><span>Decisiones de crédito</span><span>que se pueden</span><span class="hero-accent">explicar.</span></h1>
+        <p class="hero-lede">Olin convierte Círculo, capacidad de pago y evidencia operativa de un abarrotes en una recomendación auditable. El originador conserva la decisión.</p>
+        <div class="hero-actions">
+          <a class="button button-signal" href="#piloto"><span>Explorar un piloto</span><i aria-hidden="true">↗</i></a>
+          <a class="button button-ghost" href="#expediente"><span>Ver cómo decide</span><i aria-hidden="true">↓</i></a>
+        </div>
+        <p class="hero-note">Reglas explicables · revisión humana durante el piloto</p>
+      </div>
+
+      <div class="decision-theatre" aria-label="Recorrido ilustrativo de una recomendación Olin">
+        <div class="theatre-topline">
+          <span>OL / 00031</span>
+          <span class="theatre-status"><i></i> Simulación</span>
+        </div>
+
+        <div class="theatre-merchant">
+          <span class="merchant-avatar">AR</span>
+          <div><strong>Abarrotes La Reforma</strong><small>Expediente ilustrativo · Iztapalapa</small></div>
+          <span class="source-state">3 fuentes</span>
+        </div>
+
+        <div class="trace-system">
+          <svg class="trace-lines" viewBox="0 0 600 360" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M92 53 C210 53 176 180 292 180 S383 67 501 67"/>
+            <path d="M92 180 H501"/>
+            <path d="M92 307 C210 307 176 180 292 180 S383 293 501 293"/>
+          </svg>
+          <div class="trace-source source-one"><span>C1</span><small>Círculo</small></div>
+          <div class="trace-source source-two"><span>2.2×</span><small>DSCR</small></div>
+          <div class="trace-source source-three"><span>82</span><small>Score interno</small></div>
+          <div class="trace-core"><span>03</span><small>Tier</small></div>
+          <div class="trace-result"><small>Recomendación</small><strong>COMITÉ</strong><span>Revisar 2 condiciones</span></div>
+          <span class="moving-signal" aria-hidden="true"></span>
+        </div>
+
+        <div class="theatre-footer">
+          <span><i class="dot dot-source"></i> Fuente identificada</span>
+          <span><i class="dot dot-human"></i> Decisión humana</span>
+        </div>
+      </div>
+
+      <a class="scroll-cue" href="#proof" aria-label="Continuar al contenido"><span>Explorar</span><i aria-hidden="true"></i></a>
+    </section>
+
+    <section class="proof" id="proof" aria-label="Capacidades verificables del prototipo">
+      <div class="proof-item"><strong data-count="3">3</strong><span>dimensiones<br>de decisión</span></div>
+      <div class="proof-item"><strong data-count="14">14</strong><span>tiers<br>de política</span></div>
+      <div class="proof-item"><strong data-count="36">36</strong><span>combinaciones<br>probadas</span></div>
+      <div class="proof-item proof-human"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 16.5l4.2 4.2L23.5 10.4"/></svg><span>Aprobación humana<br>durante el piloto</span></div>
+    </section>
+
+    <section class="manifesto light-section" id="producto" aria-labelledby="manifesto-title">
+      <div class="section-index">01 / La brecha</div>
+      <div class="manifesto-layout">
+        <h2 id="manifesto-title" class="display-title reveal-block">El negocio existe.<br>La evidencia está <em>fragmentada.</em></h2>
+        <div class="manifesto-copy reveal-block">
+          <p>Un comercio puede vender en efectivo, reabastecer cada semana y operar durante años sin construir un expediente financiero convencional.</p>
+          <p>Olin no inventa una señal. Organiza evidencia disponible, muestra lo que falta y conserva la ruta completa hasta la decisión.</p>
+        </div>
+      </div>
+
+      <div class="fragment-stage reveal-block" aria-label="Ilustración de evidencia fragmentada que se organiza en un expediente">
+        <div class="fragment fragment-a"><small>Compra semanal</small><strong>FMCG</strong><span>estado / pendiente</span></div>
+        <div class="fragment fragment-b"><small>Capacidad</small><strong>DSCR 2.2×</strong><span>fuente / verificada</span></div>
+        <div class="fragment fragment-c"><small>Buró</small><strong>Círculo C1</strong><span>consentimiento / registrado</span></div>
+        <div class="fragment fragment-d"><small>Permanencia</small><strong>8 años</strong><span>referencia / observada</span></div>
+        <div class="fragment-connector" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="fragment-output"><span class="output-mark">o</span><div><small>Expediente Olin</small><strong>Una ruta auditable</strong></div><span class="output-arrow">→</span></div>
+      </div>
+    </section>
+
+    <section class="process dark-section" aria-labelledby="process-title">
+      <div class="section-index">02 / El sistema</div>
+      <div class="process-head reveal-block">
+        <p class="kicker">De la evidencia al aprendizaje</p>
+        <h2 id="process-title" class="display-title">Un solo hilo.<br>De punta a punta.</h2>
+      </div>
+
+      <div class="process-layout">
+        <div class="process-rail" aria-hidden="true"><i data-process-progress></i></div>
+        <ol class="process-steps">
+          <li class="process-step reveal-block">
+            <span class="step-number">01</span>
+            <div><h3>Consentimiento y captura</h3><p>Identidad, negocio, monto solicitado y autorización de Círculo quedan vinculados al expediente.</p></div>
+            <span class="step-state">Entrada</span>
+          </li>
+          <li class="process-step reveal-block">
+            <span class="step-number">02</span>
+            <div><h3>Evidencia y verificación</h3><p>Las fuentes conectadas deben conservar origen, fecha y estado. Un dato sintético nunca cruza al modo producción.</p></div>
+            <span class="step-state">Control</span>
+          </li>
+          <li class="process-step reveal-block">
+            <span class="step-number">03</span>
+            <div><h3>Tier y razones</h3><p>Treinta y seis combinaciones se agrupan en Tiers 1–13; el Tier 14 bloquea antes de la scorecard.</p></div>
+            <span class="step-state">Decisión</span>
+          </li>
+          <li class="process-step reveal-block">
+            <span class="step-number">04</span>
+            <div><h3>Comité y resultado</h3><p>La decisión humana, los pagos y el resultado final completan el registro que permitirá aprender con evidencia real.</p></div>
+            <span class="step-state">Aprendizaje</span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="explorer light-section" id="expediente" aria-labelledby="explorer-title">
+      <div class="section-index">03 / La decisión</div>
+      <div class="explorer-head reveal-block">
+        <div>
+          <p class="kicker dark-kicker">Expediente interactivo</p>
+          <h2 id="explorer-title" class="display-title">Cambia el perfil.<br>Sigue la lógica.</h2>
+        </div>
+        <p>Ejemplos ilustrativos. El piloto no automatiza aprobaciones: incluso Tier 1 requiere una decisión humana registrada.</p>
+      </div>
+
+      <div class="profile-tabs reveal-block" role="tablist" aria-label="Perfiles ilustrativos">
+        <button id="profile-tab-strong" class="profile-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="decision-panel" data-profile="strong"><span>01</span> Perfil sólido</button>
+        <button id="profile-tab-thin" class="profile-tab" type="button" role="tab" aria-selected="false" aria-controls="decision-panel" tabindex="-1" data-profile="thin"><span>02</span> Poco historial</button>
+        <button id="profile-tab-stress" class="profile-tab" type="button" role="tab" aria-selected="false" aria-controls="decision-panel" tabindex="-1" data-profile="stress"><span>03</span> Capacidad limitada</button>
+      </div>
+
+      <div class="decision-console reveal-block" id="decision-panel" role="tabpanel" aria-live="polite" aria-labelledby="profile-tab-strong">
+        <div class="console-sidebar">
+          <div class="console-id"><small>Expediente</small><strong data-field="application">OL-0142</strong><span data-field="merchant">Abarrotes San Luis</span></div>
+          <dl class="console-facts">
+            <div><dt>Solicita</dt><dd data-field="amount">$25,000</dd></div>
+            <div><dt>Antigüedad</dt><dd data-field="tenure">9 años</dd></div>
+            <div><dt>Cobertura</dt><dd data-field="coverage">85%</dd></div>
+          </dl>
+          <p class="console-caption">Datos sintéticos para demostrar la política. No representan una persona ni un resultado real.</p>
+        </div>
+
+        <div class="console-path">
+          <div class="dimension dimension-c">
+            <span class="dimension-label">Círculo</span>
+            <strong data-field="bureau">C1</strong>
+            <small data-field="bureauDetail">≥ 670</small>
+            <i><b data-bar="bureau"></b></i>
+          </div>
+          <div class="path-arrow" aria-hidden="true">→</div>
+          <div class="dimension dimension-d">
+            <span class="dimension-label">Capacidad</span>
+            <strong data-field="dscrBand">D1</strong>
+            <small><span data-field="dscr">2.7</span>× DSCR</small>
+            <i><b data-bar="dscr"></b></i>
+          </div>
+          <div class="path-arrow" aria-hidden="true">→</div>
+          <div class="dimension dimension-s">
+            <span class="dimension-label">Indicador interno</span>
+            <strong data-field="scoreBand">S1</strong>
+            <small><span data-field="score">81</span> / 100</small>
+            <i><b data-bar="score"></b></i>
+          </div>
+        </div>
+
+        <div class="console-result" data-state="approve">
+          <div class="result-tier"><small>Ruta</small><strong>Tier <span data-field="tier">1</span></strong></div>
+          <div class="result-decision"><small>Recomendación del motor</small><strong data-field="decision">AUTO · REVISIÓN HUMANA</strong><p data-field="reason">La combinación más sólida. El piloto todavía exige aprobación y justificación del analista.</p></div>
+          <span class="result-light" aria-hidden="true"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="evidence light-section" aria-labelledby="evidence-title">
+      <div class="section-index">04 / La evidencia</div>
+      <div class="evidence-layout">
+        <div class="evidence-sticky reveal-block">
+          <p class="kicker dark-kicker">Arquitectura de señales</p>
+          <h2 id="evidence-title" class="display-title">No más datos.<br>Mejor evidencia.</h2>
+          <p>La disponibilidad y el peso cambian por cohorte. Olin distingue lo verificado, lo ausente y lo que requiere un socio.</p>
+        </div>
+
+        <div class="evidence-list">
+          <article class="evidence-row reveal-block"><span class="evidence-no">01</span><div><h3>Compras FMCG</h3><p>Cadencia, continuidad y tendencia de reposición.</p></div><span class="evidence-badge partner">Requiere socio</span></article>
+          <article class="evidence-row reveal-block"><span class="evidence-no">02</span><div><h3>Flujo bancario</h3><p>Ingresos, salidas, regularidad y capacidad de pago.</p></div><span class="evidence-badge partner">Requiere conexión</span></article>
+          <article class="evidence-row reveal-block"><span class="evidence-no">03</span><div><h3>Permanencia</h3><p>Antigüedad y consistencia del negocio entre fuentes.</p></div><span class="evidence-badge available">Contemplada</span></article>
+          <article class="evidence-row reveal-block"><span class="evidence-no">04</span><div><h3>POS y señales complementarias</h3><p>Volumen POS, Maps e IMSS cuando están disponibles.</p></div><span class="evidence-badge available">Según cobertura</span></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="pilot dark-section" id="piloto" aria-labelledby="pilot-title">
+      <div class="section-index">05 / El siguiente paso</div>
+      <div class="pilot-intro reveal-block">
+        <p class="kicker">Prueba antes de integrar</p>
+        <h2 id="pilot-title" class="display-title">Diez expedientes.<br>Sin mover dinero.</h2>
+        <p>Olin recomienda en paralelo. El socio conserva su política, su decisión y sus clientes.</p>
+      </div>
+
+      <div class="pilot-map reveal-block">
+        <article><span>01</span><h3>Diseño</h3><p>Roles, consentimiento, datos, métricas y condiciones de pausa.</p><small>Semana 1</small></article>
+        <i aria-hidden="true"></i>
+        <article><span>02</span><h3>Sombra</h3><p>Diez casos consentidos, sin mover dinero ni cambiar decisiones.</p><small>Semanas 2–3</small></article>
+        <i aria-hidden="true"></i>
+        <article><span>03</span><h3>Revisión</h3><p>Cobertura, concordancia, excepciones y decisión de continuar.</p><small>Semana 4</small></article>
+      </div>
+
+      <div class="pilot-roles reveal-block">
+        <div><span class="role-label">Olin aporta</span><p>Motor, expediente, trazabilidad, análisis y reporte del piloto.</p></div>
+        <div><span class="role-label">El socio aporta</span><p>Casos consentidos, datos permitidos, criterio de crédito y un responsable.</p></div>
+        <div><span class="role-label">El piloto entrega</span><p>Un resultado comparable y un registro apto para aprender, no una promesa de precisión.</p></div>
+      </div>
+    </section>
+
+    <section class="reality light-section" aria-labelledby="reality-title">
+      <div class="section-index">06 / La realidad</div>
+      <div class="reality-head reveal-block">
+        <p class="kicker dark-kicker">Ambición con trazabilidad</p>
+        <h2 id="reality-title" class="display-title">Construido.<br>Dependiente.<br>Después.</h2>
+      </div>
+
+      <div class="reality-table reveal-block">
+        <div class="reality-column built">
+          <div class="reality-title"><i></i><span>Construido</span></div>
+          <ul><li>Sistema de decisión de 14 tiers</li><li>Flujo de analista</li><li>Consentimiento: registro + bloqueo</li><li>Ledger y audit log</li><li>Separación demo / producción</li></ul>
+        </div>
+        <div class="reality-column needed">
+          <div class="reality-title"><i></i><span>Requiere socio</span></div>
+          <ul><li>Datos FMCG verificados</li><li>Conectividad bancaria real</li><li>Casos consentidos</li><li>Originador y responsable de riesgo</li><li>Mecánica de pagos acordada</li></ul>
+        </div>
+        <div class="reality-column later">
+          <div class="reality-title"><i></i><span>Después de evidencia</span></div>
+          <ul><li>Calibración por resultados</li><li>Expansión de cohorte</li><li>Modelos estadísticos maduros</li><li>Nuevos tipos de comercio</li><li>Escala de capital</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta" aria-labelledby="cta-title">
+      <div class="cta-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="final-cta-inner reveal-block">
+        <span class="cta-overline">Olin / CDMX / 2026</span>
+        <h2 id="cta-title">Diseñemos el piloto<br>que sí podemos probar.</h2>
+        <div class="cta-actions">
+          <a class="button button-signal" href="mailto:contact@bricegarnier.com?subject=Piloto%20sombra%20Olin"><span>Hablar del piloto</span><i aria-hidden="true">↗</i></a>
+          <a class="button button-ghost" data-demo-link data-demo-fallback="Ver expediente ilustrativo" href="#expediente"><span>Abrir demo del analista</span><i aria-hidden="true">↗</i></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="#inicio" aria-label="Olin, inicio">
+      <svg class="brand-symbol" viewBox="0 0 48 48" aria-hidden="true"><path d="M37.7 13.2A18 18 0 1 0 39.9 31"/><circle cx="39" cy="11" r="4"/></svg>
+      <span class="brand-word">olin</span>
+    </a>
+    <p>Infraestructura de decisión crediticia explicable para pilotos controlados.</p>
+    <p class="footer-legal">Prototipo · No ofrece crédito al público · Los ejemplos son ilustrativos</p>
+  </footer>
+</body>
+</html>

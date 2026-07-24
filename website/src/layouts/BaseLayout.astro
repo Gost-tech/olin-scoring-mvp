@@ -1,0 +1,94 @@
+---
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import MotionOrchestrator from "../components/MotionOrchestrator.astro";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+  noHeader?: boolean;
+  noIndex?: boolean;
+  noFooter?: boolean;
+}
+
+const {
+  title,
+  description,
+  image = "/og-card.svg",
+  noHeader = false,
+  noIndex = false,
+  noFooter = false
+} = Astro.props;
+
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : undefined;
+const socialImage = Astro.site ? new URL(image, Astro.site) : image;
+---
+
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#071310" />
+    <meta name="color-scheme" content="light dark" />
+    {noIndex && <meta name="robots" content="noindex,nofollow" />}
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_MX" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={socialImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    {canonical && <link rel="canonical" href={canonical} />}
+    <link rel="icon" href="/olin-mark.svg" type="image/svg+xml" />
+    <title>{title}</title>
+    <script is:inline src="/config.js"></script>
+    <script is:inline>
+      (() => {
+        const value = typeof OLIN_DEMO_URL === "string" ? OLIN_DEMO_URL.trim() : "";
+        window.__OLIN_CONFIG__ = { demoUrl: value };
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
+    {!noHeader && <SiteHeader />}
+    <main id="main-content">
+      <slot />
+    </main>
+    {!noFooter && <SiteFooter />}
+    <MotionOrchestrator />
+
+    <script>
+      const isLoopback = (hostname: string) => ["localhost", "127.0.0.1", "::1"].includes(hostname);
+
+      document.querySelectorAll<HTMLAnchorElement>("[data-demo-link]").forEach((link) => {
+        const fallback = link.dataset.demoFallback || "/#casos";
+        const raw = window.__OLIN_CONFIG__?.demoUrl || "";
+
+        try {
+          if (!raw) throw new Error("missing");
+          const target = new URL(raw, window.location.href);
+          const productionPage = !isLoopback(window.location.hostname) && window.location.protocol === "https:";
+          if (!["http:", "https:"].includes(target.protocol)) throw new Error("protocol");
+          if (productionPage && (isLoopback(target.hostname) || target.protocol !== "https:")) throw new Error("unsafe");
+
+          link.href = target.href;
+          if (target.origin !== window.location.origin) {
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          }
+        } catch {
+          link.href = fallback;
+          link.removeAttribute("target");
+          link.removeAttribute("rel");
+        }
+      });
+    </script>
+  </body>
+</html>

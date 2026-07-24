@@ -1,0 +1,13 @@
+{
+  "title": "Olin — de la evidencia al piloto sombra",
+  "language": "es-MX",
+  "format": "1440x810",
+  "fps": 30,
+  "scenes": [
+    { "id": "01", "name": "evidence", "image": "scenes/video-01-evidence.png", "audio": "narration/01.aiff" },
+    { "id": "02", "name": "organize", "image": "scenes/video-02-organize.png", "audio": "narration/02.aiff" },
+    { "id": "03", "name": "decision", "image": "scenes/video-03-decision.png", "audio": "narration/03.aiff" },
+    { "id": "04", "name": "control", "image": "scenes/video-04-control.png", "audio": "narration/04.aiff" },
+    { "id": "05", "name": "pilot", "image": "scenes/video-05-pilot.png", "audio": "narration/05.aiff" }
+  ]
+}

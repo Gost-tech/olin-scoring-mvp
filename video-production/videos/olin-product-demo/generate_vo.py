@@ -4,18 +4,18 @@ import asyncio
 import subprocess
 import os
 
-VOICE = "en-US-AndrewMultilingualNeural"
-RATE = "+15%"
+VOICE = "en-US-JennyNeural"
+RATE = "+5%"
 ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 
 SCRIPTS = [
-    ("vo-01", "Follow one case through Olin — the real analyst workflow, synthetic data."),
-    ("vo-02", "Every case starts with evidence. Bureau, bank flow, P.O.S., suppliers, tenure, and operations — assembled before scoring."),
-    ("vo-03", "Score 63.6. Tier 10. DSCR 2.67. No bureau file — routed to committee."),
-    ("vo-04", "At 25,000 pesos: committee. Drop to 12,000 and the model clears it. Counter-offer from observed cash flow."),
-    ("vo-05", "Olin surfaces the recommendation. The analyst records their decision — rationale required before any approval or decline."),
-    ("vo-06", "Disbursement and repayment stay linked to the original recommendation and decision. This case: paid on time."),
-    ("vo-07", "Run 10 cases. No money movement. Shadow mode measures coverage, speed, disagreement, and evidence gaps."),
+    ("vo-01", "This is Olin's analyst workflow. We will follow one synthetic merchant case from intake to outcome."),
+    ("vo-02", "First, the analyst connects the merchant. Consent is recorded, then bank flow, bureau, point of sale, and supplier evidence are linked to the case."),
+    ("vo-03", "Olin assembles the signals into an explainable recommendation. This case scores sixty-three point six, Tier ten, and routes to committee because the bureau file is missing."),
+    ("vo-04", "The analyst can inspect every signal, confidence range, and reason before deciding. The requested amount and the repayment capacity stay visible together."),
+    ("vo-05", "Olin recommends. The partner decides. A rationale is required before the case can move to approval, review, or decline."),
+    ("vo-06", "The decision, disbursement, and repayment outcome stay linked in one audit trail. This paid-on-time status is synthetic demonstration data."),
+    ("vo-07", "The safe next step is ten authorized shadow cases. No money moves. Partners measure coverage, speed, disagreement, and missing evidence."),
 ]
 
 async def generate(name: str, text: str):

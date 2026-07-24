@@ -1,0 +1,10 @@
+Olin · Analyst Review
+DEMO MODE · synthetic inputs may be present · never use for real disbursement
+
+The dashboard shows three illustrative merchant routes:
+
+1. Jugueria La Esquina — Tier 13, score 19.2, DECLINE. Missing bank data, short tenure, and weak operating signals remain visible. The analyst retains approve, route-to-review, and decline controls.
+2. Roberto — Taqueria El Güero — Tier 10, score 63.6, COMMITTEE. Olin reduces the requested MXN 25,000 to a MXN 12,000 counter-offer, explains the capacity constraint, shows missing Círculo evidence, and records analyst rationale.
+3. Maria — Abarrotes Don Chuy — Tier 1, score 92.5, AUTO APPROVE recommendation. The interface shows Círculo 720, DSCR 2.87, 95% coverage, operating signals, analyst rationale, approval, disbursement state, and a paid-on-time outcome.
+
+The product separates the engine recommendation from the institution's final analyst decision. Every missing signal, reason, repayment metric, decision, disbursement status, payment event, and outcome remains auditable.

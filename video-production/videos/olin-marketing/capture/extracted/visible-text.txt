@@ -1,0 +1,155 @@
+[a] Saltar al contenido
+[span] OLIN
+[a] Cómo funciona
+[a] Ver un caso
+[a] Ver piloto
+[a] Cómo funciona
+[a] Casos sintéticos
+[a] Ver el piloto
+[p] Sitio para instituciones · no acepta solicitudes de crédito
+[p] Software para equipos de crédito · prototipo funcional
+[h1] ¿Puede este negocio
+[em] pagar este crédito?
+[p] Olin ayuda a bancos, Sofomes y fintechs a estimarlo para un monto y un plazo concretos. Reúne historial crediticio, capacidad estimada de pago y señales de operación en una recomendación que su equipo puede revisar.
+[a] Ver cómo se evalúa un caso
+[a] Explorar el piloto controlado
+[p] Sitio institucional · Olin no acepta solicitudes ni garantiza el pago · la institución toma la decisión final
+[span] OL / EXPEDIENTE / 0142
+[span] Caso sintético
+[span] Repetir
+[strong] Tienda de abarrotes San Luis
+[small] Iztapalapa · solicitud de MXN 25,000
+[span] 3 fuentes
+[small] Círculo ≥ 670
+[strong] 2,7×
+[small] Capacidad estimada
+[small] Indicador interno
+[small] Ruta
+[small] Recomendación del motor
+[strong] RUTA
+[strong] FAVORABLE
+[p] La institución revisa las fuentes, el monto y conserva la decisión final.
+[span] Cliente
+[strong] Institución financiera
+[p] Banco, SOFOM o fintech que evalúa créditos.
+[span] Evalúa
+[strong] Pequeños negocios
+[p] Con información autorizada y fuentes identificadas.
+[span] Entrega
+[strong] Recomendación + razones
+[p] Incluye faltantes, supuestos y ruta de revisión.
+[span] Decide
+[strong] El equipo de crédito
+[p] Olin apoya la decisión; no sustituye al otorgante.
+[p] 01 / La pregunta central
+[h2] ¿Cómo estimar si un negocio podrá
+[em] cumplir con sus pagos?
+[p] No se puede saber con certeza. Ningún sistema de crédito puede garantizar que una persona pagará. Olin reduce la incertidumbre al separar tres preguntas que suelen confundirse.
+[strong] La capacidad se estima para un monto y un plazo concretos.
+[p] Si la cuota cambia, la evaluación también debe cambiar. La calidad y vigencia de la información condicionan el resultado.
+[h3] ¿Cómo ha pagado antes?
+[p] Círculo de Crédito muestra historial, deudas y atrasos. No tener expediente no significa automáticamente pagar bien o mal.
+[span] Comportamiento
+[h3] ¿La cuota cabe en su flujo?
+[p] La cobertura de deuda compara el efectivo estimado disponible con el pago requerido. Una razón de 2,0× significa dos pesos disponibles por cada peso de cuota.
+[span] Capacidad estimada
+[h3] ¿La operación es consistente?
+[p] Antigüedad, ventas bancarias o por terminal y compras a proveedores ayudan a comprobar continuidad cuando la fuente está autorizada.
+[span] Contexto operativo
+[p] 02 / Alcance
+[h2] Una plataforma.
+[h2] Políticas distintas por
+[em] giro.
+[p] Olin está diseñado para instituciones que evalúan pequeños negocios. La primera cohorte propuesta se concentra en tiendas de abarrotes; cada giro adicional requiere revisar sus señales y calibrar su propia política.
+[span] Primera cohorte
+[h3] Tiendas de abarrotes
+[p] Reposición frecuente, ventas diarias, antigüedad y compras a distribuidores.
+[small] Política inicial por validar
+[span] Piloto separado
+[h3] Taquerías y fondas
+[p] Mayor variación diaria, ventas por terminal o plataforma y compras de insumos.
+[small] Requiere ajustar capacidad y estacionalidad
+[span] Piloto separado
+[h3] Papelerías y ferreterías
+[p] Inventario, compras a proveedores, temporadas y permanencia del establecimiento.
+[small] Requiere reglas propias del giro
+[span] Exploración futura
+[h3] Servicios locales
+[p] Salones, talleres y otros negocios pueden aportar ventas, citas y flujo bancario.
+[small] No dependen de las mismas señales de inventario
+[strong] Importante:
+[div] la arquitectura puede adaptarse; la política actual no está validada para todos los negocios y sus criterios no se trasladan automáticamente entre giros.
+[p] 03 / Lo que recibe el otorgante
+[h2] Un expediente que se puede
+[em] revisar.
+[p] El resultado no es solamente un puntaje. El equipo ve qué información entró, qué falta, qué regla se activó y por qué el caso siguió una ruta.
+[h3] Fuentes claras
+[p] Origen, fecha, permiso y estado de cada dato. Lo ausente permanece visible.
+[h3] Recomendación explicada
+[p] Ruta favorable, comité o no recomendada, acompañada de las razones de la política.
+[h3] Decisión registrada
+[p] El analista conserva su justificación para comparar después la decisión con el resultado observado.
+[p] 04 / Casos sintéticos
+[h2] Tres negocios.
+[h2] Tres rutas
+[em] distintas.
+[p] Estos ejemplos muestran cómo cambia una recomendación cuando cambian el historial, la capacidad y las señales operativas. No son clientes ni prueban precisión.
+[button] Abarrotes
+[button] Taquería
+[button] Papelería
+[small] Expediente
+[small] OL-0142
+[h3] Tienda de abarrotes San Luis
+[dt] Solicita
+[dd] MXN 25,000
+[dt] Antigüedad
+[dd] 9 años
+[dt] Señales
+[dd] Banco + compras
+[span] Historial crediticio
+[span] dato sintético
+[p] puntaje ≥ 670
+[span] Capacidad estimada
+[span] dato sintético
+[p] 2,7× la cuota
+[span] Señales operativas
+[span] dato sintético
+[p] 81 / 100
+[small] Ruta del motor
+[div] Ruta 1
+[h3] Recomendación favorable
+[p] La política ilustrativa ubica el caso en su ruta favorable. La institución todavía revisa las fuentes, el monto y la decisión final.
+[p] Los valores son sintéticos y las rutas coinciden con la matriz actual. Cada giro requerirá validación y calibración antes de usarse con crédito real.
+[p] Piloto en paralelo
+[h2] 10 expedientes reales. Decisión oficial intacta.
+[p] Olin analiza casos autorizados en paralelo al proceso del otorgante. El objetivo es medir cobertura, tiempo, diferencias y utilidad antes de integrar o mover dinero.
+[a] Ver la propuesta del piloto
+[span] cobertura
+[span] tiempo
+[span] diferencias
+[span] faltantes
+[p] 05 / Respuestas directas
+[h2] Lo que Olin sí — y no —
+[em] responde.
+[p] Estas son las cuatro preguntas que una institución debe resolver antes de evaluar el producto.
+[summary] ¿Olin sabe quién va a pagar?
+[p] No. Estima la capacidad de pago y organiza señales de riesgo para un crédito específico. Nadie puede garantizar el pago; solo los resultados reales permiten calibrar la política.
+[summary] ¿Olin presta el dinero?
+[p] No en el modelo propuesto. La institución financiera origina el crédito, define su política, aporta el capital y conserva la relación con el cliente.
+[summary] ¿Funciona para cualquier negocio?
+[p] La arquitectura admite distintos giros. La política inicial se enfoca en tiendas de abarrotes; taquerías, papelerías y servicios necesitan pilotos y reglas separados.
+[summary] ¿Qué pasa cuando falta información?
+[p] Olin no inventa el dato. Registra el faltante y aplica la ruta correspondiente: revisión adicional o caso no recomendado, según la política.
+[p] Para crédito, riesgo, datos y operación
+[h2] Revisemos un expediente, no una promesa.
+[p] La propuesta comienza con diez casos autorizados y criterios claros para avanzar o detener.
+[a] Conocer el piloto
+[p] Evaluación crediticia explicable para instituciones que atienden pequeños negocios mexicanos.
+[strong] Producto
+[a] Cómo funciona
+[a] Casos sintéticos
+[a] Piloto en paralelo
+[a] Privacidad
+[a] Términos
+[span] © 2026 Olin
+[span] Prototipo funcional · no es una oferta de crédito

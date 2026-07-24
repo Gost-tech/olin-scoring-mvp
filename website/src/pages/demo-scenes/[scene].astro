@@ -1,0 +1,85 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import OlinLogo from "../../components/OlinLogo.astro";
+
+export function getStaticPaths() {
+  return ["evidence", "organize", "decision", "control", "pilot"].map((scene) => ({ params: { scene } }));
+}
+
+const { scene } = Astro.params;
+
+const titles: Record<string, string> = {
+  evidence: "La evidencia existe",
+  organize: "Una ruta auditable",
+  decision: "La lógica permanece visible",
+  control: "El originador decide",
+  pilot: "Probar antes de integrar"
+};
+---
+
+<BaseLayout title={`${titles[scene ?? ""]} | Olin`} description="Escena de la demostración de Olin." noHeader noFooter noIndex>
+  {scene === "evidence" && (
+    <section class="video-frame video-frame--dark">
+      <div class="video-frame__brand"><OlinLogo inverse /><span>01 / LA BRECHA</span></div>
+      <div class="video-frame__headline"><p>Una tienda de abarrotes puede operar durante años.</p><h1>La evidencia existe.<br />Está <em>fragmentada.</em></h1></div>
+      <div class="video-fragments">
+        <article><small>Buró</small><strong>Círculo C1</strong><span>consentimiento / registrado</span></article>
+        <article><small>Capacidad</small><strong>DSCR 2.2×</strong><span>fuente / identificada</span></article>
+        <article><small>Operación</small><strong>Compra semanal</strong><span>estado / pendiente</span></article>
+      </div>
+    </section>
+  )}
+
+  {scene === "organize" && (
+    <section class="video-frame video-frame--dark">
+      <div class="video-frame__brand"><OlinLogo inverse /><span>02 / ORGANIZAR</span></div>
+      <div class="video-frame__split-title"><h1>No más datos.<br />Mejor <em>evidencia.</em></h1><p>Fuente, fecha y estado permanecen visibles.</p></div>
+      <div class="video-merge">
+        <div class="video-merge__inputs"><span><b>C1</b>Círculo</span><span><b>2.2×</b>Capacidad</span><span><b>82</b>Operación</span></div>
+        <svg viewBox="0 0 360 240" preserveAspectRatio="none" aria-hidden="true"><path d="M0 36C160 36 150 120 360 120"/><path d="M0 120H360"/><path d="M0 204C160 204 150 120 360 120"/></svg>
+        <div class="video-merge__output"><span>OL</span><div><small>Expediente Olin</small><strong>Una ruta auditable</strong></div></div>
+      </div>
+    </section>
+  )}
+
+  {scene === "decision" && (
+    <section class="video-frame video-frame--light">
+      <div class="video-frame__brand"><OlinLogo /><span>03 / RECOMENDACIÓN</span></div>
+      <div class="video-frame__split-title"><h1>Tres dimensiones.<br />Una lógica <em>visible.</em></h1><p>36 combinaciones agrupan la política en 14 tiers.</p></div>
+      <div class="video-policy">
+        <article><small>Círculo</small><strong>C3</strong><span>sin expediente</span></article>
+        <i aria-hidden="true">+</i>
+        <article><small>Capacidad</small><strong>D2</strong><span>1.9× DSCR</span></article>
+        <i aria-hidden="true">+</i>
+        <article><small>Interno</small><strong>S1</strong><span>77 / 100</span></article>
+        <i aria-hidden="true">→</i>
+        <article class="video-policy__result"><small>Ruta del motor</small><strong>R11</strong><span>COMITÉ</span></article>
+      </div>
+    </section>
+  )}
+
+  {scene === "control" && (
+    <section class="video-frame video-frame--dark">
+      <div class="video-frame__brand"><OlinLogo inverse /><span>04 / CONTROL</span></div>
+      <div class="video-control">
+        <div><h1>El originador<br /><em>decide.</em></h1><p>La recomendación orienta. La decisión humana y su motivo quedan registrados.</p></div>
+        <div class="video-control__ledger">
+          <div><span>09:42</span><strong>Consentimiento registrado</strong><small>canal · WhatsApp</small></div>
+          <div><span>09:43</span><strong>Ruta 11 · Comité</strong><small>C3 · D2 · S1</small></div>
+          <div class="is-active"><span>10:08</span><strong>Decisión del analista</strong><small>motivo obligatorio</small></div>
+        </div>
+      </div>
+    </section>
+  )}
+
+  {scene === "pilot" && (
+    <section class="video-frame video-frame--signal">
+      <div class="video-frame__brand"><OlinLogo /><span>05 / SIGUIENTE PASO</span></div>
+      <div class="video-pilot">
+        <div><span class="video-pilot__number">10</span><h1>expedientes.<br />Sin mover dinero.</h1></div>
+        <p>Medir cobertura, tiempo, concordancia y evidencia ausente antes de integrar.</p>
+      </div>
+      <div class="video-pilot__metrics"><span>COBERTURA</span><span>TIEMPO</span><span>CONCORDANCIA</span><span>EVIDENCIA</span></div>
+    </section>
+  )}
+</BaseLayout>

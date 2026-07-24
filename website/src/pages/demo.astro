@@ -1,0 +1,11 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PilotWorkspace from "../components/PilotWorkspace";
+---
+
+<BaseLayout title="Demo workspace | Olin" description="Interactive synthetic shadow-pilot workspace for Olin." noIndex>
+  <section class="page-hero" aria-labelledby="demo-title">
+    <div class="shell page-hero__inner"><div><p class="eyebrow">Investor demo · synthetic data</p><h1 id="demo-title">From merchant intake<br /><em>to pilot evidence.</em></h1></div><div class="page-hero__aside"><p>This is the smallest complete Olin workflow: consent, evidence, explainable route and partner comparison. It does not approve or disburse credit.</p></div></div>
+  </section>
+  <section class="section section--paper"><div class="shell"><PilotWorkspace client:load /><div class="button-row" style="margin-top:1.5rem"><a class="button button--dark" href="/analyst-demo/">Open analyst review console <span aria-hidden="true">→</span></a></div><p class="explorer-disclaimer">All values in this workspace are synthetic. The production product requires approved data sources, legal review, consent controls and a lending partner.</p></div></section>
+</BaseLayout>
