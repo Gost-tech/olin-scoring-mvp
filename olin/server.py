@@ -1181,6 +1181,170 @@ load();
 
 
 # ---------------------------------------------------------------------------
+# POST /api/applications helpers
+# ---------------------------------------------------------------------------
+
+def _build_application(body: dict):
+    """Build an Application from the JSON body sent by a bank partner.
+
+    All signal blocks are optional. Unrecognised keys are ignored.
+    Required: merchant_name, business_type, requested_mxn.
+    """
+    from .models import (
+        Application, BusinessType,
+        BankData, FMCGData, TenureData, POSData,
+        MapsRatingData, IMSSPayrollData, BuroData, FraudData,
+    )
+
+    merchant_name = str(body["merchant_name"]).strip()
+    if not merchant_name:
+        raise ValueError("merchant_name is required")
+
+    try:
+        btype = BusinessType(str(body["business_type"]).lower())
+    except ValueError:
+        valid = [e.value for e in BusinessType]
+        raise ValueError(f"business_type must be one of {valid}")
+
+    requested = float(body["requested_mxn"])
+    if requested <= 0:
+        raise ValueError("requested_mxn must be > 0")
+
+    def _sub(key):
+        return body.get(key) or {}
+
+    b = _sub("bank")
+    bank = BankData(
+        months_connected=float(b.get("months_connected", 0)),
+        avg_daily_balance_mxn=float(b.get("avg_daily_balance_mxn", 0)),
+        monthly_deposit_count=float(b.get("monthly_deposit_count", 0)),
+        monthly_deposit_volume_mxn=float(b.get("monthly_deposit_volume_mxn", 0)),
+        monthly_outflow_volume_mxn=float(b.get("monthly_outflow_volume_mxn", 0)),
+        deposit_regularity=float(b.get("deposit_regularity", 0)),
+        overdrafts_90d=int(b.get("overdrafts_90d", 0)),
+        balance_trend_90d=float(b.get("balance_trend_90d", 0)),
+        min_daily_balance_mxn=float(b.get("min_daily_balance_mxn", 0)),
+        source=str(b.get("source", "api")),
+        verified=bool(b.get("verified", False)),
+        evidence_reference=str(b.get("evidence_reference", "")),
+        observed_at=str(b.get("observed_at", "")),
+    ) if b else None
+
+    f = _sub("fmcg")
+    fmcg = FMCGData(
+        months_of_history=float(f.get("months_of_history", 0)),
+        weekly_purchase_rate=float(f.get("weekly_purchase_rate", 0)),
+        missed_weeks_last_12=int(f.get("missed_weeks_last_12", 0)),
+        avg_weekly_purchase_mxn=float(f.get("avg_weekly_purchase_mxn", 0)),
+        distributor_confirmed=bool(f.get("distributor_confirmed", False)),
+        trend_3m=float(f.get("trend_3m", 0)),
+        source=str(f.get("source", "api")),
+        verified=bool(f.get("verified", False)),
+        evidence_reference=str(f.get("evidence_reference", "")),
+        observed_at=str(f.get("observed_at", "")),
+    ) if f else None
+
+    t = _sub("tenure")
+    tenure = TenureData(
+        years_on_google_maps=float(t.get("years_on_google_maps", 0)),
+        years_in_imss=float(t.get("years_in_imss", 0)),
+        address_consistent=bool(t.get("address_consistent", True)),
+    ) if t else None
+
+    p = _sub("pos")
+    pos = POSData(
+        months_of_history=float(p.get("months_of_history", 0)),
+        avg_monthly_volume_mxn=float(p.get("avg_monthly_volume_mxn", 0)),
+        volume_consistency=float(p.get("volume_consistency", 0)),
+        trend_3m=float(p.get("trend_3m", 0)),
+    ) if p else None
+
+    m = _sub("maps")
+    maps = MapsRatingData(
+        rating=float(m.get("rating", 0)),
+        review_count=int(m.get("review_count", 0)),
+        review_velocity_6m=int(m.get("review_velocity_6m", 0)),
+    ) if m else None
+
+    i = _sub("imss")
+    imss = IMSSPayrollData(
+        registered_employees=i.get("registered_employees"),
+    ) if i else None
+
+    bu = _sub("buro")
+    buro = BuroData(
+        checked=bool(bu.get("checked", False)),
+        active_delinquencies=int(bu.get("active_delinquencies", 0)),
+        active_loans_count=int(bu.get("active_loans_count", 0)),
+        worst_mob_status=str(bu.get("worst_mob_status", "")),
+        score=bu.get("score"),
+    ) if bu else None
+
+    fr = _sub("fraud")
+    fraud = FraudData(
+        phone_mx=str(fr.get("phone_mx", "")),
+        rfc=str(fr.get("rfc", "")),
+        curp=str(fr.get("curp", "")),
+        ine_checked=bool(fr.get("ine_checked", False)),
+        address_stated=str(fr.get("address_stated", "")),
+    ) if fr else None
+
+    return Application(
+        merchant_name=merchant_name,
+        business_type=btype,
+        requested_amount_mxn=requested,
+        colonia=str(body.get("colonia", "")),
+        clabe=str(body.get("clabe", "")),
+        bank=bank,
+        fmcg=fmcg,
+        tenure=tenure,
+        pos=pos,
+        maps=maps,
+        imss=imss,
+        buro=buro,
+        fraud=fraud,
+    )
+
+
+def _format_score_result(app, result) -> dict:
+    """Compact, bank-friendly response for POST /api/applications."""
+    from dataclasses import asdict
+    rep = result.repayment
+    return {
+        "application_id": result.application_id,
+        "merchant_name": result.merchant_name,
+        "score": round(result.score, 2),
+        "ci_low": round(result.ci_low, 2),
+        "ci_high": round(result.ci_high, 2),
+        "tier": result.tier,
+        "decision": result.decision.value,
+        "approved_amount_mxn": result.approved_amount_mxn,
+        "pricing_fixed_cost_mxn": result.pricing_fixed_cost_mxn,
+        "data_coverage": round(result.data_coverage, 3),
+        "decision_reasons": result.decision_reasons,
+        "hard_filter_failures": result.hard_filter_failures,
+        "repayment": {
+            "dscr": rep.dscr,
+            "burden_ratio": rep.burden_ratio,
+            "hard_declines": rep.hard_declines,
+            "downgrades": rep.downgrades,
+        } if rep else None,
+        "signals": [
+            {
+                "name": s.name,
+                "available": s.available,
+                "raw_score": s.raw_score,
+                "explanation": s.explanation,
+            }
+            for s in result.signals
+        ],
+        "scored_at": result.scored_at,
+        "engine_version": result.engine_version,
+        "analyst_ui": "http://localhost:8080",
+    }
+
+
+# ---------------------------------------------------------------------------
 # HTTP handler
 # ---------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
@@ -1263,6 +1427,37 @@ class Handler(BaseHTTPRequestHandler):
             return
         elif path == "/api/apps":
             self._json(self._load_apps())
+        elif path.startswith("/api/applications/"):
+            app_id = path.split("/api/applications/")[1].strip("/")
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT application_id, merchant_name, score, tier, decision, "
+                    "approved_mxn, data_coverage, analyst_override, analyst_reason, "
+                    "disbursed, outcome_status, scored_at, raw_result "
+                    "FROM scoring_log WHERE application_id=?", (app_id,)
+                ).fetchone()
+            if not row:
+                self._json({"error": "not found"}, 404)
+            else:
+                import json as _json
+                raw = _json.loads(row["raw_result"] or "{}")
+                self._json({
+                    "application_id": row["application_id"],
+                    "merchant_name": row["merchant_name"],
+                    "score": row["score"],
+                    "tier": row["tier"],
+                    "decision": row["decision"],
+                    "approved_amount_mxn": row["approved_mxn"],
+                    "data_coverage": row["data_coverage"],
+                    "analyst_override": row["analyst_override"],
+                    "analyst_reason": row["analyst_reason"],
+                    "disbursed": bool(row["disbursed"]),
+                    "outcome_status": row["outcome_status"],
+                    "scored_at": row["scored_at"],
+                    "decision_reasons": raw.get("decision_reasons", []),
+                    "signals": raw.get("signals", []),
+                })
         elif path == "/api/portfolio":
             from .store import ScoringLog
             with ScoringLog(DB_PATH) as _sl:
@@ -1310,6 +1505,28 @@ class Handler(BaseHTTPRequestHandler):
             and parts[1] == "webhook" and parts[2] == "stp"
         )
         if not is_webhook and not self._require_analyst_auth():
+            return
+
+        # POST /api/applications  — submit a new merchant application for scoring
+        if parts == ["api", "applications"]:
+            body, _ = self._read_json()
+            if body is None:
+                return
+            try:
+                app = _build_application(body)
+            except (KeyError, ValueError) as exc:
+                self._json({"error": f"invalid payload: {exc}"}, 400)
+                return
+            from .scorecard import score_application
+            from .portfolio import check_portfolio
+            from .graduation import get_graduation_offer
+            from .store import ScoringLog
+            port = check_portfolio(app, DB_PATH)
+            grad = get_graduation_offer(app.clabe or "", DB_PATH)
+            result = score_application(app, portfolio_block=port, graduation=grad)
+            with ScoringLog(DB_PATH) as sl:
+                sl.log(app, result)
+            self._json(_format_score_result(app, result), 201)
             return
 
         # POST /api/apps/{id}/disburse
