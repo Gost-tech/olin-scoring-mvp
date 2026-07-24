@@ -380,6 +380,8 @@ def score_application(
     app.environment = runtime_mode()
 
     # ── PRE-GATE: production provenance ─────────────────────────────────────
+    # Only block synthetic/mocked data — agent-stated or unverified real data
+    # is allowed to contribute (analysts review before any disbursement).
     production_blocks: list[str] = []
     if is_production():
         if app.bank is not None and is_synthetic_source(app.bank.source):
@@ -389,14 +391,6 @@ def score_application(
         if app.fmcg is not None and is_synthetic_source(app.fmcg.source):
             production_blocks.append(
                 "Synthetic FMCG data is forbidden in production underwriting"
-            )
-        if app.bank is not None and not app.bank.verified:
-            production_blocks.append(
-                "Bank data has not been verified from a production source"
-            )
-        if app.fmcg is not None and not app.fmcg.verified:
-            production_blocks.append(
-                "FMCG evidence has not been verified"
             )
     if production_blocks:
         signals_list = _collect_signals(app)

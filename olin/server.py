@@ -1360,6 +1360,33 @@ input::placeholder{color:#4a5568}
       </div>
     </div>
 
+    <!-- 5. Círculo de Crédito -->
+    <div class="card">
+      <div class="card-title"><span class="num">5</span>Círculo de Crédito <span class="optional-tag" style="text-transform:none;font-size:11px">(agente: consultar antes de enviar)</span></div>
+      <div class="field">
+        <label>¿Se consultó el buró?</label>
+        <div class="toggle-row">
+          <input type="radio" name="buro_checked" id="buro_yes" value="yes">
+          <label for="buro_yes">Sí</label>
+          <input type="radio" name="buro_checked" id="buro_no" value="no" checked>
+          <label for="buro_no">No</label>
+        </div>
+      </div>
+      <div class="collapsible" id="buroFields">
+        <div class="row">
+          <div class="field">
+            <label>Puntaje Círculo</label>
+            <input name="buro_score" type="number" min="300" max="850" placeholder="Ej. 680">
+          </div>
+          <div class="field">
+            <label>Adeudos activos</label>
+            <input name="buro_delinquencies" type="number" min="0" placeholder="0 si ninguno">
+          </div>
+        </div>
+      </div>
+      <p class="hint">Un puntaje Círculo ≥670 habilita aprobación automática.</p>
+    </div>
+
     <button type="submit" class="submit-btn" id="submitBtn">Solicitar crédito →</button>
   </form>
 </div>
@@ -1376,6 +1403,7 @@ function toggle(radioName, containerId) {
 toggle('has_bank', 'bankFields');
 toggle('has_imss', 'imssFields');
 toggle('has_pos', 'posFields');
+toggle('buro_checked', 'buroFields');
 
 document.getElementById('applyForm').addEventListener('submit', async function(e) {
   e.preventDefault();
@@ -1428,39 +1456,53 @@ def _render_apply_result(app_id: str, result) -> str:
 
     if decision == Decision.AUTO_APPROVE:
         icon = "✓"
-        title = "¡Felicidades, pre-aprobado!"
+        title = "¡Pre-aprobado!"
         color = "#10b981"
         bg = "#052e1a"
         border = "#065f46"
-        subtitle = f"Monto aprobado: <strong>MXN {approved:,.0f}</strong>"
+        subtitle = f"Crédito pre-aprobado por <strong>MXN {approved:,.0f}</strong>"
         next_steps = [
-            "Un ejecutivo de Olin te contactará en menos de 24 horas.",
-            "Ten a la mano tu INE y los datos de tu cuenta CLABE.",
-            f"Costo estimado del crédito: MXN {cost:,.0f} (60 días).",
+            f"<strong>Monto aprobado:</strong> MXN {approved:,.0f}",
+            f"<strong>Costo total (60 días):</strong> MXN {cost:,.0f}",
+            "Un ejecutivo te llamará en menos de 2 horas hábiles.",
+            "Ten lista tu INE y cuenta CLABE para el desembolso.",
         ]
     elif decision == Decision.DECLINE:
         icon = "✗"
-        title = "Solicitud no aprobada"
+        title = "No aprobado esta vez"
         color = "#ef4444"
         bg = "#2d0f0f"
         border = "#7f1d1d"
-        subtitle = "En este momento no podemos ofrecerte un crédito."
-        next_steps = [
-            "Puedes volver a solicitar en 90 días.",
-            "Agregar datos de banco o punto de venta mejora tu evaluación.",
-            "Para más información escríbenos a hola@olin.mx",
-        ]
+        subtitle = "No pudimos aprobar tu solicitud con los datos actuales."
+        # Build specific missing data hints from reasons
+        missing = []
+        r_text = " ".join(reasons).lower()
+        if "rfc" in r_text or "identidad" in r_text:
+            missing.append("RFC y CURP para verificar tu identidad")
+        if "banco" in r_text or "bank" in r_text:
+            missing.append("Estado de cuenta bancario de los últimos 3 meses")
+        if "círculo" in r_text or "buro" in r_text or "circulo" in r_text:
+            missing.append("Consulta de Círculo de Crédito")
+        if not missing:
+            missing = ["Más información bancaria o de distribuidores"]
+        next_steps = (
+            ["<strong>Para mejorar tu solicitud, agrega:</strong>"] +
+            [f"• {m}" for m in missing] +
+            ["Puedes volver a solicitar en 30 días con datos adicionales.",
+             "Escríbenos: <a href='mailto:hola@olin.mx' style='color:#94a3b8'>hola@olin.mx</a>"]
+        )
     else:  # COMMITTEE
         icon = "⏳"
         title = "En revisión"
         color = "#f59e0b"
         bg = "#1f1208"
         border = "#78350f"
-        subtitle = "Tu solicitud está siendo revisada por un analista."
+        subtitle = "Tu caso pasa a revisión manual con nuestro equipo."
         next_steps = [
-            "Te contactaremos en menos de 48 horas hábiles.",
-            "Asegúrate de tener disponible tu INE y CURP.",
-            "Guarda tu número de folio para cualquier consulta.",
+            "Un analista revisará tu caso en las próximas <strong>24–48 horas hábiles</strong>.",
+            "Te contactaremos al número registrado con la decisión final.",
+            "Ten lista tu INE, CURP y estado de cuenta.",
+            "Folio de seguimiento: <strong>" + app_id + "</strong>",
         ]
 
     reasons_html = "".join(
@@ -1603,6 +1645,18 @@ def _parse_apply_form(body: dict) -> dict:
                 "volume_consistency": 0.70,
                 "trend_3m": 0.0,
             }
+
+    # Círculo de Crédito (buro)
+    if body.get("buro_checked") == "yes":
+        buro_score_raw = body.get("buro_score", "").strip()
+        delinq = int(body.get("buro_delinquencies") or 0)
+        app_body["buro"] = {
+            "checked": True,
+            "active_delinquencies": delinq,
+            "active_loans_count": 0,
+            "worst_mob_status": "",
+            "score": int(buro_score_raw) if buro_score_raw else None,
+        }
 
     return app_body
 
@@ -1771,6 +1825,49 @@ def _format_score_result(app, result) -> dict:
     }
 
 
+def _record_submission_metadata(sl, application_id: str, body: dict) -> None:
+    """Persist consent and pilot metadata supplied with an application.
+
+    Scoring remains possible without consent so an analyst can see what is
+    missing; production approval is still fail-closed in the decision route.
+    """
+    consent = body.get("consent") or {}
+    if consent.get("channel") or consent.get("text"):
+        sl.record_consent(
+            application_id,
+            str(consent.get("channel", "")),
+            str(consent.get("text", "")),
+        )
+    fields = {
+        "cohort_id": body.get("cohort_id"),
+        "case_mode": body.get("case_mode"),
+        "partner_case_reference": body.get("partner_case_reference"),
+    }
+    fields = {k: (str(v).strip() if v is not None else None) for k, v in fields.items()}
+    if any(v is not None for v in fields.values()):
+        sl.conn.execute(
+            "UPDATE scoring_log SET cohort_id=?, case_mode=?, partner_case_reference=? "
+            "WHERE application_id=?",
+            (fields["cohort_id"], fields["case_mode"], fields["partner_case_reference"], application_id),
+        )
+        sl.conn.commit()
+
+
+def _validate_submission_metadata(body: dict) -> None:
+    """Reject malformed consent/metadata before a score is written."""
+    consent = body.get("consent") or {}
+    if consent.get("channel") or consent.get("text"):
+        channel = str(consent.get("channel", "")).strip().lower()
+        text = str(consent.get("text", "")).strip()
+        if channel not in ("whatsapp", "sms", "in_person"):
+            raise ValueError("consent.channel must be whatsapp, sms, or in_person")
+        if not text:
+            raise ValueError("consent.text is required when consent is supplied")
+    case_mode = body.get("case_mode")
+    if case_mode is not None and str(case_mode).strip().lower() not in ("shadow", "live"):
+        raise ValueError("case_mode must be shadow or live")
+
+
 # ---------------------------------------------------------------------------
 # HTTP handler
 # ---------------------------------------------------------------------------
@@ -1849,7 +1946,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
-        if path == "/":
+        if path == "/healthz":
+            # Deliberately public and non-sensitive: useful for partner uptime
+            # checks without exposing the analyst API or database contents.
+            self._json({"ok": True, "service": "olin", "mode": runtime_mode()})
+        elif path == "/":
             self._send(HTML_PAGE.encode())
         elif path == "/solicitar":
             self._send(APPLY_HTML.encode())
@@ -1890,7 +1991,10 @@ class Handler(BaseHTTPRequestHandler):
                 row = conn.execute(
                     "SELECT application_id, merchant_name, score, tier, decision, "
                     "approved_mxn, data_coverage, analyst_override, analyst_reason, "
-                    "disbursed, outcome_status, scored_at, raw_result "
+                    "disbursed, outcome_status, scored_at, raw_result, "
+                    "consent_timestamp, consent_channel, cohort_id, case_mode, "
+                    "partner_case_reference, partner_decision, partner_reason, "
+                    "partner_decision_at, recommendation_agreement "
                     "FROM scoring_log WHERE application_id=?", (app_id,)
                 ).fetchone()
             if not row:
@@ -1913,6 +2017,19 @@ class Handler(BaseHTTPRequestHandler):
                     "scored_at": row["scored_at"],
                     "decision_reasons": raw.get("decision_reasons", []),
                     "signals": raw.get("signals", []),
+                    "consent": {
+                        "timestamp": row["consent_timestamp"],
+                        "channel": row["consent_channel"],
+                    },
+                    "pilot": {
+                        "cohort_id": row["cohort_id"],
+                        "case_mode": row["case_mode"],
+                        "partner_case_reference": row["partner_case_reference"],
+                        "partner_decision": row["partner_decision"],
+                        "partner_reason": row["partner_reason"],
+                        "partner_decision_at": row["partner_decision_at"],
+                        "recommendation_agreement": row["recommendation_agreement"],
+                    },
                 })
         elif path == "/api/portfolio":
             from .store import ScoringLog
@@ -1970,6 +2087,7 @@ class Handler(BaseHTTPRequestHandler):
             if body is None:
                 return
             try:
+                _validate_submission_metadata(body)
                 app_body = _parse_apply_form(body)
                 app = _build_application(app_body)
             except (KeyError, ValueError) as exc:
@@ -1984,6 +2102,7 @@ class Handler(BaseHTTPRequestHandler):
             result = score_application(app, portfolio_block=port, graduation=grad)
             with ScoringLog(DB_PATH) as sl:
                 sl.log(app, result)
+                _record_submission_metadata(sl, result.application_id, body)
             self._json({"application_id": result.application_id,
                         "redirect": f"/solicitar/resultado/{result.application_id}"}, 201)
             return
@@ -1994,6 +2113,7 @@ class Handler(BaseHTTPRequestHandler):
             if body is None:
                 return
             try:
+                _validate_submission_metadata(body)
                 app = _build_application(body)
             except (KeyError, ValueError) as exc:
                 self._json({"error": f"invalid payload: {exc}"}, 400)
@@ -2007,8 +2127,27 @@ class Handler(BaseHTTPRequestHandler):
             result = score_application(app, portfolio_block=port, graduation=grad)
             with ScoringLog(DB_PATH) as sl:
                 sl.log(app, result)
+                _record_submission_metadata(sl, result.application_id, body)
             self._json(_format_score_result(app, result), 201)
             return
+
+        # POST /api/apps/{id}/outcome — partner decision for a shadow case.
+        if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "outcome":
+            body, _ = self._read_json()
+            if body is None:
+                return
+            try:
+                from .store import ScoringLog
+                with ScoringLog(DB_PATH) as sl:
+                    outcome = sl.record_partner_outcome(
+                        parts[2], body.get("partner_decision", ""),
+                        body.get("partner_reason", ""), body.get("partner_decision_at"),
+                    )
+            except LookupError as exc:
+                self._json({"error": str(exc)}, 404); return
+            except ValueError as exc:
+                self._json({"error": str(exc)}, 400); return
+            self._json(outcome, 200); return
 
         # POST /api/apps/{id}/disburse
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "disburse":

@@ -88,6 +88,13 @@ class ScoringLog:
             "ALTER TABLE scoring_log ADD COLUMN consent_timestamp TEXT",
             "ALTER TABLE scoring_log ADD COLUMN consent_channel TEXT",
             "ALTER TABLE scoring_log ADD COLUMN consent_text TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN cohort_id TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN case_mode TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN partner_case_reference TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN partner_decision TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN partner_reason TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN partner_decision_at TEXT",
+            "ALTER TABLE scoring_log ADD COLUMN recommendation_agreement INTEGER",
         ]:
             try:
                 self.conn.execute(col_sql)
@@ -194,6 +201,57 @@ class ScoringLog:
             self.conn.rollback()
             raise LookupError("Application not found")
         self.conn.commit()
+
+    def record_partner_outcome(
+        self,
+        application_id: str,
+        decision: str,
+        reason: str,
+        decision_at: Optional[str] = None,
+    ) -> dict:
+        """Persist a partner's independent shadow-pilot outcome.
+
+        This is deliberately separate from the analyst decision: the partner
+        supplies the ground-truth comparison after seeing the expediente.
+        No money movement is triggered by this method.
+        """
+        from datetime import datetime, timezone
+
+        decision = str(decision).strip().lower()
+        reason = str(reason).strip()
+        if decision not in ("approved", "declined", "pending"):
+            raise ValueError("partner_decision must be approved, declined, or pending")
+        if decision != "pending" and len(reason) < 5:
+            raise ValueError("A partner reason of at least 5 characters is required")
+        row = self.conn.execute(
+            "SELECT decision, partner_decision FROM scoring_log WHERE application_id=?",
+            (application_id,),
+        ).fetchone()
+        if not row:
+            raise LookupError("Application not found")
+        if row[1] and row[1] != "pending":
+            raise ValueError("Partner outcome is already recorded")
+        agreement = None
+        if decision != "pending":
+            engine = str(row[0]).upper()
+            agreement = int(
+                (decision == "approved" and engine == "APPROVE")
+                or (decision == "declined" and engine == "DECLINE")
+            )
+        when = decision_at or datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "UPDATE scoring_log SET partner_decision=?, partner_reason=?, "
+            "partner_decision_at=?, recommendation_agreement=? WHERE application_id=?",
+            (decision, reason[:2000], when, agreement, application_id),
+        )
+        self.conn.commit()
+        return {
+            "application_id": application_id,
+            "partner_decision": decision,
+            "partner_reason": reason[:2000],
+            "partner_decision_at": when,
+            "recommendation_agreement": agreement,
+        }
 
     def record_outcome(
         self,
