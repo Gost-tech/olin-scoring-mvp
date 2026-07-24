@@ -1360,9 +1360,24 @@ input::placeholder{color:#4a5568}
       </div>
     </div>
 
-    <!-- 5. Círculo de Crédito -->
+    <!-- 5. Verificación de identidad -->
     <div class="card">
-      <div class="card-title"><span class="num">5</span>Círculo de Crédito <span class="optional-tag" style="text-transform:none;font-size:11px">(agente: consultar antes de enviar)</span></div>
+      <div class="card-title"><span class="num">5</span>Verificación de identidad <span class="optional-tag" style="text-transform:none;font-size:11px">(agente)</span></div>
+      <div class="field">
+        <label>¿Se verificó la INE/IFE del titular? <span class="required">*</span></label>
+        <div class="toggle-row">
+          <input type="radio" name="ine_checked" id="ine_yes" value="yes">
+          <label for="ine_yes">Sí, verifiqué</label>
+          <input type="radio" name="ine_checked" id="ine_no" value="no" checked>
+          <label for="ine_no">No todavía</label>
+        </div>
+      </div>
+      <p class="hint" style="color:#f59e0b">La INE es obligatoria. Sin verificación, la solicitud no puede ser aprobada.</p>
+    </div>
+
+    <!-- 6. Círculo de Crédito -->
+    <div class="card">
+      <div class="card-title"><span class="num">6</span>Círculo de Crédito <span class="optional-tag" style="text-transform:none;font-size:11px">(agente: consultar antes de enviar)</span></div>
       <div class="field">
         <label>¿Se consultó el buró?</label>
         <div class="toggle-row">
@@ -1595,8 +1610,8 @@ def _parse_apply_form(body: dict) -> dict:
     curp = body.get("curp", "").strip().upper()
     if curp:
         fraud["curp"] = curp
-    if fraud:
-        app_body["fraud"] = fraud
+    fraud["ine_checked"] = (body.get("ine_checked") == "yes")
+    app_body["fraud"] = fraud
 
     # Bank
     if body.get("has_bank") == "yes":
