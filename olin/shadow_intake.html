@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nuevo expediente sombra | Olin</title>
+  <style>
+    :root {
+      --ink:#071713; --paper:#f4f7f1; --card:#fff; --line:#cfdbd3;
+      --muted:#5d6f67; --lime:#bdff4a; --lime-dark:#3b6200;
+      --red:#a72e2e; --amber:#8a5b00; --radius:18px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+    a{color:inherit}
+    .shell{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:24px 0 72px}
+    .top{display:flex;align-items:center;justify-content:space-between;padding:6px 0 28px}
+    .brand{font-weight:900;font-size:24px;letter-spacing:-1px;text-decoration:none}
+    .brand i{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--lime);margin-left:3px}
+    .back{font-size:14px;color:var(--muted);text-decoration:none}
+    .hero{background:var(--ink);color:white;border-radius:26px;padding:34px;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end}
+    .eyebrow{color:var(--lime);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+    h1{font-size:clamp(34px,5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;max-width:760px}
+    .hero p{color:#b9c8c2;max-width:710px;margin:0}
+    .mode{border:1px solid #496057;border-radius:999px;padding:9px 13px;font-size:12px;white-space:nowrap}
+    form{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+    section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+    section.wide{grid-column:1/-1}
+    h2{font-size:19px;letter-spacing:-.02em;margin:0 0 5px}
+    .help{font-size:13px;color:var(--muted);margin:0 0 20px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .grid.three{grid-template-columns:repeat(3,1fr)}
+    label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:750;color:#32473e}
+    label.full{grid-column:1/-1}
+    input,select,textarea{width:100%;border:1px solid #b9c8c0;border-radius:10px;background:#fbfdf9;color:var(--ink);font:inherit;padding:11px 12px;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:#659322;box-shadow:0 0 0 3px rgba(189,255,74,.28)}
+    textarea{min-height:92px;resize:vertical}
+    .check{flex-direction:row;align-items:center;background:#f3f7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px}
+    .check input{width:18px;height:18px;accent-color:var(--lime-dark)}
+    details{border:1px solid var(--line);border-radius:12px;padding:0 14px;margin-top:12px}
+    summary{cursor:pointer;font-weight:800;padding:14px 0}
+    details .grid{padding:2px 0 16px}
+    .actions{grid-column:1/-1;position:sticky;bottom:16px;background:rgba(244,247,241,.92);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+    .actions small{color:var(--muted);max-width:580px}
+    button{border:0;border-radius:999px;background:var(--lime);color:var(--ink);font-weight:900;padding:14px 22px;cursor:pointer;white-space:nowrap}
+    button:disabled{opacity:.55;cursor:wait}
+    #status{grid-column:1/-1;display:none;border-radius:16px;padding:20px}
+    #status.ok{display:block;background:#e5ffd2;border:1px solid #7eb748}
+    #status.error{display:block;background:#fff0ef;border:1px solid #dc8a83;color:#721b1b}
+    .result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+    .metric{background:rgba(255,255,255,.65);border:1px solid rgba(7,23,19,.12);border-radius:12px;padding:12px}
+    .metric span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .metric strong{font-size:20px}
+    .token-modal{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgba(7,23,19,.72);backdrop-filter:blur(8px)}
+    .token-modal[hidden]{display:none}
+    .token-card{width:min(440px,100%);background:white;border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.3)}
+    .token-card h2{font-size:23px;margin-bottom:7px}
+    .token-card p{font-size:14px;color:var(--muted);margin:0 0 18px}
+    .token-card .token-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+    .token-card .secondary{background:#edf2ed}
+    .token-error{min-height:20px;color:var(--red);font-size:12px;padding-top:6px}
+    @media(max-width:800px){.hero{grid-template-columns:1fr}.mode{justify-self:start}form{grid-template-columns:1fr}section.wide,.actions{grid-column:1}.grid,.grid.three,.result-grid{grid-template-columns:1fr}.actions{position:static;align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <div class="top">
+    <a class="brand" href="/">OLIN<i></i></a>
+    <a class="back" href="/">Volver a expedientes</a>
+  </div>
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Piloto de observación</div>
+      <h1>Crear expediente sombra</h1>
+      <p>Olin organiza evidencia y genera una ruta explicable. La institución conserva la decisión final. Este flujo no origina ni desembolsa crédito.</p>
+    </div>
+    <div class="mode">SHADOW · SIN MOVIMIENTO DE DINERO</div>
+  </header>
+
+  <form id="case-form">
+    <section>
+      <h2>1. Control del piloto</h2>
+      <p class="help">Identifica la cohorte, la referencia del socio y el consentimiento utilizado.</p>
+      <div class="grid">
+        <label>Cohorte
+          <input name="cohort_id" value="shadow_2026_07" required>
+        </label>
+        <label>Referencia del socio
+          <input name="partner_case_reference" placeholder="MONEX-001" required>
+        </label>
+        <label>Canal de consentimiento
+          <select name="consent_channel" required>
+            <option value="">Seleccionar</option>
+            <option value="in_person">Presencial</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="sms">SMS</option>
+          </select>
+        </label>
+        <label class="full">Texto de consentimiento aprobado
+          <textarea name="consent_text" placeholder="Pega aquí el texto legal exacto aceptado por el comerciante." required></textarea>
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Comercio e identidad</h2>
+      <p class="help">Primera cohorte limitada a tiendas de abarrotes.</p>
+      <div class="grid">
+        <label>Nombre comercial
+          <input name="merchant_name" required>
+        </label>
+        <label>Tipo de negocio
+          <select name="business_type" required>
+            <option value="abarrotes">Tienda de abarrotes</option>
+          </select>
+        </label>
+        <label>Monto a evaluar (MXN)
+          <input name="requested_mxn" type="number" min="1000" max="80000" step="500" required>
+        </label>
+        <label>Colonia
+          <input name="colonia" required>
+        </label>
+        <label>Teléfono (10 dígitos)
+          <input name="phone_mx" inputmode="numeric" pattern="[0-9]{10}" required>
+        </label>
+        <label>RFC
+          <input name="rfc" minlength="12" maxlength="13" required>
+        </label>
+        <label>CURP
+          <input name="curp" minlength="18" maxlength="18">
+        </label>
+        <label>CLABE
+          <input name="clabe" inputmode="numeric" pattern="[0-9]{18}">
+        </label>
+        <label class="full">Domicilio declarado
+          <input name="address_stated" required>
+        </label>
+        <label class="check full"><input name="ine_checked" type="checkbox" required> INE revisada por el analista</label>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Círculo de Crédito</h2>
+      <p class="help">Carga el resultado de la consulta autorizada. Un expediente sin archivo puede pasar a revisión, nunca a autoaprobación.</p>
+      <div class="grid">
+        <label class="check full"><input name="buro_checked" type="checkbox"> Consulta realizada</label>
+        <label>Score Círculo
+          <input name="buro_score" type="number" min="300" max="850">
+        </label>
+        <label>Créditos activos
+          <input name="active_loans_count" type="number" min="0" value="0">
+        </label>
+        <label>Moras activas
+          <input name="active_delinquencies" type="number" min="0" value="0">
+        </label>
+        <label>Peor estatus MOP
+          <input name="worst_mob_status" placeholder="01">
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. Evidencia bancaria</h2>
+      <p class="help">En producción, los datos deben estar verificados y vinculados a una referencia de evidencia.</p>
+      <div class="grid">
+        <label>Fuente
+          <select name="bank_source">
+            <option value="">Sin evidencia bancaria</option>
+            <option value="syncfy_api">Syncfy API</option>
+            <option value="partner_api">API del socio</option>
+            <option value="bank_statements">Estados de cuenta</option>
+            <option value="pos_settlement">Liquidaciones TPV</option>
+          </select>
+        </label>
+        <label>Referencia de evidencia
+          <input name="bank_evidence_reference" placeholder="SYNC-CASE-001">
+        </label>
+        <label class="check full"><input name="bank_verified" type="checkbox"> Evidencia verificada</label>
+      </div>
+      <details>
+        <summary>Métricas de flujo de efectivo</summary>
+        <div class="grid three">
+          <label>Meses observados<input name="bank_months" type="number" min="0" step=".1"></label>
+          <label>Saldo diario promedio<input name="avg_balance" type="number" step=".01"></label>
+          <label>Saldo diario mínimo<input name="min_balance" type="number" step=".01"></label>
+          <label>Depósitos por mes<input name="deposit_count" type="number" min="0" step=".1"></label>
+          <label>Volumen de depósitos<input name="deposit_volume" type="number" min="0" step=".01"></label>
+          <label>Volumen de salidas<input name="outflow_volume" type="number" min="0" step=".01"></label>
+          <label>Regularidad (0 a 1)<input name="deposit_regularity" type="number" min="0" max="1" step=".01"></label>
+          <label>Sobregiros en 90 días<input name="overdrafts" type="number" min="0"></label>
+          <label>Tendencia 90 días (-1 a 1)<input name="balance_trend" type="number" min="-1" max="1" step=".01"></label>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <h2>5. Compras a proveedores</h2>
+      <p class="help">Recibos o extractos del distribuidor. No declares “verificado” sin una referencia recuperable.</p>
+      <div class="grid">
+        <label>Fuente
+          <select name="fmcg_source">
+            <option value="">Sin evidencia de proveedor</option>
+            <option value="distributor_export">Extracto del distribuidor</option>
+            <option value="receipts">Recibos verificados</option>
+            <option value="partner_api">API del socio</option>
+          </select>
+        </label>
+        <label>Referencia de evidencia
+          <input name="fmcg_evidence_reference" placeholder="FMCG-CASE-001">
+        </label>
+        <label class="check full"><input name="fmcg_verified" type="checkbox"> Evidencia verificada</label>
+      </div>
+      <details>
+        <summary>Métricas de abastecimiento</summary>
+        <div class="grid three">
+          <label>Meses observados<input name="fmcg_months" type="number" min="0" step=".1"></label>
+          <label>Cadencia semanal (0 a 1)<input name="weekly_rate" type="number" min="0" max="1" step=".01"></label>
+          <label>Semanas omitidas (últimas 12)<input name="missed_weeks" type="number" min="0" max="12"></label>
+          <label>Compra semanal promedio<input name="weekly_purchase" type="number" min="0" step=".01"></label>
+          <label>Tendencia 3 meses (-1 a 1)<input name="fmcg_trend" type="number" min="-1" max="1" step=".01"></label>
+          <label class="check"><input name="distributor_confirmed" type="checkbox"> Distribuidor confirmado</label>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <h2>6. Continuidad operativa</h2>
+      <p class="help">Señales complementarias. Deja un campo vacío cuando la evidencia no existe.</p>
+      <div class="grid">
+        <label>Años en Google Maps<input name="years_maps" type="number" min="0" step=".1"></label>
+        <label>Años en IMSS<input name="years_imss" type="number" min="0" step=".1"></label>
+        <label>Calificación Google<input name="maps_rating" type="number" min="0" max="5" step=".1"></label>
+        <label>Número de reseñas<input name="review_count" type="number" min="0"></label>
+        <label>Reseñas nuevas en 6 meses<input name="review_velocity" type="number" min="0"></label>
+        <label>Empleados registrados IMSS<input name="employees" type="number" min="0"></label>
+        <label class="check full"><input name="address_consistent" type="checkbox" checked> Domicilio consistente entre fuentes</label>
+      </div>
+      <details>
+        <summary>Datos TPV opcionales</summary>
+        <div class="grid">
+          <label>Meses observados<input name="pos_months" type="number" min="0" step=".1"></label>
+          <label>Volumen mensual promedio<input name="pos_volume" type="number" min="0" step=".01"></label>
+          <label>Consistencia (0 a 1)<input name="pos_consistency" type="number" min="0" max="1" step=".01"></label>
+          <label>Tendencia 3 meses (-1 a 1)<input name="pos_trend" type="number" min="-1" max="1" step=".01"></label>
+        </div>
+      </details>
+    </section>
+
+    <div id="status" role="status"></div>
+    <div class="actions">
+      <small>Al enviar, Olin registra el expediente, la versión del motor, la evidencia y el consentimiento. No se mueve dinero.</small>
+      <button id="submit" type="submit">Evaluar expediente</button>
+    </div>
+  </form>
+</div>
+<div class="token-modal" id="token-modal" hidden>
+  <form class="token-card" id="token-form" role="dialog" aria-modal="true" aria-labelledby="token-title">
+    <h2 id="token-title">Acceso del socio</h2>
+    <p>Ingresa tu token personal. Olin lo conserva únicamente durante esta sesión del navegador.</p>
+    <label>Token de acceso
+      <input id="token-input" type="password" autocomplete="current-password">
+    </label>
+    <div class="token-error" id="token-error" role="alert"></div>
+    <div class="token-actions">
+      <button class="secondary" id="token-cancel" type="button">Cancelar</button>
+      <button type="submit">Continuar</button>
+    </div>
+  </form>
+</div>
+<script>
+  const form = document.getElementById('case-form');
+  const statusBox = document.getElementById('status');
+  const submitButton = document.getElementById('submit');
+  const value = name => form.elements[name]?.value?.trim() || '';
+  const number = name => value(name) === '' ? 0 : Number(value(name));
+  const checked = name => Boolean(form.elements[name]?.checked);
+  let tokenResolver = null;
+
+  function closeTokenModal(value) {
+    document.getElementById('token-modal').hidden = true;
+    if (tokenResolver) {
+      const resolve = tokenResolver;
+      tokenResolver = null;
+      resolve(value);
+    }
+  }
+
+  function requestAccessToken() {
+    const modal = document.getElementById('token-modal');
+    const input = document.getElementById('token-input');
+    input.value = '';
+    document.getElementById('token-error').textContent = '';
+    modal.hidden = false;
+    requestAnimationFrame(() => input.focus());
+    return new Promise(resolve => { tokenResolver = resolve; });
+  }
+
+  document.getElementById('token-cancel').addEventListener('click', () => closeTokenModal(null));
+  document.getElementById('token-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const token = document.getElementById('token-input').value.trim();
+    if (!token) {
+      document.getElementById('token-error').textContent = 'El token es obligatorio.';
+      return;
+    }
+    closeTokenModal(token);
+  });
+  document.getElementById('token-modal').addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeTokenModal(null);
+  });
+
+  async function apiFetch(url, options={}) {
+    const headers = new Headers(options.headers || {});
+    let token = sessionStorage.getItem('olin_analyst_token') || '';
+    if (token) headers.set('X-Olin-Analyst-Token', token);
+    let response = await fetch(url, {...options, headers});
+    if (response.status === 401) {
+      token = await requestAccessToken();
+      if (token) {
+        sessionStorage.setItem('olin_analyst_token', token);
+        headers.set('X-Olin-Analyst-Token', token);
+        response = await fetch(url, {...options, headers});
+      }
+    }
+    return response;
+  }
+
+  function buildPayload() {
+    const payload = {
+      merchant_name:value('merchant_name'), business_type:'abarrotes',
+      requested_mxn:number('requested_mxn'), colonia:value('colonia'), clabe:value('clabe'),
+      case_mode:'shadow', cohort_id:value('cohort_id'),
+      partner_case_reference:value('partner_case_reference'),
+      consent:{channel:value('consent_channel'), text:value('consent_text')},
+      fraud:{phone_mx:value('phone_mx'), rfc:value('rfc').toUpperCase(),
+        curp:value('curp').toUpperCase(), ine_checked:checked('ine_checked'),
+        address_stated:value('address_stated')},
+      buro:{checked:checked('buro_checked'), active_delinquencies:number('active_delinquencies'),
+        active_loans_count:number('active_loans_count'), worst_mob_status:value('worst_mob_status'),
+        score:value('buro_score') === '' ? null : number('buro_score')},
+      tenure:{years_on_google_maps:number('years_maps'), years_in_imss:number('years_imss'),
+        address_consistent:checked('address_consistent')}
+    };
+    if (value('bank_source')) payload.bank = {
+      source:value('bank_source'), verified:checked('bank_verified'),
+      evidence_reference:value('bank_evidence_reference'), months_connected:number('bank_months'),
+      avg_daily_balance_mxn:number('avg_balance'), min_daily_balance_mxn:number('min_balance'),
+      monthly_deposit_count:number('deposit_count'), monthly_deposit_volume_mxn:number('deposit_volume'),
+      monthly_outflow_volume_mxn:number('outflow_volume'), deposit_regularity:number('deposit_regularity'),
+      overdrafts_90d:number('overdrafts'), balance_trend_90d:number('balance_trend')
+    };
+    if (value('fmcg_source')) payload.fmcg = {
+      source:value('fmcg_source'), verified:checked('fmcg_verified'),
+      evidence_reference:value('fmcg_evidence_reference'), months_of_history:number('fmcg_months'),
+      weekly_purchase_rate:number('weekly_rate'), missed_weeks_last_12:number('missed_weeks'),
+      avg_weekly_purchase_mxn:number('weekly_purchase'), trend_3m:number('fmcg_trend'),
+      distributor_confirmed:checked('distributor_confirmed')
+    };
+    if (value('maps_rating') || value('review_count') || value('review_velocity')) payload.maps = {
+      rating:number('maps_rating'), review_count:number('review_count'),
+      review_velocity_6m:number('review_velocity')
+    };
+    if (value('employees') !== '') payload.imss = {registered_employees:number('employees')};
+    if (value('pos_months') || value('pos_volume') || value('pos_consistency') || value('pos_trend')) payload.pos = {
+      months_of_history:number('pos_months'), avg_monthly_volume_mxn:number('pos_volume'),
+      volume_consistency:number('pos_consistency'), trend_3m:number('pos_trend')
+    };
+    return payload;
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    statusBox.className = '';
+    submitButton.disabled = true;
+    submitButton.textContent = 'Evaluando...';
+    try {
+      const response = await apiFetch('/api/applications', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(buildPayload())
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No fue posible evaluar el expediente');
+      const route = {AUTO_APPROVE:'Ruta de aprobación', COMMITTEE:'Revisión requerida', DECLINE:'No recomendar'}[data.decision] || data.decision;
+      statusBox.className = 'ok';
+      statusBox.innerHTML = `<strong>Expediente registrado</strong>
+        <div class="result-grid">
+          <div class="metric"><span>Folio</span><strong>${data.application_id}</strong></div>
+          <div class="metric"><span>Ruta Olin</span><strong>${route}</strong></div>
+          <div class="metric"><span>Tier</span><strong>${data.tier}</strong></div>
+          <div class="metric"><span>Score</span><strong>${Number(data.score).toFixed(1)}</strong></div>
+        </div>
+        <a href="/">Abrir la mesa de decisión</a>`;
+      statusBox.scrollIntoView({behavior:'smooth',block:'center'});
+      form.reset();
+    } catch (error) {
+      statusBox.className = 'error';
+      statusBox.textContent = error.message;
+      statusBox.scrollIntoView({behavior:'smooth',block:'center'});
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = 'Evaluar expediente';
+    }
+  });
+</script>
+</body>
+</html>

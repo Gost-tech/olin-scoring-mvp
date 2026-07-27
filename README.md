@@ -5,12 +5,11 @@ small businesses. It combines bureau, estimated repayment capacity, and
 authorized operating evidence. It is a weighted scorecard with a V2
 repayment layer—not a trained machine-learning model.
 
-The current external proposal is a 10-case parallel pilot: Olin produces a
-second, explainable reading while the institution retains its official
-decision and no money moves. A separate direct-lending track is under
-strategic review and must not be presented externally or treated as live.
-The shared codebase is the decision engine; product packaging for those two
-tracks remains deliberately unresolved.
+The current product is a 10-case shadow pilot: Olin produces a second,
+explainable reading while the institution retains its official decision and
+no money moves. Direct lending, public loan applications, repayment, and
+collection are out of scope for this MVP. Legacy modules for those flows
+remain in the repository but are blocked from shadow cases.
 
 ## Decision model
 
@@ -21,20 +20,20 @@ The engine combines three dimensions:
 - DSCR: D1 (2.5+), D2 (1.5–2.49), D3 (below 1.5 or unavailable)
 - Internal score: S1 (75+), S2 (50–74.99), S3 (below 50)
 
-The 36 combinations resolve to Tier 1 auto-approve, Tiers 2–12 committee,
-or Tier 13 decline. Tier 14 is a pre-score safety block. During the pilot,
-every approval still requires a recorded analyst decision and rationale.
+The 36 combinations resolve to Tier 1 route of approval, Tiers 2–12 review,
+or Tier 13 do-not-recommend. Tier 14 is a pre-score safety block. These are
+Olin recommendations, not the partner's final credit decision.
 
 ## Safety modes
 
 `OLIN_MODE=demo` allows deterministic bank and FMCG mocks and writes to
-`olin_scoring.db`. `OLIN_MODE=production` rejects mocked or unverified bank
-and FMCG evidence and defaults to the separate `olin_production.db`.
+`olin_scoring.db`. `OLIN_MODE=production` rejects mocked, unverified, or
+unreferenced bank and FMCG evidence and defaults to the separate
+`olin_production.db`.
 
-The payment connector enforces the same boundary: demo can only use the STP
-sandbox, while production can only use real STP. Production startup also
-requires analyst and webhook secrets and refuses a database containing demo
-rows.
+Production case routes require a named API key. Merchant self-origination is
+disabled, public case data is blocked, and `case_mode=shadow` can never reach
+the disbursement connector.
 
 ## Run the demo webpage
 
@@ -43,7 +42,8 @@ cp .env.example .env
 python3 -m olin.server --seed-demo
 ```
 
-The analyst interface opens at `http://127.0.0.1:8080`. Demo seeding is
+The partner workspace opens at `http://127.0.0.1:8080`. Use
+`http://127.0.0.1:8080/nuevo` to create a shadow case. Demo seeding is
 explicit; starting the server normally does not create applications.
 
 Run the public partner website separately with:
@@ -56,7 +56,8 @@ Then open `http://127.0.0.1:8001`. It is a dependency-free static site built
 for mobile performance and can be deployed independently from the protected
 analyst application.
 
-Run the WhatsApp-style onboarding simulator with:
+The old WhatsApp-style onboarding simulator is retained only as a legacy
+prototype and is not part of the shadow MVP:
 
 ```bash
 python3 onboard.py
@@ -66,6 +67,7 @@ python3 onboard.py
 
 ```bash
 python3 test_pilot_safety.py
+python3 -m unittest -v test_shadow_mvp
 python3 -m olin.test_v2
 python3 test_full_flow.py
 python3 test_belvo_pipeline.py
@@ -78,24 +80,22 @@ detection, and separation of demo and production payment rails.
 
 ## Production prerequisites
 
-Before changing `OLIN_MODE` to `production`:
+Before changing `OLIN_MODE` to `production` for the shadow pilot:
 
-1. Set strong `OLIN_ANALYST_TOKEN` and `OLIN_STP_WEBHOOK_SECRET` values.
-2. Configure real STP credentials and set `STP_SANDBOX=0`.
-3. Connect verified Syncfy and distributor/receipt evidence; mocks fail closed.
+1. Set `OLIN_API_KEYS` to a JSON object of named users and strong tokens.
+2. Keep every submitted case in `case_mode=shadow`.
+3. Connect verified bank and distributor/receipt evidence with retrievable references.
 4. Use a clean production database and make an encrypted backup routine.
-5. Complete the operational checklist in [PILOT_RUNBOOK.md](PILOT_RUNBOOK.md).
+5. Complete the [shadow pilot runbook](docs/SHADOW_PILOT_RUNBOOK.md).
 
 ## Main components
 
-- `onboard.py`: application collection and mock/real connector selection
+- `olin/shadow_intake.html`: authenticated partner case intake
 - `olin/scorecard.py`: scoring, repayment gates, tier matrix, and decision
-- `olin/store.py`: audit log, analyst decision, disbursement, payment ledger,
-  outcomes, and training export
-- `olin/server.py`: analyst webpage and authenticated API
-- `olin/stp.py`: CLABE validation and SPEI disbursement
-- `olin/collection.py`: repayment matching, idempotency, overdue detection
-- `jobs/daily.py`: overdue/default monitoring and portfolio snapshot
+- `olin/store.py`: case record, immutable workflow events, and cohort outcome
+- `olin/server.py`: partner workspace and authenticated API
+- `olin/stp.py`, `olin/collection.py`, `jobs/daily.py`: legacy lending modules,
+  not used by the shadow MVP
 
 Olin is still a controlled pilot system, not an unattended production lending
 platform. The public site and Monex materials describe only the parallel-pilot

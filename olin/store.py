@@ -58,12 +58,35 @@ CREATE INDEX IF NOT EXISTS idx_payment_ledger_application
 ON payment_ledger(application_id, payment_number);
 """
 
+AUDIT_SCHEMA = """
+CREATE TABLE IF NOT EXISTS audit_event (
+    event_id       TEXT PRIMARY KEY,
+    application_id TEXT NOT NULL,
+    event_type     TEXT NOT NULL,
+    actor          TEXT NOT NULL,
+    occurred_at    TEXT NOT NULL,
+    payload        TEXT NOT NULL,
+    FOREIGN KEY(application_id) REFERENCES scoring_log(application_id)
+);
+CREATE INDEX IF NOT EXISTS idx_audit_event_application
+ON audit_event(application_id, occurred_at);
+"""
+
 
 class ScoringLog:
     def __init__(self, db_path: str | Path = "olin_scoring.db"):
         self.conn = sqlite3.connect(str(db_path))
+        try:
+            self._initialize()
+        except BaseException:
+            self.conn.close()
+            raise
+
+    def _initialize(self) -> None:
+        """Create and migrate the schema without leaking on partial failure."""
         self.conn.execute(SCHEMA)
         self.conn.executescript(PAYMENT_SCHEMA)
+        self.conn.executescript(AUDIT_SCHEMA)
         # Incremental migrations — safe to re-run
         for col_sql in [
             "ALTER TABLE scoring_log ADD COLUMN clabe TEXT DEFAULT ''",
@@ -124,6 +147,31 @@ class ScoringLog:
         )
         self.conn.commit()
 
+    def _append_audit(
+        self,
+        application_id: str,
+        event_type: str,
+        actor: str,
+        payload: dict,
+    ) -> None:
+        """Append one immutable workflow event to the case audit trail."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        self.conn.execute(
+            "INSERT INTO audit_event "
+            "(event_id,application_id,event_type,actor,occurred_at,payload) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                uuid4().hex,
+                application_id,
+                event_type,
+                str(actor or "system")[:120],
+                datetime.now(timezone.utc).isoformat(),
+                json.dumps(payload, ensure_ascii=False, default=str),
+            ),
+        )
+
     def close(self) -> None:
         self.conn.close()
 
@@ -168,6 +216,17 @@ class ScoringLog:
                 "not_disbursed",
                 ),
             )
+            self._append_audit(
+                result.application_id,
+                "case_scored",
+                "olin_engine",
+                {
+                    "engine_version": result.engine_version,
+                    "decision": result.decision.value,
+                    "tier": result.tier,
+                    "score": result.score,
+                },
+            )
         except sqlite3.IntegrityError as exc:
             raise ValueError(
                 f"Application {result.application_id} is already logged; "
@@ -182,7 +241,13 @@ class ScoringLog:
         )
         self.conn.commit()
 
-    def record_consent(self, application_id: str, channel: str, text: str) -> None:
+    def record_consent(
+        self,
+        application_id: str,
+        channel: str,
+        text: str,
+        actor: str = "system",
+    ) -> None:
         """Record the merchant's Círculo consent evidence."""
         from datetime import datetime, timezone
 
@@ -200,6 +265,12 @@ class ScoringLog:
         if cur.rowcount != 1:
             self.conn.rollback()
             raise LookupError("Application not found")
+        self._append_audit(
+            application_id,
+            "consent_recorded",
+            actor,
+            {"channel": channel, "text": text},
+        )
         self.conn.commit()
 
     def record_partner_outcome(
@@ -208,6 +279,7 @@ class ScoringLog:
         decision: str,
         reason: str,
         decision_at: Optional[str] = None,
+        actor: str = "partner",
     ) -> dict:
         """Persist a partner's independent shadow-pilot outcome.
 
@@ -234,15 +306,26 @@ class ScoringLog:
         agreement = None
         if decision != "pending":
             engine = str(row[0]).upper()
-            agreement = int(
-                (decision == "approved" and engine == "APPROVE")
-                or (decision == "declined" and engine == "DECLINE")
-            )
+            if engine == "AUTO_APPROVE":
+                agreement = int(decision == "approved")
+            elif engine == "DECLINE":
+                agreement = int(decision == "declined")
         when = decision_at or datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             "UPDATE scoring_log SET partner_decision=?, partner_reason=?, "
             "partner_decision_at=?, recommendation_agreement=? WHERE application_id=?",
             (decision, reason[:2000], when, agreement, application_id),
+        )
+        self._append_audit(
+            application_id,
+            "partner_decision_recorded",
+            actor,
+            {
+                "partner_decision": decision,
+                "partner_reason": reason[:2000],
+                "partner_decision_at": when,
+                "recommendation_agreement": agreement,
+            },
         )
         self.conn.commit()
         return {

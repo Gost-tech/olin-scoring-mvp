@@ -380,18 +380,36 @@ def score_application(
     app.environment = runtime_mode()
 
     # ── PRE-GATE: production provenance ─────────────────────────────────────
-    # Only block synthetic/mocked data — agent-stated or unverified real data
-    # is allowed to contribute (analysts review before any disbursement).
+    # Production underwriting is fail-closed: synthetic inputs and evidence
+    # that has not been independently verified cannot support a decision.
     production_blocks: list[str] = []
     if is_production():
-        if app.bank is not None and is_synthetic_source(app.bank.source):
-            production_blocks.append(
-                "Synthetic bank data is forbidden in production underwriting"
-            )
-        if app.fmcg is not None and is_synthetic_source(app.fmcg.source):
-            production_blocks.append(
-                "Synthetic FMCG data is forbidden in production underwriting"
-            )
+        if app.bank is not None:
+            if is_synthetic_source(app.bank.source):
+                production_blocks.append(
+                    "Synthetic bank data is forbidden in production underwriting"
+                )
+            elif not app.bank.verified:
+                production_blocks.append(
+                    "Bank evidence must be verified before production underwriting"
+                )
+            elif not app.bank.evidence_reference.strip():
+                production_blocks.append(
+                    "Verified bank evidence requires an evidence reference"
+                )
+        if app.fmcg is not None:
+            if is_synthetic_source(app.fmcg.source):
+                production_blocks.append(
+                    "Synthetic FMCG data is forbidden in production underwriting"
+                )
+            elif not app.fmcg.verified:
+                production_blocks.append(
+                    "FMCG evidence must be verified before production underwriting"
+                )
+            elif not app.fmcg.evidence_reference.strip():
+                production_blocks.append(
+                    "Verified FMCG evidence requires an evidence reference"
+                )
     if production_blocks:
         signals_list = _collect_signals(app)
         composite = _composite(signals_list)

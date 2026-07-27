@@ -13,10 +13,12 @@ import argparse
 import hashlib
 import hmac
 import json
+import math
 import sqlite3
 import threading
 import time
 import webbrowser
+from contextlib import closing
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -33,6 +35,7 @@ from .config import (
 
 # Set by main() before server starts
 DB_PATH: str = ""
+SHADOW_INTAKE_PATH = Path(__file__).with_name("shadow_intake.html")
 
 # ---------------------------------------------------------------------------
 # Embedded HTML page
@@ -42,7 +45,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Olin · Analyst Review</title>
+<title>Olin · Mesa de decisión</title>
 <style>
 :root {
   --bg:       #0d1117;
@@ -77,6 +80,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .stats-chips{display:flex;gap:8px;margin-left:auto}
 .chip{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surf2);cursor:default}
 .chip.active{border-color:var(--blue);color:#58a6ff;background:rgba(31,111,235,.12)}
+.new-case{color:#071713;background:#bdff4a;border-radius:999px;padding:7px 13px;text-decoration:none;font-size:12px;font-weight:800}
 
 /* ── Filter tabs ──────────────────────────────────────────────────── */
 .filter-bar{
@@ -475,6 +479,37 @@ main{max-width:1100px;margin:0 auto;padding:24px}
 .source-pill.synthetic{color:var(--amber-hi);border-color:rgba(154,103,0,.55);background:rgba(154,103,0,.1)}
 .decision-rationale{font-size:11px;color:var(--muted);margin-left:auto;max-width:52ch;text-align:right}
 
+/* ── Accessible input modal ───────────────────────────────────────── */
+.input-modal{
+  position:fixed;inset:0;z-index:300;
+  display:grid;place-items:center;padding:20px;
+  background:rgba(1,4,9,.78);backdrop-filter:blur(8px);
+}
+.input-modal[hidden]{display:none}
+.input-modal-card{
+  width:min(520px,100%);padding:24px;border-radius:12px;
+  border:1px solid var(--border);background:var(--surf);
+  box-shadow:0 24px 80px rgba(0,0,0,.55);
+}
+.input-modal-card h2{font-size:18px;line-height:1.3;margin-bottom:6px}
+.input-modal-card label{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
+.input-modal-card input,.input-modal-card textarea{
+  width:100%;padding:11px 12px;border-radius:7px;border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font:inherit;
+}
+.input-modal-card [hidden]{display:none}
+.input-modal-card textarea{min-height:120px;resize:vertical}
+.input-modal-card input:focus,.input-modal-card textarea:focus{
+  outline:2px solid #58a6ff;outline-offset:2px;border-color:transparent;
+}
+.input-modal-error{min-height:20px;margin-top:8px;color:var(--red-hi);font-size:12px}
+.input-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.input-modal-actions button{
+  border-radius:7px;padding:9px 14px;border:1px solid var(--border);
+  color:var(--text);background:var(--surf2);font-weight:600;cursor:pointer;
+}
+.input-modal-actions .modal-confirm{background:var(--blue);border-color:var(--blue)}
+
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -484,8 +519,9 @@ main{max-width:1100px;margin:0 auto;padding:24px}
 <body>
 
 <header class="topbar">
-  <span class="logo">Olin <span>· Analyst Review</span></span>
+  <span class="logo">Olin <span>· Mesa de decisión</span></span>
   <div class="stats-chips" id="stats-chips"></div>
+  <a class="new-case" href="/nuevo">+ Nuevo expediente</a>
 </header>
 <div class="mode-banner" id="mode-banner" role="status"></div>
 
@@ -494,38 +530,177 @@ main{max-width:1100px;margin:0 auto;padding:24px}
 <nav class="filter-bar" id="filter-bar"></nav>
 
 <main>
-  <div id="app-grid"><p class="empty">Loading…</p></div>
+  <div id="app-grid"><p class="empty">Cargando expedientes…</p></div>
 </main>
 
 <div id="toast"></div>
+
+<div class="input-modal" id="input-modal" hidden>
+  <form class="input-modal-card" id="input-modal-form" role="dialog"
+        aria-modal="true" aria-labelledby="input-modal-title">
+    <h2 id="input-modal-title">Registrar información</h2>
+    <label id="input-modal-label" for="input-modal-input"></label>
+    <input id="input-modal-input" autocomplete="off">
+    <textarea id="input-modal-textarea"></textarea>
+    <div class="input-modal-error" id="input-modal-error" role="alert"></div>
+    <div class="input-modal-actions">
+      <button type="button" id="input-modal-cancel">Cancelar</button>
+      <button type="submit" class="modal-confirm">Continuar</button>
+    </div>
+  </form>
+</div>
 
 <script>
 'use strict';
 
 const SIG_LABELS = {
-  fmcg_purchase_history: 'FMCG Purchases',
-  bank_cash_flow:        'Bank Cash Flow',
-  business_tenure:       'Business Tenure',
-  pos_transaction_volume:'POS Volume',
+  fmcg_purchase_history: 'Compras a proveedores',
+  bank_cash_flow:        'Flujo de efectivo',
+  business_tenure:       'Antigüedad',
+  pos_transaction_volume:'Volumen TPV',
   google_maps_rating:    'Google Maps',
-  imss_payroll:          'IMSS Payroll',
+  imss_payroll:          'Registro IMSS',
 };
 
 const ENG_LABEL = {
-  AUTO_APPROVE:  {text:'AUTO APPROVE',  cls:'ae'},
-  COMMITTEE:     {text:'COMMITTEE',     cls:'mr'},
-  MANUAL_REVIEW: {text:'MANUAL REVIEW', cls:'mr'},
-  DECLINE:       {text:'DECLINE',       cls:'dc'},
+  AUTO_APPROVE:  {text:'RUTA DE APROBACIÓN', cls:'ae'},
+  COMMITTEE:     {text:'REVISIÓN REQUERIDA', cls:'mr'},
+  MANUAL_REVIEW: {text:'REVISIÓN MANUAL',    cls:'mr'},
+  DECLINE:       {text:'NO RECOMENDAR',       cls:'dc'},
 };
 
-const ANALYST_LABEL = {
-  APPROVE:       {text:'✓ Approved',          cls:'analyst-ap'},
-  MANUAL_REVIEW: {text:'↩ Routed to Review',  cls:'analyst-mr'},
-  DECLINE:       {text:'✗ Declined',          cls:'analyst-dc'},
+const PARTNER_LABELS = {
+  approved:'aprobado',
+  declined:'declinado',
+  pending:'pendiente',
 };
+const OUTCOME_LABELS = {
+  not_disbursed:'sin desembolso',
+  disburse_pending:'desembolso pendiente',
+  active:'activo',
+  paid_on_time:'pagado a tiempo',
+  defaulted:'incumplido',
+};
+const SOURCE_LABELS = {
+  partner_api:'API del socio',
+  distributor_export:'archivo del distribuidor',
+  missing:'sin datos',
+};
+
+function localizeText(value) {
+  let text = String(value || '');
+  const exact = {
+    'Cash-only merchant, no POS terminal (28% of CDMX segment)':
+      'Comercio principalmente en efectivo; no hay historial TPV disponible.',
+    'No bank data: not on a Syncfy-covered bank and no manual upload':
+      'Sin conexión bancaria disponible ni estados de cuenta cargados.',
+    'No distributor purchase history available':
+      'Sin historial verificable de compras al distribuidor.',
+    'IMSS payroll status unknown':
+      'Situación de nómina IMSS no disponible.',
+    'No Google Maps reviews':
+      'Sin reseñas disponibles en Google Maps.',
+    'Optimal — no upgrade path needed':
+      'Sin acciones adicionales para esta ruta.',
+    'DSCR could not be assessed (no bank data)':
+      'No fue posible calcular el DSCR por falta de datos bancarios.',
+    'No amount to assess (already declined)':
+      'No hay monto que evaluar porque la ruta ya es no recomendar.',
+  };
+  if (exact[text]) return exact[text];
+  return text
+    .replace(/(\d+(?:\.\d+)?) months of purchase history, (\d+)% weekly restock cadence, (\d+) missed weeks in last 12/g,
+      '$1 meses de historial de compras, reposición semanal de $2%, $3 semanas omitidas en las últimas 12')
+    .replace(/(\d+(?:\.\d+)?) deposits\/month, regularity ([\d.]+), (\d+) overdrafts in 90d, source: ([\w-]+)/g,
+      '$1 depósitos al mes, regularidad $2, $3 sobregiros en 90 días, fuente: $4')
+    .replace(/([\d.]+) years in operation \(Maps\/IMSS\), address consistent: (True|False)/g,
+      (_, years, consistent) => `${years} años de operación (Maps/IMSS), domicilio consistente: ${consistent === 'True' ? 'sí' : 'no'}`)
+    .replace(/([\d.]+) stars, (\d+) reviews, (\d+) new in 6m/g,
+      '$1 estrellas, $2 reseñas, $3 nuevas en 6 meses')
+    .replace(/(\d+) registered IMSS employees? \(formality multiplier\)/g,
+      '$1 empleados registrados en IMSS')
+    .replace(/\[FRAUD FLAG\]/g, '[ALERTA DE IDENTIDAD]')
+    .replace(/CURP not provided/g, 'CURP no proporcionada')
+    .replace(/Phone not provided/g, 'Teléfono no proporcionado')
+    .replace(/RFC not provided/g, 'RFC no proporcionado')
+    .replace(/INE\/IFE not verified/g, 'INE/IFE no verificada')
+    .replace(/identity confidence lower/g, 'menor confianza de identidad')
+    .replace(/Tier (\d+)/g, 'Nivel $1')
+    .replace(/AUTO_APPROVE/g, 'RUTA DE APROBACIÓN')
+    .replace(/COMMITTEE/g, 'REVISIÓN REQUERIDA')
+    .replace(/DECLINE/g, 'NO RECOMENDAR')
+    .replace(/Score uncertain/g, 'Score con incertidumbre')
+    .replace(/coverage/g, 'cobertura')
+    .replace(/all Phase 0 \+ repayment \+ fraud checks passed/g,
+      'todos los controles de datos, pago e identidad superados')
+    .replace(/No Círculo de Crédito file on record/g,
+      'Sin expediente de Círculo de Crédito')
+    .replace(/committee review required/g, 'revisión del socio requerida')
+    .replace(/No bank data/g, 'Sin datos bancarios')
+    .replace(/not checked/g, 'no verificado');
+}
 
 let allApps = [];
 let activeFilter = 'all';
+let modalResolve = null;
+let modalMinLength = 0;
+let modalPreviousFocus = null;
+
+function closeInputModal(value) {
+  const modal = document.getElementById('input-modal');
+  modal.hidden = true;
+  if (modalResolve) {
+    const resolve = modalResolve;
+    modalResolve = null;
+    resolve(value);
+  }
+  if (modalPreviousFocus) modalPreviousFocus.focus();
+}
+
+function openInputModal({
+  title,
+  label,
+  multiline=false,
+  secret=false,
+  minLength=0,
+}) {
+  const modal = document.getElementById('input-modal');
+  const input = document.getElementById('input-modal-input');
+  const textarea = document.getElementById('input-modal-textarea');
+  const field = multiline ? textarea : input;
+  modalPreviousFocus = document.activeElement;
+  modalMinLength = minLength;
+  document.getElementById('input-modal-title').textContent = title;
+  document.getElementById('input-modal-label').textContent = label;
+  document.getElementById('input-modal-error').textContent = '';
+  input.hidden = multiline;
+  textarea.hidden = !multiline;
+  input.type = secret ? 'password' : 'text';
+  input.value = '';
+  textarea.value = '';
+  modal.hidden = false;
+  requestAnimationFrame(() => field.focus());
+  return new Promise(resolve => { modalResolve = resolve; });
+}
+
+document.getElementById('input-modal-cancel').addEventListener(
+  'click', () => closeInputModal(null)
+);
+document.getElementById('input-modal-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const input = document.getElementById('input-modal-input');
+  const textarea = document.getElementById('input-modal-textarea');
+  const value = (input.hidden ? textarea.value : input.value).trim();
+  if (value.length < modalMinLength) {
+    document.getElementById('input-modal-error').textContent =
+      `Escribe al menos ${modalMinLength} caracteres.`;
+    return;
+  }
+  closeInputModal(value);
+});
+document.getElementById('input-modal').addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeInputModal(null);
+});
 
 async function apiFetch(url, options={}) {
   const headers = new Headers(options.headers || {});
@@ -533,7 +708,12 @@ async function apiFetch(url, options={}) {
   if (token) headers.set('X-Olin-Analyst-Token', token);
   let response = await fetch(url, {...options, headers});
   if (response.status === 401) {
-    const supplied = window.prompt('Analyst access token');
+    const supplied = await openInputModal({
+      title:'Acceso del socio',
+      label:'Token de acceso',
+      secret:true,
+      minLength:1,
+    });
     if (supplied) {
       sessionStorage.setItem('olin_analyst_token', supplied.trim());
       headers.set('X-Olin-Analyst-Token', supplied.trim());
@@ -549,18 +729,24 @@ async function load() {
     const r = await apiFetch('/api/apps');
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
     allApps = await r.json();
-    const mode = allApps[0]?.environment || 'demo';
+    let mode = allApps[0]?.environment || 'demo';
+    try {
+      const health = await fetch('/healthz');
+      if (health.ok) mode = (await health.json()).mode || mode;
+    } catch (_) {
+      // Keep the case-derived fallback if the uptime endpoint is unavailable.
+    }
     const banner = document.getElementById('mode-banner');
     banner.className = `mode-banner ${mode === 'production' ? 'production' : 'demo'}`;
     banner.textContent = mode === 'production'
-      ? 'PRODUCTION · verified inputs required · engine declines are locked'
-      : 'DEMO MODE · synthetic inputs may be present · never use for real disbursement';
+      ? 'PILOTO SOMBRA · evidencia verificada obligatoria · sin movimiento de dinero'
+      : 'DEMOSTRACIÓN SINTÉTICA · datos ficticios · sin movimiento de dinero';
     renderFilterBar();
     renderGrid();
     renderPortfolioBar();
   } catch(e) {
     document.getElementById('app-grid').innerHTML =
-      `<p class="empty">Error loading data: ${e.message}</p>`;
+      `<p class="empty">No fue posible cargar los expedientes: ${esc(e.message)}</p>`;
   }
 }
 
@@ -568,24 +754,22 @@ async function load() {
 function renderFilterBar() {
   const counts = {
     all:            allApps.length,
-    pending:        allApps.filter(a => !a.analyst_override).length,
-    APPROVE:        allApps.filter(a => a.analyst_override === 'APPROVE').length,
-    MANUAL_REVIEW:  allApps.filter(a => a.analyst_override === 'MANUAL_REVIEW').length,
-    DECLINE:        allApps.filter(a => a.analyst_override === 'DECLINE').length,
+    pending:        allApps.filter(a => !a.partner_decision || a.partner_decision === 'pending').length,
+    approved:       allApps.filter(a => a.partner_decision === 'approved').length,
+    declined:       allApps.filter(a => a.partner_decision === 'declined').length,
   };
 
   // stats chips in topbar
   document.getElementById('stats-chips').innerHTML = `
-    <span class="chip">${counts.all} total</span>
-    <span class="chip">${counts.pending} pending</span>
+    <span class="chip">${counts.all}/10 expedientes</span>
+    <span class="chip">${counts.pending} pendientes del socio</span>
   `;
 
   const tabs = [
-    ['all',           'All'],
-    ['pending',       'Pending'],
-    ['APPROVE',       'Approved'],
-    ['MANUAL_REVIEW', 'Routed'],
-    ['DECLINE',       'Declined'],
+    ['all',      'Todos'],
+    ['pending',  'Pendientes'],
+    ['approved', 'Aprobados por socio'],
+    ['declined', 'Declinados por socio'],
   ];
   document.getElementById('filter-bar').innerHTML = tabs.map(([key, label]) =>
     `<button class="tab${activeFilter===key?' active':''}" onclick="setFilter('${key}')">
@@ -603,12 +787,12 @@ function setFilter(f) {
 // ── Grid ──────────────────────────────────────────────────────────────
 function renderGrid() {
   let apps = allApps;
-  if (activeFilter === 'pending')       apps = apps.filter(a => !a.analyst_override);
-  else if (activeFilter !== 'all')      apps = apps.filter(a => a.analyst_override === activeFilter);
+  if (activeFilter === 'pending') apps = apps.filter(a => !a.partner_decision || a.partner_decision === 'pending');
+  else if (activeFilter !== 'all') apps = apps.filter(a => a.partner_decision === activeFilter);
   const grid = document.getElementById('app-grid');
   grid.innerHTML = apps.length
     ? apps.map(cardHtml).join('')
-    : '<p class="empty">No applications in this view.</p>';
+    : '<p class="empty">No hay expedientes en esta vista.</p>';
 }
 
 // ── Card rendering ────────────────────────────────────────────────────
@@ -620,13 +804,9 @@ function cardHtml(app) {
   const dateStr = isNaN(dt) ? app.scored_at : dt.toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'});
   const analystApproved = app.analyst_override === 'APPROVE';
   const declined = app.decision === 'DECLINE' || app.analyst_override === 'DECLINE';
-  const inCommittee = !analystApproved && !declined && app.decision === 'COMMITTEE';
-  const amountLabel = analystApproved ? 'Aprobado'
-    : declined ? 'No aprobado'
-    : inCommittee ? 'Monto en comité'
-    : 'Monto evaluado';
+  const amountLabel = declined ? 'No aprobado' : 'Monto evaluado';
   const amountValue = declined ? 0 : app.approved_mxn;
-  const costLabel = analystApproved ? 'Costo fijo' : 'Costo estimado';
+  const costLabel = 'Costo estimado';
   const costValue = declined ? 0 : app.pricing_fixed_cost_mxn;
 
   return `
@@ -639,15 +819,20 @@ function cardHtml(app) {
         <span class="badge badge-type">${esc(app.business_type)}</span>
         ${app.colonia ? `<span class="colonia">${esc(app.colonia)}</span>` : ''}
         <span class="app-id">app ${app.application_id}</span>
-        ${app.tier > 0 ? `<span class="tier-badge t${app.tier}" title="Credit tier from Círculo×DSCR×Score matrix">Tier ${app.tier}</span>` : ''}
+        ${app.tier > 0 ? `<span class="tier-badge t${app.tier}" title="Nivel de la matriz Círculo × DSCR × score">Tier ${app.tier}</span>` : ''}
         ${app.buro_score != null ? `<span class="badge badge-type" title="Círculo de Crédito score">Círculo ${app.buro_score}</span>` : ''}
         ${app.graduation_tier > 0 ? `<span class="grad-badge">Grad ${app.graduation_tier}</span>` : ''}
-        ${app.is_demo ? `<span class="source-pill synthetic">DEMO DATA</span>` : `<span class="source-pill verified">PRODUCTION</span>`}
+        ${app.case_mode ? `<span class="source-pill verified">${esc(app.case_mode)}</span>` : ''}
+        ${app.cohort_id ? `<span class="source-pill">${esc(app.cohort_id)}</span>` : ''}
+        ${app.consent_timestamp ? `<span class="source-pill verified">Consentimiento registrado</span>` : `<span class="source-pill synthetic">Falta consentimiento</span>`}
+        ${app.is_demo ? `<span class="source-pill synthetic">DATOS DE DEMO</span>` : `<span class="source-pill verified">PRODUCCIÓN</span>`}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
       <span class="scored-at">${dateStr}</span>
-      ${decided ? `<span class="badge badge-${ANALYST_LABEL[decided].cls}">${ANALYST_LABEL[decided].text}</span>` : ''}
+      ${app.partner_decision
+        ? `<span class="badge badge-type">Socio: ${esc(PARTNER_LABELS[app.partner_decision] || app.partner_decision)}</span>`
+        : '<span class="badge badge-type">Socio: pendiente</span>'}
     </div>
   </div>
 
@@ -658,7 +843,7 @@ function cardHtml(app) {
       <div>
         <div class="score-big ${scoreColor}">${app.score.toFixed(1)}</div>
         <div class="ci-text" style="margin-top:4px">
-          CI <strong>[${app.ci_low.toFixed(1)} – ${app.ci_high.toFixed(1)}]</strong>
+          IC <strong>[${app.ci_low.toFixed(1)} – ${app.ci_high.toFixed(1)}]</strong>
         </div>
       </div>
 
@@ -676,13 +861,13 @@ function cardHtml(app) {
       </div>
 
       <div class="coverage-row">
-        <span>Coverage</span>
+        <span>Cobertura</span>
         <div class="coverage-bar"><div class="coverage-fill" style="width:${(app.data_coverage*100).toFixed(0)}%"></div></div>
         <span>${(app.data_coverage*100).toFixed(0)}%</span>
       </div>
 
       <div class="engine-rec">
-        <span class="label">Engine:</span>
+        <span class="label">Ruta Olin:</span>
         <span class="badge badge-${eng.cls}">${eng.text}</span>
       </div>
 
@@ -710,9 +895,9 @@ function cardHtml(app) {
   ${(app.decision_reasons.length || app.hard_filter_failures.length) ? `
   <div class="reasons">
     ${app.hard_filter_failures.map(r =>
-      `<span class="reason-item hard-fail">${esc(r)}</span>`).join('')}
+      `<span class="reason-item hard-fail">${esc(localizeText(r))}</span>`).join('')}
     ${app.decision_reasons.map(r =>
-      `<span class="reason-item">${esc(r)}</span>`).join('')}
+      `<span class="reason-item">${esc(localizeText(r))}</span>`).join('')}
   </div>` : ''}
 
   ${provenanceHtml(app)}
@@ -730,21 +915,13 @@ function cardHtml(app) {
   ${analystNoteHtml(app)}
 
   <div class="card-footer">
-    <button class="action-btn btn-approve" onclick="decide('${app.application_id}','APPROVE')"
-      ${(decided || app.decision === 'DECLINE')?'disabled':''}
-      title="${app.decision === 'DECLINE' ? 'Pilot policy: engine declines cannot be overridden' : 'Approve application'}">✓ Approve</button>
-    <button class="action-btn btn-manual"  onclick="decide('${app.application_id}','MANUAL_REVIEW')"
-      ${decided?'disabled':''}>↩ Route to Review</button>
-    <button class="action-btn btn-decline" onclick="decide('${app.application_id}','DECLINE')"
-      ${decided?'disabled':''}>✗ Decline</button>
-    ${app.analyst_override === 'APPROVE'
-      ? app.disbursed
-        ? `<button class="action-btn btn-disburse disbursed-ok" disabled>✓ Disbursed</button>`
-        : `<button class="action-btn btn-disburse" onclick="disburse('${app.application_id}',${app.approved_mxn})">💸 Send MXN</button>`
-      : ''}
-    ${decided
-      ? `<span class="decision-stamp">Analyst decision recorded</span>`
-      : `<span class="decision-stamp" style="color:var(--muted)">Awaiting analyst decision</span>`}
+    <button class="action-btn btn-approve" onclick="partnerOutcome('${app.application_id}','approved')"
+      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>✓ Socio aprueba</button>
+    <button class="action-btn btn-manual" onclick="partnerOutcome('${app.application_id}','pending')"
+      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>… Socio pendiente</button>
+    <button class="action-btn btn-decline" onclick="partnerOutcome('${app.application_id}','declined')"
+      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>✗ Socio declina</button>
+    <span class="decision-stamp">${app.partner_case_reference ? `Ref. ${esc(app.partner_case_reference)}` : 'Sin referencia del socio'}</span>
   </div>
 
 </article>`;
@@ -755,7 +932,7 @@ function sigRow(s) {
   if (!s.available) {
     return `<tr>
       <td class="sig-name missing">${esc(label)}</td>
-      <td colspan="3"><span class="sig-missing">${esc(s.explanation)}</span></td>
+      <td colspan="3"><span class="sig-missing">${esc(localizeText(s.explanation))}</span></td>
     </tr>`;
   }
   const score = s.raw_score;
@@ -775,8 +952,8 @@ function sigRow(s) {
         <span class="sig-score">${score.toFixed(1)}</span>
       </div>
     </td>
-    <td class="sig-wt">w=${s.effective_weight.toFixed(2)}</td>
-    <td class="sig-expl">${esc(s.explanation)}</td>
+    <td class="sig-wt">peso ${s.effective_weight.toFixed(2)}</td>
+    <td class="sig-expl">${esc(localizeText(s.explanation))}</td>
   </tr>`;
 }
 
@@ -785,15 +962,16 @@ function provenanceHtml(app) {
   const pill = (label, source, verified) => {
     const synthetic = String(source || '').startsWith('mock');
     const cls = verified ? 'verified' : (synthetic ? 'synthetic' : '');
-    const state = verified ? 'verified' : (synthetic ? 'synthetic' : 'unverified');
-    return `<span class="source-pill ${cls}">${esc(label)}: ${esc(source || 'missing')} · ${state}</span>`;
+    const state = verified ? 'verificado' : (synthetic ? 'sintético' : 'no verificado');
+    const sourceName = SOURCE_LABELS[source] || source || 'sin datos';
+    return `<span class="source-pill ${cls}">${esc(label)}: ${esc(sourceName)} · ${state}</span>`;
   };
   const rationale = app.analyst_reason
-    ? `<span class="decision-rationale">Analyst rationale: ${esc(app.analyst_reason)}</span>` : '';
+    ? `<span class="decision-rationale">Justificación interna: ${esc(app.analyst_reason)}</span>` : '';
   return `<div class="provenance">
-    ${pill('Bank', src.bank, src.bank_verified)}
-    ${pill('FMCG', src.fmcg, src.fmcg_verified)}
-    <span class="source-pill">Outcome: ${esc(app.outcome_status || 'not_disbursed')}</span>
+    ${pill('Banco', src.bank, src.bank_verified)}
+    ${pill('Compras', src.fmcg, src.fmcg_verified)}
+    <span class="source-pill">Estado: ${esc(OUTCOME_LABELS[app.outcome_status] || app.outcome_status || 'sin desembolso')}</span>
     ${rationale}
   </div>`;
 }
@@ -807,8 +985,8 @@ function counterOfferHtml(app) {
   <div class="counter-offer-banner">
     <div class="co-icon">⚡</div>
     <div class="co-body">
-      <div class="co-title">Counter-offer — Loan amount adjusted</div>
-      <div class="co-text">${esc(coNote)}</div>
+      <div class="co-title">Monto ajustado por capacidad</div>
+      <div class="co-text">${esc(localizeText(coNote))}</div>
       <div class="co-amounts">
         <div class="co-amount">
           <span class="co-amount-label">Solicitado</span>
@@ -829,11 +1007,11 @@ function sensitivityHintsHtml(app) {
   const path = sens.path || '';
   if (!path || path === 'Optimal — no upgrade path needed') return '';
   const chips = path.split(' · ').map(p =>
-    `<span class="sens-chip">↑ ${esc(p)}</span>`
+    `<span class="sens-chip">↑ ${esc(localizeText(p))}</span>`
   ).join('');
   return `
   <div class="sensitivity-hints">
-    <h3>Upgrade path</h3>
+    <h3>Acciones para mejorar la ruta</h3>
     <div>${chips}</div>
   </div>`;
 }
@@ -843,11 +1021,11 @@ function analystNoteHtml(app) {
   const existing = app.analyst_note || '';
   return `
   <div class="analyst-note-section">
-    <h3>Analyst note</h3>
+    <h3>Nota del analista</h3>
     <div class="analyst-note-row">
       <textarea class="analyst-note-textarea" id="note-${app.application_id}"
-        placeholder="Add analysis, rationale, or follow-up...">${esc(existing)}</textarea>
-      <button class="btn-save-note" onclick="saveNote('${app.application_id}')">Save</button>
+        placeholder="Agregar análisis, justificación o seguimiento...">${esc(existing)}</textarea>
+      <button class="btn-save-note" onclick="saveNote('${app.application_id}')">Guardar</button>
     </div>
   </div>`;
 }
@@ -859,21 +1037,21 @@ function fraudHtml(fa) {
   const scoreCls = score < 20 ? 'clean' : score < 50 ? 'warn' : 'bad';
   const checks = fa.checks || {};
   const CHECK_LABELS = {
-    phone: 'Phone', rfc: 'RFC', curp: 'CURP',
-    address: 'Address', clabe: 'CLABE', ine: 'INE'
+    phone: 'Teléfono', rfc: 'RFC', curp: 'CURP',
+    address: 'Domicilio', clabe: 'CLABE', ine: 'INE'
   };
   const checkBadges = Object.entries(CHECK_LABELS).map(([k, label]) => {
     const ok = checks[k];
     return `<span class="fraud-check ${ok?'ok':'fail'}">${label}</span>`;
   }).join('');
   const blocks = (fa.hard_blocks||[]).map(b =>
-    `<div class="fraud-block">🔴 ${esc(b)}</div>`).join('');
+    `<div class="fraud-block">🔴 ${esc(localizeText(b))}</div>`).join('');
   const flags = (fa.flags||[]).map(f =>
-    `<div class="fraud-flag">⚠ ${esc(f)}</div>`).join('');
+    `<div class="fraud-flag">⚠ ${esc(localizeText(f))}</div>`).join('');
 
   return `
   <div class="fraud-section">
-    <h3>Fraud screening</h3>
+    <h3>Controles de identidad y fraude</h3>
     <div class="fraud-grid">
       <div class="fraud-score-wrap">
         <span class="fraud-score ${scoreCls}">${score.toFixed(0)}<span style="font-size:11px;font-weight:400;color:var(--muted)">/100</span></span>
@@ -905,40 +1083,40 @@ function repaymentHtml(rep) {
   }
   function buroEl(rep) {
     if ((rep.notes||[]).some(n => n.includes('Buro')))
-      return '<span class="rep-value rep-buro-warn">NOT CHECKED</span>';
+      return '<span class="rep-value rep-buro-warn">NO VERIFICADO</span>';
     if ((rep.hard_declines||[]).some(d => d.includes('Buro')))
-      return '<span class="rep-value rep-buro-bad">DELINQUENT</span>';
+      return '<span class="rep-value rep-buro-bad">MORA ACTIVA</span>';
     if ((rep.downgrades||[]).some(d => d.includes('Buro')))
-      return '<span class="rep-value rep-buro-warn">MULTI-LENDING</span>';
+      return '<span class="rep-value rep-buro-warn">DEUDA MÚLTIPLE</span>';
     return '<span class="rep-value rep-buro-ok">OK</span>';
   }
 
   const notes = (rep.notes||[]).map(n =>
-    `<div class="rep-note">⚠ ${esc(n)}</div>`).join('');
+    `<div class="rep-note">⚠ ${esc(localizeText(n))}</div>`).join('');
 
   return `
   <div class="repayment-section">
-    <h3>Repayment</h3>
+    <h3>Capacidad de pago</h3>
     <div class="rep-grid">
       <div class="rep-item">
         <span class="rep-label">DSCR</span>
         ${dscrEl(rep.dscr)}
       </div>
       <div class="rep-item">
-        <span class="rep-label">Burden</span>
+        <span class="rep-label">Carga de pago</span>
         ${burdenEl(rep.burden_ratio)}
       </div>
       <div class="rep-item">
-        <span class="rep-label">Stress buffer</span>
+        <span class="rep-label">Margen de estrés</span>
         ${bufferEl(rep.stress_buffer_ratio)}
       </div>
       <div class="rep-item">
-        <span class="rep-label">Buro</span>
+        <span class="rep-label">Círculo</span>
         ${buroEl(rep)}
       </div>
       ${rep.estimated_monthly_net_mxn != null ? `
       <div class="rep-item">
-        <span class="rep-label">Net / mo</span>
+        <span class="rep-label">Neto mensual</span>
         <span class="rep-value">MXN ${fmt(rep.estimated_monthly_net_mxn)}</span>
       </div>` : ''}
     </div>
@@ -1018,28 +1196,27 @@ function collectionCalendarHtml(app) {
 
 // ── Portfolio bar ─────────────────────────────────────────────────────
 async function renderPortfolioBar() {
-  try {
-    const r = await apiFetch('/api/portfolio');
-    const pf = await r.json();
-    const bar = document.getElementById('portfolio-bar');
-    if (!bar) return;
-    const dr = pf.default_rate ?? 0;
-    const drCls = dr < 0.10 ? '' : dr < 0.15 ? 'warn' : 'bad';
-    bar.innerHTML = `
-      <div class="pf-stat"><span class="pf-label">Activos</span><span class="pf-value">${pf.active_loans ?? 0}</span></div>
-      <div class="pf-sep"></div>
-      <div class="pf-stat"><span class="pf-label">Expuesto</span><span class="pf-value">MXN ${fmt(pf.active_mxn ?? 0)}</span></div>
-      <div class="pf-sep"></div>
-      <div class="pf-stat"><span class="pf-label">Desembolsados</span><span class="pf-value">${pf.total_disbursed ?? 0}</span></div>
-      <div class="pf-sep"></div>
-      <div class="pf-stat"><span class="pf-label">Repagados</span><span class="pf-value">${pf.repaid ?? 0}</span></div>
-      <div class="pf-sep"></div>
-      <div class="pf-stat"><span class="pf-label">Default rate</span><span class="pf-value ${drCls}">${(dr*100).toFixed(1)}%</span></div>
-      <div class="pf-sep"></div>
-      ${tierDistWidget(pf.by_tier || [])}
-      <button class="btn-export" onclick="exportCsv()" title="Export all applications as CSV">↓ CSV</button>
-    `;
-  } catch(e) { /* portfolio bar is non-critical */ }
+  const bar = document.getElementById('portfolio-bar');
+  if (!bar) return;
+  const complete = allApps.filter(a => a.partner_decision && a.partner_decision !== 'pending').length;
+  const consented = allApps.filter(a => a.consent_timestamp).length;
+  const verified = allApps.filter(a =>
+    a.data_sources?.bank_verified && a.data_sources?.fmcg_verified
+  ).length;
+  const comparable = allApps.filter(a => a.recommendation_agreement !== null && a.recommendation_agreement !== undefined);
+  const agreements = comparable.filter(a => Number(a.recommendation_agreement) === 1).length;
+  bar.innerHTML = `
+    <div class="pf-stat"><span class="pf-label">Cohorte</span><span class="pf-value">${allApps.length}/10</span></div>
+    <div class="pf-sep"></div>
+    <div class="pf-stat"><span class="pf-label">Consentimiento</span><span class="pf-value">${consented}/${allApps.length}</span></div>
+    <div class="pf-sep"></div>
+    <div class="pf-stat"><span class="pf-label">Banco + FMCG verificados</span><span class="pf-value">${verified}/${allApps.length}</span></div>
+    <div class="pf-sep"></div>
+    <div class="pf-stat"><span class="pf-label">Decisión del socio</span><span class="pf-value">${complete}/${allApps.length}</span></div>
+    <div class="pf-sep"></div>
+    <div class="pf-stat"><span class="pf-label">Concordancia comparable</span><span class="pf-value">${agreements}/${comparable.length}</span></div>
+    <button class="btn-export" onclick="exportCsv()" title="Exportar cohorte CSV">↓ Exportar cohorte</button>
+  `;
 }
 
 async function exportCsv() {
@@ -1051,7 +1228,7 @@ async function exportCsv() {
     const a = document.createElement('a');
     a.href = url; a.download = 'olin_scoring.csv'; a.click();
     URL.revokeObjectURL(url);
-  } catch (e) { toast('Export error: ' + e.message, 'err'); }
+  } catch (e) { toast('Error de exportación: ' + e.message, 'err'); }
 }
 
 function tierDistWidget(byTier) {
@@ -1076,9 +1253,41 @@ function tierDistWidget(byTier) {
     </div>`;
   }).join('');
   return `<div class="tier-dist-widget">
-    <span class="tier-dist-label">Tier dist</span>
+    <span class="tier-dist-label">Niveles</span>
     <div class="tier-bars">${bars}</div>
   </div>`;
+}
+
+// ── Independent partner decision ─────────────────────────────────────
+async function partnerOutcome(appId, decision) {
+  const labels = {
+    approved: 'aprobación del socio',
+    declined: 'declinación del socio',
+    pending: 'estado pendiente',
+  };
+  const reason = await openInputModal({
+    title:'Registrar decisión independiente',
+    label:`Motivo para ${labels[decision]}${decision === 'pending' ? ' (opcional)' : ''}`,
+    multiline:true,
+    minLength:decision === 'pending' ? 0 : 5,
+  });
+  if (reason === null) return;
+  try {
+    const response = await apiFetch(`/api/apps/${appId}/outcome`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        partner_decision:decision,
+        partner_reason:reason.trim(),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || response.statusText);
+    toast('Decisión del socio registrada', 'ok');
+    await load();
+  } catch (error) {
+    toast('Error: ' + error.message, 'err');
+  }
 }
 
 // ── Disburse ──────────────────────────────────────────────────────────
@@ -1115,11 +1324,17 @@ async function decide(appId, decision) {
   btns.forEach(b => b.disabled = true);
 
   try {
-    const promptLabel = decision === 'APPROVE' ? 'approval' :
-      (decision === 'DECLINE' ? 'decline' : 'review routing');
-    const reason = window.prompt(`Reason for ${promptLabel} (required)`);
-    if (!reason || reason.trim().length < 5) {
-      throw new Error('A decision reason of at least 5 characters is required');
+    const promptLabel = decision === 'APPROVE' ? 'aprobar' :
+      (decision === 'DECLINE' ? 'no recomendar' : 'enviar a revisión');
+    const reason = await openInputModal({
+      title:'Registrar decisión del analista',
+      label:`Motivo para ${promptLabel}`,
+      multiline:true,
+      minLength:5,
+    });
+    if (reason === null) {
+      btns.forEach(b => b.disabled = false);
+      return;
     }
     const res = await apiFetch(`/api/apps/${appId}/decision`, {
       method: 'POST',
@@ -1130,7 +1345,11 @@ async function decide(appId, decision) {
       const err = await res.json();
       throw new Error(err.error || res.statusText);
     }
-    const label = {APPROVE:'Approved ✓', MANUAL_REVIEW:'Routed to Review ↩', DECLINE:'Declined ✗'}[decision];
+    const label = {
+      APPROVE:'Aprobación registrada ✓',
+      MANUAL_REVIEW:'Enviado a revisión ↩',
+      DECLINE:'No recomendación registrada ✗',
+    }[decision];
     toast(label, 'ok');
     await load();
   } catch(e) {
@@ -1151,9 +1370,9 @@ async function saveNote(appId) {
       body: JSON.stringify({note}),
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
-    toast('Note saved', 'ok');
+    toast('Nota guardada', 'ok');
   } catch(e) {
-    toast('Error saving note: ' + e.message, 'err');
+    toast('Error al guardar la nota: ' + e.message, 'err');
   }
 }
 
@@ -1178,7 +1397,6 @@ load();
 </script>
 </body>
 </html>"""
-
 
 # ---------------------------------------------------------------------------
 # Merchant-facing application form  (/solicitar)
@@ -1709,6 +1927,24 @@ def _build_application(body: dict):
     def _sub(key):
         return body.get(key) or {}
 
+    def _bool(block: dict, key: str, default: bool = False) -> bool:
+        value = block.get(key, default)
+        if not isinstance(value, bool):
+            raise ValueError(f"{key} must be a JSON boolean")
+        return value
+
+    def _range(name: str, value: float, minimum: float, maximum: float | None = None) -> None:
+        if not math.isfinite(float(value)) or value < minimum:
+            raise ValueError(f"{name} must be >= {minimum}")
+        if maximum is not None and value > maximum:
+            raise ValueError(f"{name} must be <= {maximum}")
+
+    def _finite(name: str, value: float) -> None:
+        if not math.isfinite(float(value)):
+            raise ValueError(f"{name} must be a finite number")
+
+    _range("requested_mxn", requested, 1_000, 80_000)
+
     b = _sub("bank")
     bank = BankData(
         months_connected=float(b.get("months_connected", 0)),
@@ -1721,7 +1957,7 @@ def _build_application(body: dict):
         balance_trend_90d=float(b.get("balance_trend_90d", 0)),
         min_daily_balance_mxn=float(b.get("min_daily_balance_mxn", 0)),
         source=str(b.get("source", "api")),
-        verified=bool(b.get("verified", False)),
+        verified=_bool(b, "verified"),
         evidence_reference=str(b.get("evidence_reference", "")),
         observed_at=str(b.get("observed_at", "")),
     ) if b else None
@@ -1732,10 +1968,10 @@ def _build_application(body: dict):
         weekly_purchase_rate=float(f.get("weekly_purchase_rate", 0)),
         missed_weeks_last_12=int(f.get("missed_weeks_last_12", 0)),
         avg_weekly_purchase_mxn=float(f.get("avg_weekly_purchase_mxn", 0)),
-        distributor_confirmed=bool(f.get("distributor_confirmed", False)),
+        distributor_confirmed=_bool(f, "distributor_confirmed"),
         trend_3m=float(f.get("trend_3m", 0)),
         source=str(f.get("source", "api")),
-        verified=bool(f.get("verified", False)),
+        verified=_bool(f, "verified"),
         evidence_reference=str(f.get("evidence_reference", "")),
         observed_at=str(f.get("observed_at", "")),
     ) if f else None
@@ -1744,7 +1980,7 @@ def _build_application(body: dict):
     tenure = TenureData(
         years_on_google_maps=float(t.get("years_on_google_maps", 0)),
         years_in_imss=float(t.get("years_in_imss", 0)),
-        address_consistent=bool(t.get("address_consistent", True)),
+        address_consistent=_bool(t, "address_consistent", True),
     ) if t else None
 
     p = _sub("pos")
@@ -1768,12 +2004,17 @@ def _build_application(body: dict):
     ) if i else None
 
     bu = _sub("buro")
+    buro_score = bu.get("score")
+    if buro_score not in (None, ""):
+        buro_score = int(buro_score)
+    else:
+        buro_score = None
     buro = BuroData(
-        checked=bool(bu.get("checked", False)),
+        checked=_bool(bu, "checked"),
         active_delinquencies=int(bu.get("active_delinquencies", 0)),
         active_loans_count=int(bu.get("active_loans_count", 0)),
         worst_mob_status=str(bu.get("worst_mob_status", "")),
-        score=bu.get("score"),
+        score=buro_score,
     ) if bu else None
 
     fr = _sub("fraud")
@@ -1781,9 +2022,43 @@ def _build_application(body: dict):
         phone_mx=str(fr.get("phone_mx", "")),
         rfc=str(fr.get("rfc", "")),
         curp=str(fr.get("curp", "")),
-        ine_checked=bool(fr.get("ine_checked", False)),
+        ine_checked=_bool(fr, "ine_checked"),
         address_stated=str(fr.get("address_stated", "")),
     ) if fr else None
+
+    if bank:
+        _range("bank.months_connected", bank.months_connected, 0)
+        _finite("bank.avg_daily_balance_mxn", bank.avg_daily_balance_mxn)
+        _range("bank.monthly_deposit_count", bank.monthly_deposit_count, 0)
+        _range("bank.monthly_deposit_volume_mxn", bank.monthly_deposit_volume_mxn, 0)
+        _range("bank.monthly_outflow_volume_mxn", bank.monthly_outflow_volume_mxn, 0)
+        _range("bank.deposit_regularity", bank.deposit_regularity, 0, 1)
+        _range("bank.overdrafts_90d", bank.overdrafts_90d, 0)
+        _finite("bank.min_daily_balance_mxn", bank.min_daily_balance_mxn)
+        _range("bank.balance_trend_90d", bank.balance_trend_90d, -1, 1)
+    if fmcg:
+        _range("fmcg.months_of_history", fmcg.months_of_history, 0)
+        _range("fmcg.weekly_purchase_rate", fmcg.weekly_purchase_rate, 0, 1)
+        _range("fmcg.missed_weeks_last_12", fmcg.missed_weeks_last_12, 0, 12)
+        _range("fmcg.avg_weekly_purchase_mxn", fmcg.avg_weekly_purchase_mxn, 0)
+        _range("fmcg.trend_3m", fmcg.trend_3m, -1, 1)
+    if tenure:
+        _range("tenure.years_on_google_maps", tenure.years_on_google_maps, 0)
+        _range("tenure.years_in_imss", tenure.years_in_imss, 0)
+    if pos:
+        _range("pos.months_of_history", pos.months_of_history, 0)
+        _range("pos.avg_monthly_volume_mxn", pos.avg_monthly_volume_mxn, 0)
+        _range("pos.volume_consistency", pos.volume_consistency, 0, 1)
+        _range("pos.trend_3m", pos.trend_3m, -1, 1)
+    if maps:
+        _range("maps.rating", maps.rating, 0, 5)
+        _range("maps.review_count", maps.review_count, 0)
+        _range("maps.review_velocity_6m", maps.review_velocity_6m, 0)
+    if buro:
+        _range("buro.active_delinquencies", buro.active_delinquencies, 0)
+        _range("buro.active_loans_count", buro.active_loans_count, 0)
+        if buro.score is not None:
+            _range("buro.score", buro.score, 0, 1000)
 
     return Application(
         merchant_name=merchant_name,
@@ -1852,6 +2127,7 @@ def _record_submission_metadata(sl, application_id: str, body: dict) -> None:
             application_id,
             str(consent.get("channel", "")),
             str(consent.get("text", "")),
+            actor=str(body.get("_actor", "authenticated_partner")),
         )
     fields = {
         "cohort_id": body.get("cohort_id"),
@@ -1859,6 +2135,8 @@ def _record_submission_metadata(sl, application_id: str, body: dict) -> None:
         "partner_case_reference": body.get("partner_case_reference"),
     }
     fields = {k: (str(v).strip() if v is not None else None) for k, v in fields.items()}
+    if fields["case_mode"]:
+        fields["case_mode"] = fields["case_mode"].lower()
     if any(v is not None for v in fields.values()):
         sl.conn.execute(
             "UPDATE scoring_log SET cohort_id=?, case_mode=?, partner_case_reference=? "
@@ -1871,16 +2149,26 @@ def _record_submission_metadata(sl, application_id: str, body: dict) -> None:
 def _validate_submission_metadata(body: dict) -> None:
     """Reject malformed consent/metadata before a score is written."""
     consent = body.get("consent") or {}
-    if consent.get("channel") or consent.get("text"):
+    consent_supplied = bool(consent.get("channel") or consent.get("text"))
+    if consent_supplied:
         channel = str(consent.get("channel", "")).strip().lower()
         text = str(consent.get("text", "")).strip()
         if channel not in ("whatsapp", "sms", "in_person"):
             raise ValueError("consent.channel must be whatsapp, sms, or in_person")
         if not text:
             raise ValueError("consent.text is required when consent is supplied")
-    case_mode = body.get("case_mode")
-    if case_mode is not None and str(case_mode).strip().lower() not in ("shadow", "live"):
+    case_mode = str(body.get("case_mode", "")).strip().lower()
+    if case_mode and case_mode not in ("shadow", "live"):
         raise ValueError("case_mode must be shadow or live")
+    if is_production():
+        if case_mode != "shadow":
+            raise ValueError("case_mode must be shadow in production pilot")
+        if not consent_supplied:
+            raise ValueError("consent is required in production")
+        if not str(body.get("cohort_id", "")).strip():
+            raise ValueError("cohort_id is required in production")
+        if not str(body.get("partner_case_reference", "")).strip():
+            raise ValueError("partner_case_reference is required in production")
 
 
 # ---------------------------------------------------------------------------
@@ -1911,6 +2199,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _require_analyst_auth(self) -> bool:
         if not is_production():
+            self.auth_actor = "demo_user"
             return True
         from .config import api_keys
         keys = api_keys()
@@ -1918,9 +2207,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "OLIN_ANALYST_TOKEN is not configured"}, 503)
             return False
         supplied = self.headers.get("X-Olin-Analyst-Token", "").strip()
-        if not supplied or not any(hmac.compare_digest(supplied, t) for t in keys.values()):
+        matched_actor = next(
+            (name for name, token in keys.items() if hmac.compare_digest(supplied, token)),
+            None,
+        ) if supplied else None
+        if not matched_actor:
             self._json({"error": "Analyst authentication required"}, 401)
             return False
+        self.auth_actor = matched_actor
         return True
 
     def _read_json(self, max_bytes: int = 65_536) -> tuple[dict | None, bytes]:
@@ -1965,43 +2259,31 @@ class Handler(BaseHTTPRequestHandler):
             # Deliberately public and non-sensitive: useful for partner uptime
             # checks without exposing the analyst API or database contents.
             self._json({"ok": True, "service": "olin", "mode": runtime_mode()})
-        elif path == "/":
-            self._send(HTML_PAGE.encode())
-        elif path == "/solicitar":
-            self._send(APPLY_HTML.encode())
-        elif path.startswith("/solicitar/resultado/"):
-            app_id = path.split("/solicitar/resultado/")[1].strip("/")
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.row_factory = sqlite3.Row
-                row = conn.execute(
-                    "SELECT raw_result FROM scoring_log WHERE application_id=?", (app_id,)
-                ).fetchone()
-            if not row:
-                self._send(b"<h1>No encontrado</h1>", status=404)
-                return
-            import json as _j
-            from .models import ScoreResult, Decision
-            raw = _j.loads(row["raw_result"] or "{}")
-            # Reconstruct a minimal result-like object for the renderer
-            class _R:
-                pass
-            r = _R()
-            r.application_id = app_id
-            r.decision = Decision(raw.get("decision", "DECLINE"))
-            r.approved_amount_mxn = raw.get("approved_amount_mxn", 0)
-            r.score = raw.get("score", 0)
-            r.pricing_fixed_cost_mxn = raw.get("pricing_fixed_cost_mxn", 0)
-            r.decision_reasons = raw.get("decision_reasons", [])
-            r.data_coverage = raw.get("data_coverage", 0)
-            r.tier = raw.get("tier", 14)
-            self._send(_render_apply_result(app_id, r).encode())
-        elif not self._require_analyst_auth():
             return
-        elif path == "/api/apps":
+        if path == "/solicitar" or path.startswith("/solicitar/"):
+            self._json({
+                "error": "Public merchant origination is disabled. "
+                         "Cases must be created by an authenticated pilot partner."
+            }, 410)
+            return
+        # The static shells contain no case data. Serving them before auth lets
+        # a normal browser ask for a named token on the first API request.
+        if path == "/":
+            self._send(HTML_PAGE.encode())
+            return
+        if path == "/nuevo":
+            try:
+                self._send(SHADOW_INTAKE_PATH.read_bytes())
+            except OSError:
+                self._json({"error": "shadow intake page is unavailable"}, 503)
+            return
+        if not self._require_analyst_auth():
+            return
+        if path == "/api/apps":
             self._json(self._load_apps())
         elif path.startswith("/api/applications/"):
             app_id = path.split("/api/applications/")[1].strip("/")
-            with sqlite3.connect(DB_PATH) as conn:
+            with closing(sqlite3.connect(DB_PATH)) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT application_id, merchant_name, score, tier, decision, "
@@ -2064,7 +2346,10 @@ class Handler(BaseHTTPRequestHandler):
                 "data_coverage", "decision", "tier", "buro_score", "scored_at",
                 "analyst_override", "disbursed", "repaid_on_time", "defaulted",
                 "outcome_status", "is_demo", "analyst_reason", "analyst_decision_at",
-                "payment_1_amount_mxn", "payment_2_amount_mxn", "analyst_note"]
+                "payment_1_amount_mxn", "payment_2_amount_mxn", "analyst_note",
+                "consent_timestamp", "consent_channel", "cohort_id", "case_mode",
+                "partner_case_reference", "partner_decision", "partner_reason",
+                "partner_decision_at", "recommendation_agreement"]
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(cols)
@@ -2093,33 +2378,13 @@ class Handler(BaseHTTPRequestHandler):
             and parts[1] == "webhook" and parts[2] == "stp"
         )
         is_apply = parts == ["solicitar"]
-        if not is_webhook and not is_apply and not self._require_analyst_auth():
-            return
-
-        # POST /solicitar — public merchant application form submission
         if is_apply:
-            body, _ = self._read_json()
-            if body is None:
-                return
-            try:
-                _validate_submission_metadata(body)
-                app_body = _parse_apply_form(body)
-                app = _build_application(app_body)
-            except (KeyError, ValueError) as exc:
-                self._json({"error": str(exc)}, 400)
-                return
-            from .scorecard import score_application
-            from .portfolio import check_portfolio
-            from .graduation import get_graduation_offer
-            from .store import ScoringLog
-            port = check_portfolio(app, DB_PATH)
-            grad = get_graduation_offer(app.clabe or "", DB_PATH)
-            result = score_application(app, portfolio_block=port, graduation=grad)
-            with ScoringLog(DB_PATH) as sl:
-                sl.log(app, result)
-                _record_submission_metadata(sl, result.application_id, body)
-            self._json({"application_id": result.application_id,
-                        "redirect": f"/solicitar/resultado/{result.application_id}"}, 201)
+            self._json({
+                "error": "Public merchant origination is disabled. "
+                         "Cases must be created by an authenticated pilot partner."
+            }, 410)
+            return
+        if not is_webhook and not self._require_analyst_auth():
             return
 
         # POST /api/applications  — submit a new merchant application for scoring
@@ -2142,7 +2407,9 @@ class Handler(BaseHTTPRequestHandler):
             result = score_application(app, portfolio_block=port, graduation=grad)
             with ScoringLog(DB_PATH) as sl:
                 sl.log(app, result)
-                _record_submission_metadata(sl, result.application_id, body)
+                metadata = dict(body)
+                metadata["_actor"] = getattr(self, "auth_actor", "authenticated_partner")
+                _record_submission_metadata(sl, result.application_id, metadata)
             self._json(_format_score_result(app, result), 201)
             return
 
@@ -2157,6 +2424,7 @@ class Handler(BaseHTTPRequestHandler):
                     outcome = sl.record_partner_outcome(
                         parts[2], body.get("partner_decision", ""),
                         body.get("partner_reason", ""), body.get("partner_decision_at"),
+                        actor=getattr(self, "auth_actor", "authenticated_partner"),
                     )
             except LookupError as exc:
                 self._json({"error": str(exc)}, 404); return
@@ -2167,16 +2435,21 @@ class Handler(BaseHTTPRequestHandler):
         # POST /api/apps/{id}/disburse
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "disburse":
             app_id = parts[2]
-            with sqlite3.connect(DB_PATH) as conn:
+            with closing(sqlite3.connect(DB_PATH)) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT application_id, merchant_name, clabe, approved_mxn, decision, "
-                    "analyst_override, disbursed, is_demo, raw_result "
+                    "analyst_override, disbursed, is_demo, raw_result, case_mode, "
+                    "consent_timestamp "
                     "FROM scoring_log WHERE application_id=?", (app_id,)
                 ).fetchone()
             if not row:
                 self._json({"error": "not found"}, 404); return
             row = dict(row)
+            if row["case_mode"] != "live":
+                self._json({"error": "Disbursement blocked — shadow case"}, 403); return
+            if is_production() and not row["consent_timestamp"]:
+                self._json({"error": "Círculo consent has not been recorded"}, 403); return
             if row["analyst_override"] != "APPROVE":
                 self._json({"error": "Analyst has not approved this application"}, 400); return
             if row["decision"] == "DECLINE":
@@ -2284,7 +2557,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def _load_apps(self) -> list:  # noqa: C901
-        with sqlite3.connect(DB_PATH) as conn:
+        with closing(sqlite3.connect(DB_PATH)) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT application_id, merchant_name, business_type, colonia,
@@ -2293,7 +2566,10 @@ class Handler(BaseHTTPRequestHandler):
                        analyst_override, analyst_reason, analyst_decision_at,
                        disbursed, graduation_tier, tier, analyst_note, buro_score,
                        is_demo, outcome_status, payment_1_amount_mxn,
-                       payment_2_amount_mxn, raw_application, raw_result
+                       payment_2_amount_mxn, consent_timestamp, consent_channel,
+                       cohort_id, case_mode, partner_case_reference,
+                       partner_decision, partner_reason, partner_decision_at,
+                       recommendation_agreement, raw_application, raw_result
                 FROM scoring_log
                 ORDER BY scored_at DESC
             """).fetchall()
@@ -2595,9 +2871,9 @@ def main():
 
     DB_PATH = args.db
 
-    if is_production() and (not api_keys() or not webhook_secret()):
+    if is_production() and not api_keys():
         raise RuntimeError(
-            "Production requires OLIN_ANALYST_TOKEN (or OLIN_API_KEYS) and OLIN_STP_WEBHOOK_SECRET"
+            "Production requires OLIN_ANALYST_TOKEN or named OLIN_API_KEYS"
         )
 
     from .store import ScoringLog
@@ -2626,7 +2902,7 @@ def main():
             print(f"  Seeded {n} demo applications → {DB_PATH}")
 
     # Count apps
-    with sqlite3.connect(DB_PATH) as conn:
+    with closing(sqlite3.connect(DB_PATH)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM scoring_log").fetchone()[0]
 
     url = f"http://{args.host}:{args.port}"
