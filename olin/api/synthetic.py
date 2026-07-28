@@ -68,6 +68,9 @@ SYNTHETIC_CASES = [
             "avg_monthly_volume_mxn": 48_000,
             "volume_consistency": 0.91,
             "trend_3m": 0.08,
+            "source": "synthetic",
+            "verified": True,
+            "evidence_reference": "SYN-POS-001",
         },
         "maps": {
             "rating": 4.7,
@@ -132,6 +135,15 @@ SYNTHETIC_CASES = [
             "source": "synthetic",
             "verified": True,
             "evidence_reference": "SYN-FMCG-002",
+        },
+        "pos": {
+            "months_of_history": 12,
+            "avg_monthly_volume_mxn": 34_000,
+            "volume_consistency": 0.78,
+            "trend_3m": 0.02,
+            "source": "synthetic",
+            "verified": True,
+            "evidence_reference": "SYN-POS-002",
         },
         "tenure": {
             "years_on_google_maps": 5,

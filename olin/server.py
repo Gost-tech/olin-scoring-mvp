@@ -1280,9 +1280,16 @@ async function renderPortfolioBar() {
   if (!bar) return;
   const complete = allApps.filter(a => a.partner_decision && a.partner_decision !== 'pending').length;
   const consented = allApps.filter(a => a.consent_timestamp).length;
-  const verified = allApps.filter(a =>
-    a.data_sources?.bank_verified && a.data_sources?.fmcg_verified
-  ).length;
+  const verified = allApps.filter(a => {
+    const route = a.evidence_route || 'hybrid';
+    const bank = Boolean(a.data_sources?.bank_verified);
+    const supplier = Boolean(a.data_sources?.fmcg_verified);
+    const pos = Boolean(a.data_sources?.pos_verified);
+    if (route === 'inventory_led') return bank && supplier;
+    if (route === 'tpv_led') return bank && pos;
+    if (route === 'bank_flow_led') return bank;
+    return bank && (supplier || pos);
+  }).length;
   const comparable = allApps.filter(a => a.recommendation_agreement !== null && a.recommendation_agreement !== undefined);
   const agreements = comparable.filter(a => Number(a.recommendation_agreement) === 1).length;
   bar.innerHTML = `
@@ -1290,7 +1297,7 @@ async function renderPortfolioBar() {
     <div class="pf-sep"></div>
     <div class="pf-stat"><span class="pf-label">Consentimiento</span><span class="pf-value">${consented}/${allApps.length}</span></div>
     <div class="pf-sep"></div>
-    <div class="pf-stat"><span class="pf-label">Banco + FMCG verificados</span><span class="pf-value">${verified}/${allApps.length}</span></div>
+    <div class="pf-stat"><span class="pf-label">Ruta de evidencia verificada</span><span class="pf-value">${verified}/${allApps.length}</span></div>
     <div class="pf-sep"></div>
     <div class="pf-stat"><span class="pf-label">Decisión de la institución</span><span class="pf-value">${complete}/${allApps.length}</span></div>
     <div class="pf-sep"></div>

@@ -95,6 +95,10 @@ class POSData:
     avg_monthly_volume_mxn: float = 0.0
     volume_consistency: float = 0.0         # 0..1
     trend_3m: float = 0.0                   # -1..+1
+    source: str = "unknown"
+    verified: bool = False
+    evidence_reference: str = ""
+    observed_at: str = ""
 
 
 @dataclass

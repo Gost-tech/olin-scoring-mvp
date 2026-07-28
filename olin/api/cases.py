@@ -133,6 +133,10 @@ def build_application(body: dict[str, Any]) -> Application:
         avg_monthly_volume_mxn=float(pos_raw.get("avg_monthly_volume_mxn", 0)),
         volume_consistency=float(pos_raw.get("volume_consistency", 0)),
         trend_3m=float(pos_raw.get("trend_3m", 0)),
+        source=str(pos_raw.get("source", "api")),
+        verified=boolean(pos_raw, "verified"),
+        evidence_reference=str(pos_raw.get("evidence_reference", "")),
+        observed_at=str(pos_raw.get("observed_at", "")),
     ) if pos_raw else None
 
     maps_raw = sub("maps")
@@ -530,6 +534,13 @@ def list_cases(
             ),
             "fmcg_reference": (
                 application.get("fmcg") or {}
+            ).get("evidence_reference", ""),
+            "pos": (application.get("pos") or {}).get("source", "missing"),
+            "pos_verified": bool(
+                (application.get("pos") or {}).get("verified", False)
+            ),
+            "pos_reference": (
+                application.get("pos") or {}
             ).get("evidence_reference", ""),
         }
         case["mitigation_menu"] = None

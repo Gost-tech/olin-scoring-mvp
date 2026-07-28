@@ -48,7 +48,7 @@ cd website && pnpm test
 ```
 
 Résultat au 27 juillet : 27/27 tests API et sécurité, flux historique complet,
-0 erreur Astro, 308 contrôles statiques et parcours navigateur validé avec un
+0 erreur Astro, 309 contrôles statiques et parcours navigateur validé avec un
 faux partenaire puis un faux analyste.
 
 ## Limites connues

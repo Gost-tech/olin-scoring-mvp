@@ -10,11 +10,11 @@ credit decision and no money is disbursed.
    exact evidence it may share.
 2. Have Mexican counsel approve the consent text, privacy notice, retention
    period, and access policy.
-3. Create one named API key per user in `.env`:
+3. Create one named user per person in `.env`:
 
    ```text
    OLIN_MODE=production
-   OLIN_API_KEYS={"brice":"long-random-token","partner_analyst":"another-long-random-token"}
+   OLIN_USERS={"partner_operator":{"token":"long-random-token","role":"partner"},"credit_analyst":{"token":"another-long-random-token","role":"analyst"}}
    ```
 
 4. Use a new, encrypted production database. Never copy the synthetic demo

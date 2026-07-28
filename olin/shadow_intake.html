@@ -288,6 +288,17 @@
       <details>
         <summary>Datos TPV opcionales</summary>
         <div class="grid">
+          <label>Fuente TPV
+            <select name="pos_source">
+              <option value="">Sin evidencia TPV</option>
+              <option value="partner_api">API del socio</option>
+              <option value="pos_settlement">Liquidaciones TPV</option>
+              <option value="statements">Estado de liquidaciones</option>
+              <option value="synthetic">Escenario sintético</option>
+            </select>
+          </label>
+          <label>Referencia TPV<input name="pos_evidence_reference" placeholder="TPV-CASE-001"></label>
+          <label class="check full"><input name="pos_verified" type="checkbox"> Evidencia TPV verificada</label>
           <label>Meses observados<input name="pos_months" type="number" min="0" step=".1"></label>
           <label>Volumen mensual promedio<input name="pos_volume" type="number" min="0" step=".01"></label>
           <label>Consistencia (0 a 1)<input name="pos_consistency" type="number" min="0" max="1" step=".01"></label>
@@ -415,7 +426,9 @@
       review_velocity_6m:number('review_velocity')
     };
     if (value('employees') !== '') payload.imss = {registered_employees:number('employees')};
-    if (value('pos_months') || value('pos_volume') || value('pos_consistency') || value('pos_trend')) payload.pos = {
+    if (value('pos_source')) payload.pos = {
+      source:value('pos_source'), verified:checked('pos_verified'),
+      evidence_reference:value('pos_evidence_reference'),
       months_of_history:number('pos_months'), avg_monthly_volume_mxn:number('pos_volume'),
       volume_consistency:number('pos_consistency'), trend_3m:number('pos_trend')
     };
@@ -487,6 +500,9 @@
       review_count:maps.review_count,
       review_velocity:maps.review_velocity_6m,
       pos_months:pos.months_of_history,
+      pos_source:pos.source,
+      pos_evidence_reference:`${pos.evidence_reference || ''}-NUEVO`,
+      pos_verified:pos.verified,
       pos_volume:pos.avg_monthly_volume_mxn,
       pos_consistency:pos.volume_consistency,
       pos_trend:pos.trend_3m,

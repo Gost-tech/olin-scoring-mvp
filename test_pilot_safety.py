@@ -13,7 +13,7 @@ from olin import alerts
 from olin.collection import check_overdue, make_collection_ref, process_incoming_payment
 from olin.models import (
     Application, BankData, BuroData, BusinessType, FMCGData, FraudData,
-    MapsRatingData, RepaymentAssessment, TenureData,
+    MapsRatingData, POSData, RepaymentAssessment, TenureData,
 )
 from olin.scorecard import (
     _buro_dim, _dscr_dim, _score_dim, _tier_lookup, score_application,
@@ -162,6 +162,24 @@ class PilotSafetyTests(unittest.TestCase):
         self.assertEqual(result.tier, 14)
         self.assertEqual(result.approved_amount_mxn, 0)
         self.assertTrue(result.production_blocks)
+
+        app = healthy_app()
+        app.pos = POSData(
+            months_of_history=12,
+            avg_monthly_volume_mxn=40_000,
+            volume_consistency=0.9,
+            trend_3m=0.1,
+            source="synthetic",
+            verified=True,
+            evidence_reference="SYN-POS-001",
+        )
+        with patch.dict(os.environ, {"OLIN_MODE": "production"}):
+            result = score_application(app)
+        self.assertEqual(result.decision.value, "DECLINE")
+        self.assertIn(
+            "Synthetic POS data is forbidden in production underwriting",
+            result.production_blocks,
+        )
 
     def test_engine_decline_has_zero_amount_and_cannot_be_overridden(self):
         app = healthy_app()

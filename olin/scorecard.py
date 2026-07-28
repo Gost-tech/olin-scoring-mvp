@@ -434,6 +434,19 @@ def score_application(
                 production_blocks.append(
                     "Verified FMCG evidence requires an evidence reference"
                 )
+        if app.pos is not None:
+            if is_synthetic_source(app.pos.source):
+                production_blocks.append(
+                    "Synthetic POS data is forbidden in production underwriting"
+                )
+            elif not app.pos.verified:
+                production_blocks.append(
+                    "POS evidence must be verified before production underwriting"
+                )
+            elif not app.pos.evidence_reference.strip():
+                production_blocks.append(
+                    "Verified POS evidence requires an evidence reference"
+                )
     if production_blocks:
         signals_list = _collect_signals(app)
         composite = _composite(signals_list)
