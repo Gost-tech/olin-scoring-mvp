@@ -73,19 +73,19 @@ import DecisionExplorer from "../components/DecisionExplorer";
       <div class="section-heading">
         <div>
           <p class="section-kicker muted-dark">02 / Alcance</p>
-          <h2 class="section-title" id="scope-title">Una plataforma.<br />Políticas distintas por <em>giro.</em></h2>
+          <h2 class="section-title" id="scope-title">Todos los pequeños negocios.<br />La evidencia correcta para <em>cada caso.</em></h2>
         </div>
-        <p class="section-lede">Olin está diseñado para instituciones que evalúan pequeños negocios. La primera cohorte propuesta se concentra en tiendas de abarrotes; cada giro adicional requiere revisar sus señales y calibrar su propia política.</p>
+        <p class="section-lede">Olin puede recibir comercios, restaurantes, talleres, salones, consultorios y otros pequeños negocios. No presupone que todos operan igual: selecciona una ruta de evidencia y envía a revisión humana cualquier política sectorial que todavía no esté calibrada.</p>
       </div>
 
-      <div class="business-grid" aria-label="Ejemplos de giros comerciales">
-        <article class="card card--dark business-card business-card--active"><span class="tag tag--signal">Primera cohorte</span><h3>Tiendas de abarrotes</h3><p>Reposición frecuente, ventas diarias, antigüedad y compras a distribuidores.</p><small>Política inicial por validar</small></article>
-        <article class="card card--dark business-card"><span class="tag tag--dark">Piloto separado</span><h3>Taquerías y fondas</h3><p>Mayor variación diaria, ventas por terminal o plataforma y compras de insumos.</p><small>Requiere ajustar capacidad y estacionalidad</small></article>
-        <article class="card card--dark business-card"><span class="tag tag--dark">Piloto separado</span><h3>Papelerías y ferreterías</h3><p>Inventario, compras a proveedores, temporadas y permanencia del establecimiento.</p><small>Requiere reglas propias del giro</small></article>
-        <article class="card card--dark business-card"><span class="tag tag--dark">Exploración futura</span><h3>Servicios locales</h3><p>Salones, talleres y otros negocios pueden aportar ventas, citas y flujo bancario.</p><small>No dependen de las mismas señales de inventario</small></article>
+      <div class="business-grid" aria-label="Rutas de evidencia para pequeños negocios">
+        <article class="card card--dark business-card business-card--active"><span class="tag tag--signal">Inventario</span><h3>Comercio y retail</h3><p>Compras a proveedores, rotación de inventario, depósitos y ventas por terminal.</p><small>Abarrotes, papelerías, ferreterías y tiendas</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">TPV + flujo</span><h3>Alimentos y hospitalidad</h3><p>Ventas diarias, estacionalidad, liquidaciones TPV, depósitos y compras de insumos.</p><small>Taquerías, restaurantes, fondas y cafés</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Flujo + actividad</span><h3>Servicios y profesionales</h3><p>Depósitos, facturación, recurrencia de clientes, antigüedad y carga financiera.</p><small>Talleres, salones, consultorios y despachos</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Activos + pedidos</span><h3>Producción y transporte</h3><p>Pedidos, contratos, utilización de activos, gastos operativos y flujo bancario.</p><small>Manufactura ligera, logística y transporte local</small></article>
       </div>
 
-      <div class="scope-note"><strong>Importante:</strong> la arquitectura puede adaptarse; la política actual no está validada para todos los negocios y sus criterios no se trasladan automáticamente entre giros.</div>
+      <div class="scope-note"><strong>Importante:</strong> Olin puede registrar todos estos casos desde hoy. Solo la política de abarrotes puede producir una ruta automática en la demo; los demás giros permanecen en revisión de la institución hasta reunir resultados suficientes.</div>
     </div>
   </section>
 
@@ -141,7 +141,7 @@ import DecisionExplorer from "../components/DecisionExplorer";
       <div class="faq-grid">
         <details class="card faq-item" open><summary>¿Olin sabe quién va a pagar?</summary><p>No. Estima la capacidad de pago y organiza señales de riesgo para un crédito específico. Nadie puede garantizar el pago; solo los resultados reales permiten calibrar la política.</p></details>
         <details class="card faq-item"><summary>¿Olin presta el dinero?</summary><p>No en el modelo propuesto. La institución financiera origina el crédito, define su política, aporta el capital y conserva la relación con el cliente.</p></details>
-        <details class="card faq-item"><summary>¿Funciona para cualquier negocio?</summary><p>La arquitectura admite distintos giros. La política inicial se enfoca en tiendas de abarrotes; taquerías, papelerías y servicios necesitan pilotos y reglas separados.</p></details>
+        <details class="card faq-item"><summary>¿Funciona para cualquier negocio?</summary><p>Puede registrar y evaluar distintos pequeños negocios cuando existe evidencia autorizada. No usa una aprobación universal: el sistema identifica la ruta de evidencia y obliga a revisión humana cuando el sector o la información todavía no están calibrados.</p></details>
         <details class="card faq-item"><summary>¿Qué pasa cuando falta información?</summary><p>Olin no inventa el dato. Registra el faltante y aplica la ruta correspondiente: revisión adicional o caso no recomendado, según la política.</p></details>
       </div>
     </div>

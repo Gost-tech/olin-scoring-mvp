@@ -47,7 +47,13 @@ for (const path of htmlFiles) {
 const home = readFileSync(join(dist, "index.html"), "utf8");
 record(home.includes("¿Puede este negocio"), "accueil: question principale explicite");
 record(home.includes("Nadie puede garantizar el pago"), "accueil: aucune promesse de remboursement");
-record(home.includes("Tiendas de abarrotes") && home.includes("Taquerías y fondas") && home.includes("Papelerías y ferreterías"), "accueil: plusieurs types de petits commerces");
+record(
+  home.includes("Comercio y retail")
+    && home.includes("Alimentos y hospitalidad")
+    && home.includes("Servicios y profesionales")
+    && home.includes("Producción y transporte"),
+  "accueil: plusieurs routes de preuve pour petits commerces",
+);
 record(!/microcomercios|corner stores|tiendas de esquina|un abarrotes|garantiza el reembolso/i.test(home), "accueil: terminologie interdite absente");
 
 const explorer = readFileSync(join(root, "src", "components", "DecisionExplorer.tsx"), "utf8");

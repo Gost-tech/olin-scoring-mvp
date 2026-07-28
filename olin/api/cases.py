@@ -26,6 +26,20 @@ from ..portfolio import check_portfolio
 from ..scorecard import score_application
 from ..store import ScoringLog
 
+FUNDING_PURPOSES = frozenset(
+    {
+        "working_capital",
+        "inventory",
+        "equipment",
+        "expansion",
+        "renovation",
+        "technology",
+    }
+)
+EVIDENCE_ROUTES = frozenset(
+    {"inventory_led", "tpv_led", "bank_flow_led", "hybrid"}
+)
+
 
 def build_application(body: dict[str, Any]) -> Application:
     """Validate an authenticated partner payload and build an application."""
@@ -215,6 +229,14 @@ def build_application(body: dict[str, Any]) -> Application:
         requested_amount_mxn=requested,
         colonia=str(body.get("colonia", "")),
         clabe=str(body.get("clabe", "")),
+        business_description=str(
+            body.get("business_description", "")
+        ).strip()[:240],
+        funding_purpose=str(body.get("funding_purpose", "")).strip()[:80],
+        project_description=str(
+            body.get("project_description", "")
+        ).strip()[:1000],
+        evidence_route=str(body.get("evidence_route", "")).strip()[:40],
         bank=bank,
         fmcg=fmcg,
         tenure=tenure,
@@ -244,6 +266,18 @@ def validate_submission_metadata(body: dict[str, Any]) -> None:
     case_mode = str(body.get("case_mode", "")).strip().lower()
     if case_mode and case_mode not in ("shadow", "live"):
         raise ValueError("case_mode must be shadow or live")
+    funding_purpose = str(body.get("funding_purpose", "")).strip().lower()
+    if funding_purpose and funding_purpose not in FUNDING_PURPOSES:
+        raise ValueError(
+            "funding_purpose must be working_capital, inventory, equipment, "
+            "expansion, renovation, or technology"
+        )
+    evidence_route = str(body.get("evidence_route", "")).strip().lower()
+    if evidence_route and evidence_route not in EVIDENCE_ROUTES:
+        raise ValueError(
+            "evidence_route must be inventory_led, tpv_led, bank_flow_led, "
+            "or hybrid"
+        )
     if is_production():
         if case_mode != "shadow":
             raise ValueError("case_mode must be shadow in production pilot")
@@ -253,6 +287,12 @@ def validate_submission_metadata(body: dict[str, Any]) -> None:
             raise ValueError("cohort_id is required in production")
         if not str(body.get("partner_case_reference", "")).strip():
             raise ValueError("partner_case_reference is required in production")
+        if not funding_purpose:
+            raise ValueError("funding_purpose is required in production")
+        if not str(body.get("project_description", "")).strip():
+            raise ValueError("project_description is required in production")
+        if not evidence_route:
+            raise ValueError("evidence_route is required in production")
 
 
 def format_score_result(app: Application, result: Any) -> dict[str, Any]:
@@ -395,6 +435,16 @@ def get_case(
             "maps": raw_application.get("maps"),
             "imss": raw_application.get("imss"),
         },
+        "request": {
+            "business_description": raw_application.get(
+                "business_description", ""
+            ),
+            "funding_purpose": raw_application.get("funding_purpose", ""),
+            "project_description": raw_application.get(
+                "project_description", ""
+            ),
+            "evidence_route": raw_application.get("evidence_route", ""),
+        },
         "consent": {
             "timestamp": row["consent_timestamp"],
             "channel": row["consent_channel"],
@@ -457,6 +507,14 @@ def list_cases(
         case["environment"] = result.get(
             "environment", application.get("environment", "unspecified")
         )
+        case["business_description"] = application.get(
+            "business_description", ""
+        )
+        case["funding_purpose"] = application.get("funding_purpose", "")
+        case["project_description"] = application.get(
+            "project_description", ""
+        )
+        case["evidence_route"] = application.get("evidence_route", "")
         case["production_blocks"] = result.get("production_blocks", [])
         case["data_sources"] = {
             "bank": (application.get("bank") or {}).get("source", "missing"),

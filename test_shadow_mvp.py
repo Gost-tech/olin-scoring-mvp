@@ -120,6 +120,9 @@ class ShadowMVPContractTests(unittest.TestCase):
                     },
                     "cohort_id": "shadow_2026_07",
                     "partner_case_reference": "PARTNER-001",
+                    "funding_purpose": "inventory",
+                    "project_description": "Comprar inventario para el negocio.",
+                    "evidence_route": "inventory_led",
                 }
             )
 
@@ -232,6 +235,10 @@ class ShadowMVPContractTests(unittest.TestCase):
         payload = {
             "merchant_name": "Abarrotes Piloto Uno",
             "business_type": "abarrotes",
+            "business_description": "Tienda de barrio con venta diaria.",
+            "funding_purpose": "inventory",
+            "project_description": "Comprar inventario de alta rotación.",
+            "evidence_route": "inventory_led",
             "requested_mxn": 20_000,
             "colonia": "Iztapalapa",
             "case_mode": "shadow",

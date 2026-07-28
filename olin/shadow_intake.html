@@ -116,7 +116,7 @@
 
     <section>
       <h2>2. Comercio e identidad</h2>
-      <p class="help">Primera cohorte limitada a tiendas de abarrotes.</p>
+      <p class="help">Olin puede registrar distintos giros. Las políticas no calibradas siempre requieren revisión de la institución.</p>
       <div class="grid">
         <label>Nombre comercial
           <input name="merchant_name" required>
@@ -124,10 +124,46 @@
         <label>Tipo de negocio
           <select name="business_type" required>
             <option value="abarrotes">Tienda de abarrotes</option>
+            <option value="retail">Comercio minorista</option>
+            <option value="taqueria">Taquería</option>
+            <option value="jugueria">Juguería</option>
+            <option value="restaurant">Restaurante o fonda</option>
+            <option value="services">Servicios locales</option>
+            <option value="health_beauty">Salud y belleza</option>
+            <option value="professional">Servicios profesionales</option>
+            <option value="transport">Transporte o logística</option>
+            <option value="light_manufacturing">Manufactura ligera</option>
+            <option value="other">Otro giro</option>
           </select>
+        </label>
+        <label class="full">Descripción del negocio
+          <input name="business_description" placeholder="Qué vende, a quién y cómo cobra" required>
         </label>
         <label>Monto a evaluar (MXN)
           <input name="requested_mxn" type="number" min="1000" max="80000" step="500" required>
+        </label>
+        <label>Uso del financiamiento
+          <select name="funding_purpose" required>
+            <option value="">Seleccionar</option>
+            <option value="working_capital">Capital de trabajo</option>
+            <option value="inventory">Inventario o insumos</option>
+            <option value="equipment">Equipo o maquinaria</option>
+            <option value="expansion">Expansión</option>
+            <option value="renovation">Remodelación</option>
+            <option value="technology">Tecnología</option>
+          </select>
+        </label>
+        <label class="full">Proyecto que será financiado
+          <textarea name="project_description" placeholder="Qué comprará, cuánto cuesta y cómo ayudará al negocio a pagar el crédito" required></textarea>
+        </label>
+        <label>Ruta principal de evidencia
+          <select name="evidence_route" required>
+            <option value="">Seleccionar</option>
+            <option value="inventory_led">Inventario y proveedores</option>
+            <option value="tpv_led">Ventas y liquidaciones TPV</option>
+            <option value="bank_flow_led">Flujo bancario y actividad</option>
+            <option value="hybrid">Ruta híbrida</option>
+          </select>
         </label>
         <label>Colonia
           <input name="colonia" required>
@@ -341,7 +377,11 @@
 
   function buildPayload() {
     const payload = {
-      merchant_name:value('merchant_name'), business_type:'abarrotes',
+      merchant_name:value('merchant_name'), business_type:value('business_type'),
+      business_description:value('business_description'),
+      funding_purpose:value('funding_purpose'),
+      project_description:value('project_description'),
+      evidence_route:value('evidence_route'),
       requested_mxn:number('requested_mxn'), colonia:value('colonia'), clabe:value('clabe'),
       case_mode:'shadow', cohort_id:value('cohort_id'),
       partner_case_reference:value('partner_case_reference'),
@@ -403,6 +443,10 @@
       consent_text:payload.consent?.text,
       merchant_name:`${payload.merchant_name} · nuevo`,
       business_type:payload.business_type,
+      business_description:payload.business_description,
+      funding_purpose:payload.funding_purpose,
+      project_description:payload.project_description,
+      evidence_route:payload.evidence_route,
       requested_mxn:payload.requested_mxn,
       colonia:payload.colonia,
       phone_mx:fraud.phone_mx,

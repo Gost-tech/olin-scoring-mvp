@@ -125,6 +125,21 @@ TERM_MONTHS = 2
 BOOTSTRAP_ITERATIONS = 500
 SIGNAL_NOISE_STD = 6.0
 
+# Only this policy has an initial auto-approval path. Other sectors can be
+# evaluated and compared in a partner pilot, but must remain human-reviewed
+# until enough labelled outcomes exist to calibrate their policy.
+AUTO_APPROVE_VALIDATED_TYPES = frozenset({"abarrotes"})
+SUPPLIER_LED_TYPES = frozenset(
+    {
+        "abarrotes",
+        "jugueria",
+        "taqueria",
+        "restaurant",
+        "retail",
+        "light_manufacturing",
+    }
+)
+
 TIER_PREGATED = 14   # fraud / portfolio block — before scorecard runs
 
 # ── 3-Dimension tier matrix (Círculo de Crédito × DSCR × Score) ─────────────
@@ -341,8 +356,17 @@ def _bootstrap_ci(signals_list: list[SignalScore], seed: int = 7) -> Tuple[float
 def _phase0_hard_filters(app: Application) -> list[str]:
     """Conservative quality filters. Failures downgrade Tier 1 → Tier 3, never auto-decline."""
     failures = []
-    if app.fmcg is None or not app.fmcg.distributor_confirmed:
-        failures.append("FMCG distributor delivery not confirmed (FEMSA/Bimbo)")
+    business_type = app.business_type.value if app.business_type else "other"
+    if business_type not in AUTO_APPROVE_VALIDATED_TYPES:
+        failures.append(
+            "Business-type policy is not calibrated for auto-approval; "
+            "partner review required"
+        )
+    if (
+        business_type in SUPPLIER_LED_TYPES
+        and (app.fmcg is None or not app.fmcg.distributor_confirmed)
+    ):
+        failures.append("Supplier purchase evidence not confirmed")
     tenure_years = 0.0
     if app.tenure is not None:
         tenure_years = max(app.tenure.years_on_google_maps, app.tenure.years_in_imss)

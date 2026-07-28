@@ -17,6 +17,12 @@ def partner_payload() -> dict:
     return {
         "merchant_name": "Abarrotes Piloto Seguro",
         "business_type": "abarrotes",
+        "business_description": "Tienda de barrio con venta diaria.",
+        "funding_purpose": "inventory",
+        "project_description": (
+            "Comprar inventario de alta rotación para cuatro semanas."
+        ),
+        "evidence_route": "inventory_led",
         "requested_mxn": 20_000,
         "colonia": "Iztapalapa",
         "case_mode": "shadow",

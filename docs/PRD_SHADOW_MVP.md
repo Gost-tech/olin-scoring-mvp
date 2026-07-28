@@ -3,7 +3,7 @@
 Status: locked for the first partner pilot  
 Owner: Brice Garnier  
 Product mode: B2B decision support  
-Pilot population: 10 authorized abarrotes cases  
+Pilot population: 10 authorized multi-sector small-business cases
 Money movement: prohibited
 
 ## Problem
@@ -18,7 +18,8 @@ institution's policy or decision.
 
 - Customer: a bank, SOFOM, or lending fintech.
 - Primary user: a credit analyst or risk manager.
-- Evaluated subject: a small merchant.
+- Evaluated subject: a small business seeking funding for a defined business
+  purpose.
 - Olin is not the lender and does not accept public loan applications in this
   MVP.
 
@@ -60,8 +61,8 @@ The product has one directional record:
 
 `Case → Evidence → Olin Recommendation → Partner Outcome`
 
-- `Case`: merchant identity, cohort, partner reference, requested amount and
-  versioned consent.
+- `Case`: merchant identity, sector, funding purpose, project description,
+  cohort, partner reference, requested amount and versioned consent.
 - `Evidence`: source, verification state, retrievable reference and observed
   values. Missing evidence remains explicit.
 - `Olin Recommendation`: scorecard version, route, tier, capacity assessment,
@@ -107,7 +108,7 @@ returned by the application.
 - Live origination, STP transfer, repayment, or collection.
 - Automated approval without a human partner decision.
 - Machine learning or claims of predictive accuracy.
-- Policies calibrated for business types beyond the first abarrotes cohort.
+- Automatic policies calibrated for every business sector.
 - Claims of a live integration or partnership without written confirmation.
 
 ## Product guardrails
@@ -127,7 +128,8 @@ returned by the application.
 2. Deployed synthetic demo with no personal data.
 3. Internal walkthrough using three synthetic cases.
 4. Partner security and workflow review.
-5. Ten consented shadow cases.
+5. Ten consented shadow cases spanning inventory-led, TPV-led and
+   bank-flow-led evidence routes.
 6. Joint report and go/no-go decision for any later live pilot.
 
 Any failed security guardrail rolls the product back to synthetic-demo-only

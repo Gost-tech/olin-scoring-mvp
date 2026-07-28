@@ -662,6 +662,10 @@ function localizeText(value) {
     .replace(/not checked/g, 'no verificado')
     .replace(/FMCG distributor delivery not confirmed \(FEMSA\/Bimbo\)/g,
       'Entrega del distribuidor no confirmada')
+    .replace(/Supplier purchase evidence not confirmed/g,
+      'Evidencia de compras a proveedores no confirmada')
+    .replace(/Business-type policy is not calibrated for auto-approval; partner review required/g,
+      'La política de este giro aún no está calibrada para aprobación automática; requiere revisión de la institución')
     .replace(/Business tenure ([\d.]+)y below Phase 0 minimum of ([\d.]+)y/g,
       'Antigüedad de $1 años por debajo del mínimo de $2 años')
     .replace(/Google Maps rating ([\d.]+) below Phase 0 minimum of ([\d.]+)/g,

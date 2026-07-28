@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 
 type Case = { id: string; merchant: string; type: string; amount: string; route: string; score: string; coverage: string; age: string; status: string; reason: string };
 const seedCases: Case[] = [
-  { id: "SYN-001", merchant: "Abarrotes La Esperanza", type: "Abarrotes · Iztapalapa", amount: "MXN 20,000", route: "AUTO-APPROVE", score: "93.6", coverage: "100%", age: "12 min", status: "Pendiente de la institución", reason: "Capacidad de pago sólida, operación estable y evidencia sintética completa." },
-  { id: "SYN-002", merchant: "Abarrotes San Miguel", type: "Abarrotes · Gustavo A. Madero", amount: "MXN 30,000", route: "COMMITTEE", score: "64.1", coverage: "83%", age: "28 min", status: "Revisión requerida", reason: "El perfil es viable, pero el margen de pago y el score Círculo requieren revisión humana." },
-  { id: "SYN-003", merchant: "Abarrotes La Unión", type: "Abarrotes · Ecatepec", amount: "MXN 25,000", route: "DECLINE", score: "9.0", coverage: "83%", age: "1 h", status: "No recomendar", reason: "Mora activa, flujo de efectivo insuficiente y señales operativas deterioradas." },
+  { id: "SYN-001", merchant: "Abarrotes La Esperanza", type: "Abarrotes · Iztapalapa", amount: "MXN 20,000", route: "AUTO-APPROVE", score: "93.6", coverage: "95%", age: "12 min", status: "Pendiente de la institución", reason: "Capacidad de pago sólida, operación estable y evidencia sintética completa." },
+  { id: "SYN-002", merchant: "Taquería San Miguel", type: "Alimentos · Gustavo A. Madero", amount: "MXN 30,000", route: "COMMITTEE", score: "64.1", coverage: "75%", age: "28 min", status: "Revisión requerida", reason: "El perfil es viable, pero el margen de pago, el score Círculo y una política sectorial aún no calibrada requieren revisión humana." },
+  { id: "SYN-003", merchant: "Taller Mecánico La Unión", type: "Servicios · Ecatepec", amount: "MXN 25,000", route: "DECLINE", score: "12.2", coverage: "55%", age: "1 h", status: "No recomendar", reason: "Mora activa, flujo de efectivo insuficiente y señales operativas deterioradas." },
 ];
 
 export default function AnalystConsole() {

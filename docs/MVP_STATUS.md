@@ -7,7 +7,8 @@ Dernière validation : 27 juillet 2026.
 Olin est un outil B2B d’aide à la décision. Il transforme un dossier, ses
 preuves et le consentement associé en une recommandation explicable. La
 banque, SOFOM ou fintech partenaire conserve la décision officielle et le
-risque. La première cohorte est limitée à dix abarrotes en mode shadow.
+risque. La première cohorte est limitée à dix petits commerces autorisés en
+mode shadow, répartis entre plusieurs routes de preuve.
 
 Modèle unique :
 
@@ -53,6 +54,9 @@ faux partenaire puis un faux analyste.
 ## Limites connues
 
 - Les trois dossiers de démonstration sont synthétiques.
+- La plateforme accepte plusieurs secteurs, mais seule la politique abarrotes
+  est actuellement éligible à une route automatique. Tous les autres secteurs
+  sont obligatoirement soumis à la revue du partenaire.
 - Aucune intégration Círculo, Syncfy, TPV ou distributeur n’est encore active
   dans cette démo.
 - `server.py` contient encore du code historique de prêt direct non exposé.
@@ -61,8 +65,10 @@ faux partenaire puis un faux analyste.
 
 ## Règle de benchmark HayCash
 
-HayCash montre la valeur d’un flux TPV et d’un remboursement lié aux ventes.
-Olin ne doit pas copier sa promesse de financement direct : son avantage à
-tester est l’expediente explicable pour les institutions et les commerces plus
-petits. Ne jamais présenter HayCash, Monex, Syncfy ou Círculo comme partenaire
-sans accord vérifiable.
+HayCash montre qu’un produit peut couvrir plusieurs secteurs tout en restant
+très précis sur sa preuve principale : le flux TPV et un remboursement lié aux
+ventes. Olin ne doit pas copier sa promesse de financement direct. Son avantage
+à tester est un expediente explicable capable de combiner plusieurs routes de
+preuve pour les institutions et les commerces moins bien servis. Ne jamais
+présenter HayCash, Monex, Syncfy ou Círculo comme partenaire sans accord
+vérifiable.

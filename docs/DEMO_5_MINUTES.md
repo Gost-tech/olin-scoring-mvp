@@ -30,7 +30,7 @@ expediente y ejecuta `scorecard.py`.”
 ## 1:40–3:10 — Revisar evidencia y recomendación
 
 1. Volver a la mesa de decisión.
-2. Abrir `Abarrotes San Miguel`.
+2. Abrir `Taquería San Miguel`.
 3. Mostrar Círculo, DSCR, score, cobertura y fuentes.
 4. Distinguir claramente:
    - recomendación Olin;

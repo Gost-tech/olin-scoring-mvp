@@ -27,6 +27,13 @@ class BusinessType(str, Enum):
     ABARROTES = "abarrotes"
     JUGUERIA = "jugueria"
     TAQUERIA = "taqueria"
+    RESTAURANT = "restaurant"
+    RETAIL = "retail"
+    SERVICES = "services"
+    HEALTH_BEAUTY = "health_beauty"
+    PROFESSIONAL = "professional"
+    TRANSPORT = "transport"
+    LIGHT_MANUFACTURING = "light_manufacturing"
     OTHER = "other"
 
 
@@ -144,6 +151,10 @@ class Application:
     requested_amount_mxn: float
     colonia: str = ""
     clabe: str = ""
+    business_description: str = ""
+    funding_purpose: str = ""
+    project_description: str = ""
+    evidence_route: str = ""
 
     fmcg: Optional[FMCGData] = None
     bank: Optional[BankData] = None

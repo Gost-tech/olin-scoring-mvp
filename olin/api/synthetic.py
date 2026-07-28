@@ -17,6 +17,16 @@ SYNTHETIC_CASES = [
     {
         "merchant_name": "Abarrotes La Esperanza",
         "business_type": "abarrotes",
+        "business_description": (
+            "Tienda de barrio con venta diaria de alimentos, bebidas y "
+            "productos de limpieza."
+        ),
+        "funding_purpose": "inventory",
+        "project_description": (
+            "Comprar inventario de alta rotación para ampliar surtido y "
+            "evitar faltantes durante cuatro semanas."
+        ),
+        "evidence_route": "inventory_led",
         "requested_mxn": 20_000,
         "colonia": "Iztapalapa",
         "case_mode": "shadow",
@@ -80,8 +90,18 @@ SYNTHETIC_CASES = [
         },
     },
     {
-        "merchant_name": "Abarrotes San Miguel",
-        "business_type": "abarrotes",
+        "merchant_name": "Taquería San Miguel",
+        "business_type": "taqueria",
+        "business_description": (
+            "Taquería con servicio en local, pedidos para llevar y cobros "
+            "en efectivo y terminal."
+        ),
+        "funding_purpose": "equipment",
+        "project_description": (
+            "Comprar una plancha y refrigerador para aumentar la capacidad "
+            "del turno nocturno."
+        ),
+        "evidence_route": "tpv_led",
         "requested_mxn": 30_000,
         "colonia": "Gustavo A. Madero",
         "case_mode": "shadow",
@@ -139,8 +159,17 @@ SYNTHETIC_CASES = [
         },
     },
     {
-        "merchant_name": "Abarrotes La Unión",
-        "business_type": "abarrotes",
+        "merchant_name": "Taller Mecánico La Unión",
+        "business_type": "services",
+        "business_description": (
+            "Taller independiente de mantenimiento y reparación automotriz."
+        ),
+        "funding_purpose": "equipment",
+        "project_description": (
+            "Comprar un escáner de diagnóstico y herramienta; el flujo "
+            "actual no demuestra capacidad suficiente."
+        ),
+        "evidence_route": "bank_flow_led",
         "requested_mxn": 25_000,
         "colonia": "Ecatepec",
         "case_mode": "shadow",
@@ -160,17 +189,6 @@ SYNTHETIC_CASES = [
             "source": "synthetic",
             "verified": True,
             "evidence_reference": "SYN-BANK-003",
-        },
-        "fmcg": {
-            "months_of_history": 5,
-            "weekly_purchase_rate": 0.48,
-            "missed_weeks_last_12": 6,
-            "avg_weekly_purchase_mxn": 2_900,
-            "distributor_confirmed": False,
-            "trend_3m": -0.36,
-            "source": "synthetic",
-            "verified": True,
-            "evidence_reference": "SYN-FMCG-003",
         },
         "tenure": {
             "years_on_google_maps": 1.4,
