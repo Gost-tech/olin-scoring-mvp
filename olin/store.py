@@ -118,6 +118,7 @@ class ScoringLog:
             "ALTER TABLE scoring_log ADD COLUMN partner_reason TEXT",
             "ALTER TABLE scoring_log ADD COLUMN partner_decision_at TEXT",
             "ALTER TABLE scoring_log ADD COLUMN recommendation_agreement INTEGER",
+            "ALTER TABLE scoring_log ADD COLUMN owner_actor TEXT",
         ]:
             try:
                 self.conn.execute(col_sql)

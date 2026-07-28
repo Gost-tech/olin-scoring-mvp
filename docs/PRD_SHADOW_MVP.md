@@ -54,6 +54,32 @@ Agreement rate and default rate are observations, not success targets, because
    rationale.
 7. Olin includes the case in a 10-case pilot export.
 
+## Canonical product model
+
+The product has one directional record:
+
+`Case → Evidence → Olin Recommendation → Partner Outcome`
+
+- `Case`: merchant identity, cohort, partner reference, requested amount and
+  versioned consent.
+- `Evidence`: source, verification state, retrievable reference and observed
+  values. Missing evidence remains explicit.
+- `Olin Recommendation`: scorecard version, route, tier, capacity assessment,
+  reasons and missing evidence. It is never the institution's decision.
+- `Partner Outcome`: approved, declined or pending, with actor, reason and
+  timestamp. It never triggers money movement in the shadow MVP.
+
+## Minimal roles
+
+- `partner`: creates cases and can read the pilot queue.
+- `analyst`: reads cases, records notes and the institution's outcome, and
+  exports the cohort.
+- `admin`: operational access to all pilot actions. Shadow disbursement remains
+  blocked regardless of role.
+
+Production credentials are named in `OLIN_USERS`; tokens are not persisted or
+returned by the application.
+
 ## Must have
 
 - Named-user authentication before any case data is returned.

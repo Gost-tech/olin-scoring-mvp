@@ -3,7 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import AnalystConsole from "../components/AnalystConsole";
 ---
 
-<BaseLayout title="Analyst demo | Olin" description="Synthetic analyst review console for Olin." noIndex>
-  <section class="page-hero" aria-labelledby="analyst-title"><div class="shell page-hero__inner"><div><p class="eyebrow">Investor demo · analyst side</p><h1 id="analyst-title">A queue your credit team<br /><em>can actually review.</em></h1></div><div class="page-hero__aside"><p>Every case has a route, evidence status, rationale and recorded partner action. This demo uses synthetic cases and cannot approve or disburse money.</p></div></div></section>
-  <section class="section section--paper"><div class="shell"><AnalystConsole client:load /><p class="explorer-disclaimer">Synthetic dashboard. Production access control, partner integrations and real evidence are required before operational use.</p></div></section>
+<BaseLayout title="Demostración para analistas | Olin" description="Vista sintética de la mesa de decisión Olin." noIndex>
+  <section class="page-hero" aria-labelledby="analyst-title"><div class="shell page-hero__inner"><div><p class="eyebrow">Demostración sintética · analista</p><h1 id="analyst-title">Una file que el equipo<br /><em>puede revisar.</em></h1></div><div class="page-hero__aside"><p>Cada expediente presenta evidencia, recomendación, razones y resultado de la institución. Esta vista usa datos ficticios y no puede originar ni desembolsar dinero.</p></div></div></section>
+  <section class="section section--paper"><div class="shell"><AnalystConsole client:load /><p class="explorer-disclaimer">Vista previa sintética. El producto operativo requiere autenticación, fuentes aprobadas, consentimiento y la infraestructura del socio.</p></div></section>
 </BaseLayout>

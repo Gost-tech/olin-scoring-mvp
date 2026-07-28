@@ -47,7 +47,7 @@ const socialImage = Astro.site ? new URL(image, Astro.site) : image;
     {canonical && <link rel="canonical" href={canonical} />}
     <link rel="icon" href="/olin-mark.svg" type="image/svg+xml" />
     <title>{title}</title>
-    <script is:inline src="/config.js"></script>
+    <script is:inline src="/config.js?v=20260727"></script>
     <script is:inline>
       (() => {
         const value = typeof OLIN_DEMO_URL === "string" ? OLIN_DEMO_URL.trim() : "";

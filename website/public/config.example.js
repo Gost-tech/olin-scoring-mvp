@@ -1,1 +1,1 @@
-const OLIN_DEMO_URL = "http://localhost:8080";
+const OLIN_DEMO_URL = "http://localhost:8080/";

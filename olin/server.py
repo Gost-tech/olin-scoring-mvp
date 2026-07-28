@@ -13,7 +13,6 @@ import argparse
 import hashlib
 import hmac
 import json
-import math
 import sqlite3
 import threading
 import time
@@ -30,7 +29,17 @@ except ImportError:
     pass
 
 from .config import (
-    analyst_token, api_keys, default_db_path, is_production, runtime_mode, webhook_secret,
+    default_db_path, is_production, runtime_mode, webhook_secret,
+)
+from .api.auth import authenticate, configured_users, is_allowed
+from .api.cases import (
+    build_application as _case_build_application,
+    create_case,
+    format_score_result as _case_format_score_result,
+    get_case,
+    list_cases,
+    record_submission_metadata as _case_record_submission_metadata,
+    validate_submission_metadata as _case_validate_submission_metadata,
 )
 
 # Set by main() before server starts
@@ -104,8 +113,20 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 }
 
 /* ── Main content ─────────────────────────────────────────────────── */
-main{max-width:1100px;margin:0 auto;padding:24px}
+main{max-width:1440px;margin:0 auto;padding:24px}
 .empty{color:var(--muted);text-align:center;padding:60px;font-size:15px}
+.case-workspace{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
+.case-queue{position:sticky;top:82px;display:flex;flex-direction:column;gap:8px}
+.queue-title{padding:0 4px 8px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.queue-case{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surf);color:var(--text);text-align:left;cursor:pointer}
+.queue-case:hover{border-color:#56615c}
+.queue-case.active{border-color:#bdff4a;box-shadow:0 0 0 1px rgba(189,255,74,.18)}
+.queue-case strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.queue-case small{color:var(--muted);font-size:11px}
+.queue-route{align-self:start;padding:2px 6px;border-radius:999px;background:var(--surf2);font-size:9px;font-weight:800;letter-spacing:.05em}
+.case-detail .card{margin-bottom:0}
+@media(max-width:900px){.case-workspace{grid-template-columns:1fr}.case-queue{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.queue-title{grid-column:1/-1}}
+@media(max-width:640px){.case-queue{grid-template-columns:1fr}}
 
 /* ── Card ─────────────────────────────────────────────────────────── */
 .card{
@@ -584,6 +605,7 @@ const OUTCOME_LABELS = {
 const SOURCE_LABELS = {
   partner_api:'API del socio',
   distributor_export:'archivo del distribuidor',
+  synthetic:'escenario sintético',
   missing:'sin datos',
 };
 
@@ -637,11 +659,45 @@ function localizeText(value) {
       'Sin expediente de Círculo de Crédito')
     .replace(/committee review required/g, 'revisión del socio requerida')
     .replace(/No bank data/g, 'Sin datos bancarios')
-    .replace(/not checked/g, 'no verificado');
+    .replace(/not checked/g, 'no verificado')
+    .replace(/FMCG distributor delivery not confirmed \(FEMSA\/Bimbo\)/g,
+      'Entrega del distribuidor no confirmada')
+    .replace(/Business tenure ([\d.]+)y below Phase 0 minimum of ([\d.]+)y/g,
+      'Antigüedad de $1 años por debajo del mínimo de $2 años')
+    .replace(/Google Maps rating ([\d.]+) below Phase 0 minimum of ([\d.]+)/g,
+      'Calificación de Google Maps $1 por debajo del mínimo de $2')
+    .replace(/Score ([\d.]+) below decline floor of ([\d.]+)/g,
+      'Score $1 por debajo del mínimo de $2')
+    .replace(/Círculo de Crédito: (\d+) active delinquencies/g,
+      'Círculo de Crédito: $1 mora activa')
+    .replace(/Círculo score \((\d+)\) in mid band \(600-669\): needs ≥670 for auto-approve/g,
+      'Score Círculo $1 en banda media; requiere ≥670 para la ruta de aprobación')
+    .replace(/Círculo score 600-669: needs ≥670 to reach auto-approve band/g,
+      'Score Círculo 600-669; requiere ≥670 para la ruta de aprobación')
+    .replace(/Score ([\d.]+) in committee band \(50-74\)/g,
+      'Score $1 en banda de revisión (50-74)')
+    .replace(/DSCR ([\d.]+): below auto-approve threshold of 2.5/g,
+      'DSCR $1 por debajo del umbral 2.5')
+    .replace(/DSCR ([\d.]+) below 2.5: repayment cobertura thin, manual review required/g,
+      'DSCR $1 por debajo de 2.5; margen de pago reducido, requiere revisión')
+    .replace(/DSCR needs \+([\d.]+) to reach D1 threshold \(2.5\)/g,
+      'El DSCR necesita +$1 para alcanzar el umbral D1 (2.5)')
+    .replace(/Score \+(\d+) pts needed to reach committee band \(50\)/g,
+      'El score necesita +$1 puntos para entrar en revisión (50)')
+    .replace(/Score \+(\d+) pts needed to reach auto-approve band \(75\)/g,
+      'El score necesita +$1 puntos para la ruta de aprobación (75)')
+    .replace(/Resolve Círculo delinquency or low score \(<600\) to re-enter credit pipeline/g,
+      'Resolver la mora o el score Círculo <600 antes de reevaluar')
+    .replace(/(\d+) months of Clip history, MXN ([\d,]+)\/month, consistency ([\d.]+), trend ([+\-\d.]+)/g,
+      '$1 meses de historial TPV, MXN $2 al mes, consistencia $3, tendencia $4')
+    .replace(/Círculo <600\/delinquent, or DSCR <1.5, or Score <50/g,
+      'Círculo <600 o con mora, DSCR <1.5 o score <50')
+    .replace(/fuente: synthetic/g, 'fuente: escenario sintético');
 }
 
 let allApps = [];
 let activeFilter = 'all';
+let selectedAppId = null;
 let modalResolve = null;
 let modalMinLength = 0;
 let modalPreviousFocus = null;
@@ -762,14 +818,14 @@ function renderFilterBar() {
   // stats chips in topbar
   document.getElementById('stats-chips').innerHTML = `
     <span class="chip">${counts.all}/10 expedientes</span>
-    <span class="chip">${counts.pending} pendientes del socio</span>
+    <span class="chip">${counts.pending} pendientes de la institución</span>
   `;
 
   const tabs = [
     ['all',      'Todos'],
     ['pending',  'Pendientes'],
-    ['approved', 'Aprobados por socio'],
-    ['declined', 'Declinados por socio'],
+    ['approved', 'Aprobados por institución'],
+    ['declined', 'Declinados por institución'],
   ];
   document.getElementById('filter-bar').innerHTML = tabs.map(([key, label]) =>
     `<button class="tab${activeFilter===key?' active':''}" onclick="setFilter('${key}')">
@@ -790,9 +846,39 @@ function renderGrid() {
   if (activeFilter === 'pending') apps = apps.filter(a => !a.partner_decision || a.partner_decision === 'pending');
   else if (activeFilter !== 'all') apps = apps.filter(a => a.partner_decision === activeFilter);
   const grid = document.getElementById('app-grid');
-  grid.innerHTML = apps.length
-    ? apps.map(cardHtml).join('')
-    : '<p class="empty">No hay expedientes en esta vista.</p>';
+  if (!apps.length) {
+    grid.innerHTML = '<p class="empty">No hay expedientes en esta vista.</p>';
+    return;
+  }
+  if (!apps.some(app => app.application_id === selectedAppId)) {
+    selectedAppId = apps[0].application_id;
+  }
+  const selected = apps.find(app => app.application_id === selectedAppId) || apps[0];
+  const queue = apps.map(app => {
+    const route = ENG_LABEL[app.decision]?.text || app.decision;
+    const outcome = PARTNER_LABELS[app.partner_decision] || 'pendiente';
+    return `<button class="queue-case${app.application_id === selected.application_id ? ' active' : ''}"
+      type="button" onclick="selectCase('${app.application_id}')">
+      <strong>${esc(app.merchant_name)}</strong>
+      <span class="queue-route">${esc(route)}</span>
+      <small>${esc(app.partner_case_reference || app.application_id)}</small>
+      <small>Institución: ${esc(outcome)}</small>
+    </button>`;
+  }).join('');
+  grid.innerHTML = `<div class="case-workspace">
+    <aside class="case-queue" aria-label="File de expedientes">
+      <div class="queue-title">${apps.length} expedientes en esta vista</div>
+      ${queue}
+    </aside>
+    <section class="case-detail" aria-label="Detalle del expediente">
+      ${cardHtml(selected)}
+    </section>
+  </div>`;
+}
+
+function selectCase(applicationId) {
+  selectedAppId = applicationId;
+  renderGrid();
 }
 
 // ── Card rendering ────────────────────────────────────────────────────
@@ -800,14 +886,12 @@ function cardHtml(app) {
   const decided = app.analyst_override;
   const scoreColor = app.score >= 75 ? 'green' : app.score >= 50 ? 'amber' : 'red';
   const eng = ENG_LABEL[app.decision] || {text: app.decision, cls:'mr'};
-  const dt = new Date(app.scored_at + (app.scored_at.includes('Z')?'':'Z'));
+  const dt = new Date(app.scored_at);
   const dateStr = isNaN(dt) ? app.scored_at : dt.toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'});
   const analystApproved = app.analyst_override === 'APPROVE';
   const declined = app.decision === 'DECLINE' || app.analyst_override === 'DECLINE';
   const amountLabel = declined ? 'No aprobado' : 'Monto evaluado';
   const amountValue = declined ? 0 : app.approved_mxn;
-  const costLabel = 'Costo estimado';
-  const costValue = declined ? 0 : app.pricing_fixed_cost_mxn;
 
   return `
 <article class="card${decided?' decided-'+decided:''}" data-app-id="${app.application_id}">
@@ -819,7 +903,7 @@ function cardHtml(app) {
         <span class="badge badge-type">${esc(app.business_type)}</span>
         ${app.colonia ? `<span class="colonia">${esc(app.colonia)}</span>` : ''}
         <span class="app-id">app ${app.application_id}</span>
-        ${app.tier > 0 ? `<span class="tier-badge t${app.tier}" title="Nivel de la matriz Círculo × DSCR × score">Tier ${app.tier}</span>` : ''}
+        ${app.tier > 0 ? `<span class="tier-badge t${app.tier}" title="Nivel de la matriz Círculo × DSCR × score">Nivel ${app.tier}</span>` : ''}
         ${app.buro_score != null ? `<span class="badge badge-type" title="Círculo de Crédito score">Círculo ${app.buro_score}</span>` : ''}
         ${app.graduation_tier > 0 ? `<span class="grad-badge">Grad ${app.graduation_tier}</span>` : ''}
         ${app.case_mode ? `<span class="source-pill verified">${esc(app.case_mode)}</span>` : ''}
@@ -831,8 +915,8 @@ function cardHtml(app) {
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
       <span class="scored-at">${dateStr}</span>
       ${app.partner_decision
-        ? `<span class="badge badge-type">Socio: ${esc(PARTNER_LABELS[app.partner_decision] || app.partner_decision)}</span>`
-        : '<span class="badge badge-type">Socio: pendiente</span>'}
+        ? `<span class="badge badge-type">Institución: ${esc(PARTNER_LABELS[app.partner_decision] || app.partner_decision)}</span>`
+        : '<span class="badge badge-type">Institución: pendiente</span>'}
     </div>
   </div>
 
@@ -872,10 +956,8 @@ function cardHtml(app) {
       </div>
 
       <div class="loan-row">
-        Solicitado <strong>MXN ${fmt(app.requested_mxn)}</strong><br>
-        ${amountLabel}&nbsp;&nbsp; <strong>MXN ${fmt(amountValue)}</strong><br>
-        ${costLabel}&nbsp; <strong>MXN ${fmt(costValue)}</strong>
-        <span style="color:var(--muted)"> (60 días)</span>
+        Monto solicitado <strong>MXN ${fmt(app.requested_mxn)}</strong><br>
+        ${amountLabel}&nbsp;&nbsp; <strong>MXN ${fmt(amountValue)}</strong>
       </div>
     </div>
 
@@ -889,8 +971,6 @@ function cardHtml(app) {
       </table>
     </div>
   </div>
-
-  ${counterOfferHtml(app)}
 
   ${(app.decision_reasons.length || app.hard_filter_failures.length) ? `
   <div class="reasons">
@@ -908,19 +988,15 @@ function cardHtml(app) {
 
   ${repaymentHtml(app.repayment)}
 
-  ${collectionCalendarHtml(app)}
-
-  ${mitigationHtml(app)}
-
   ${analystNoteHtml(app)}
 
   <div class="card-footer">
     <button class="action-btn btn-approve" onclick="partnerOutcome('${app.application_id}','approved')"
-      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>✓ Socio aprueba</button>
+      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>✓ Institución aprueba</button>
     <button class="action-btn btn-manual" onclick="partnerOutcome('${app.application_id}','pending')"
-      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>… Socio pendiente</button>
+      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>… Solicitar evidencia</button>
     <button class="action-btn btn-decline" onclick="partnerOutcome('${app.application_id}','declined')"
-      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>✗ Socio declina</button>
+      ${app.partner_decision && app.partner_decision !== 'pending' ? 'disabled' : ''}>✗ Institución declina</button>
     <span class="decision-stamp">${app.partner_case_reference ? `Ref. ${esc(app.partner_case_reference)}` : 'Sin referencia del socio'}</span>
   </div>
 
@@ -938,7 +1014,7 @@ function sigRow(s) {
   const score = s.raw_score;
   const barCls = score >= 70 ? 'hi' : score >= 40 ? 'mid' : 'lo';
   const tag = s.fallback_used
-    ? `<span class="sig-tag fallback">${esc(s.fallback_used)}</span>`
+    ? `<span class="sig-tag fallback">${esc(SOURCE_LABELS[s.fallback_used] || s.fallback_used)}</span>`
     : s.name === 'bank_cash_flow'
       ? '<span class="sig-tag">Syncfy</span>'
       : s.name === 'google_maps_rating'
@@ -1212,7 +1288,7 @@ async function renderPortfolioBar() {
     <div class="pf-sep"></div>
     <div class="pf-stat"><span class="pf-label">Banco + FMCG verificados</span><span class="pf-value">${verified}/${allApps.length}</span></div>
     <div class="pf-sep"></div>
-    <div class="pf-stat"><span class="pf-label">Decisión del socio</span><span class="pf-value">${complete}/${allApps.length}</span></div>
+    <div class="pf-stat"><span class="pf-label">Decisión de la institución</span><span class="pf-value">${complete}/${allApps.length}</span></div>
     <div class="pf-sep"></div>
     <div class="pf-stat"><span class="pf-label">Concordancia comparable</span><span class="pf-value">${agreements}/${comparable.length}</span></div>
     <button class="btn-export" onclick="exportCsv()" title="Exportar cohorte CSV">↓ Exportar cohorte</button>
@@ -1261,8 +1337,8 @@ function tierDistWidget(byTier) {
 // ── Independent partner decision ─────────────────────────────────────
 async function partnerOutcome(appId, decision) {
   const labels = {
-    approved: 'aprobación del socio',
-    declined: 'declinación del socio',
+    approved: 'aprobación de la institución',
+    declined: 'declinación de la institución',
     pending: 'estado pendiente',
   };
   const reason = await openInputModal({
@@ -1283,7 +1359,7 @@ async function partnerOutcome(appId, decision) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || response.statusText);
-    toast('Decisión del socio registrada', 'ok');
+    toast('Decisión de la institución registrada', 'ok');
     await load();
   } catch (error) {
     toast('Error: ' + error.message, 'err');
@@ -2171,6 +2247,23 @@ def _validate_submission_metadata(body: dict) -> None:
             raise ValueError("partner_case_reference is required in production")
 
 
+# Compatibility aliases for existing integrations and tests.  New HTTP code
+# calls the application service directly; these names can be removed after the
+# compatibility window.
+_build_application = _case_build_application
+_format_score_result = _case_format_score_result
+_validate_submission_metadata = _case_validate_submission_metadata
+
+
+def _record_submission_metadata(sl, application_id: str, body: dict) -> None:
+    _case_record_submission_metadata(
+        sl,
+        application_id,
+        body,
+        actor=str(body.get("_actor", "authenticated_partner")),
+    )
+
+
 # ---------------------------------------------------------------------------
 # HTTP handler
 # ---------------------------------------------------------------------------
@@ -2197,25 +2290,35 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(data, ensure_ascii=False, default=str).encode()
         self._send(body, "application/json; charset=utf-8", status)
 
-    def _require_analyst_auth(self) -> bool:
-        if not is_production():
-            self.auth_actor = "demo_user"
-            return True
-        from .config import api_keys
-        keys = api_keys()
-        if not keys:
-            self._json({"error": "OLIN_ANALYST_TOKEN is not configured"}, 503)
+    def _require_permission(self, permission: str) -> bool:
+        try:
+            users = configured_users()
+        except RuntimeError as exc:
+            self._json({"error": str(exc)}, 503)
             return False
-        supplied = self.headers.get("X-Olin-Analyst-Token", "").strip()
-        matched_actor = next(
-            (name for name, token in keys.items() if hmac.compare_digest(supplied, token)),
-            None,
-        ) if supplied else None
-        if not matched_actor:
-            self._json({"error": "Analyst authentication required"}, 401)
+        if is_production() and not users:
+            self._json({"error": "No Olin users are configured"}, 503)
             return False
-        self.auth_actor = matched_actor
+        user = authenticate(self.headers)
+        if user is None:
+            self._json({"error": "Authentication required"}, 401)
+            return False
+        if not is_allowed(user, permission):
+            self._json(
+                {
+                    "error": "Insufficient role",
+                    "required_permission": permission,
+                },
+                403,
+            )
+            return False
+        self.auth_actor = user.name
+        self.auth_role = user.role
         return True
+
+    def _require_analyst_auth(self) -> bool:
+        """Backward-compatible guard for read-only case routes."""
+        return self._require_permission("case:read")
 
     def _read_json(self, max_bytes: int = 65_536) -> tuple[dict | None, bytes]:
         try:
@@ -2266,6 +2369,11 @@ class Handler(BaseHTTPRequestHandler):
                          "Cases must be created by an authenticated pilot partner."
             }, 410)
             return
+        if path == "/api/demo/scenarios" and not is_production():
+            from .api.synthetic import demo_scenarios
+
+            self._json(demo_scenarios())
+            return
         # The static shells contain no case data. Serving them before auth lets
         # a normal browser ask for a named token on the first API request.
         if path == "/":
@@ -2277,63 +2385,41 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 self._json({"error": "shadow intake page is unavailable"}, 503)
             return
-        if not self._require_analyst_auth():
-            return
         if path == "/api/apps":
-            self._json(self._load_apps())
+            if not self._require_permission("case:read"):
+                return
+            owner_actor = (
+                self.auth_actor if self.auth_role == "partner" else None
+            )
+            self._json(list_cases(DB_PATH, owner_actor=owner_actor))
         elif path.startswith("/api/applications/"):
+            if not self._require_permission("case:read"):
+                return
             app_id = path.split("/api/applications/")[1].strip("/")
-            with closing(sqlite3.connect(DB_PATH)) as conn:
-                conn.row_factory = sqlite3.Row
-                row = conn.execute(
-                    "SELECT application_id, merchant_name, score, tier, decision, "
-                    "approved_mxn, data_coverage, analyst_override, analyst_reason, "
-                    "disbursed, outcome_status, scored_at, raw_result, "
-                    "consent_timestamp, consent_channel, cohort_id, case_mode, "
-                    "partner_case_reference, partner_decision, partner_reason, "
-                    "partner_decision_at, recommendation_agreement "
-                    "FROM scoring_log WHERE application_id=?", (app_id,)
-                ).fetchone()
-            if not row:
+            owner_actor = (
+                self.auth_actor if self.auth_role == "partner" else None
+            )
+            case = get_case(DB_PATH, app_id, owner_actor=owner_actor)
+            if case is None:
                 self._json({"error": "not found"}, 404)
             else:
-                import json as _json
-                raw = _json.loads(row["raw_result"] or "{}")
-                self._json({
-                    "application_id": row["application_id"],
-                    "merchant_name": row["merchant_name"],
-                    "score": row["score"],
-                    "tier": row["tier"],
-                    "decision": row["decision"],
-                    "approved_amount_mxn": row["approved_mxn"],
-                    "data_coverage": row["data_coverage"],
-                    "analyst_override": row["analyst_override"],
-                    "analyst_reason": row["analyst_reason"],
-                    "disbursed": bool(row["disbursed"]),
-                    "outcome_status": row["outcome_status"],
-                    "scored_at": row["scored_at"],
-                    "decision_reasons": raw.get("decision_reasons", []),
-                    "signals": raw.get("signals", []),
-                    "consent": {
-                        "timestamp": row["consent_timestamp"],
-                        "channel": row["consent_channel"],
-                    },
-                    "pilot": {
-                        "cohort_id": row["cohort_id"],
-                        "case_mode": row["case_mode"],
-                        "partner_case_reference": row["partner_case_reference"],
-                        "partner_decision": row["partner_decision"],
-                        "partner_reason": row["partner_reason"],
-                        "partner_decision_at": row["partner_decision_at"],
-                        "recommendation_agreement": row["recommendation_agreement"],
-                    },
-                })
+                self._json(case)
         elif path == "/api/portfolio":
+            if not self._require_permission("portfolio:read"):
+                return
             from .store import ScoringLog
             with ScoringLog(DB_PATH) as _sl:
                 snap = _sl.portfolio_snapshot()
             self._json(snap)
+        elif path == "/api/stats":
+            if not self._require_permission("portfolio:read"):
+                return
+            from .store import ScoringLog
+            with ScoringLog(DB_PATH) as _sl:
+                self._json(_sl.stats())
         elif path == "/api/export":
+            if not self._require_permission("case:export"):
+                return
             self._csv_export()
         else:
             self._json({"error": "not found"}, 404)
@@ -2384,8 +2470,19 @@ class Handler(BaseHTTPRequestHandler):
                          "Cases must be created by an authenticated pilot partner."
             }, 410)
             return
-        if not is_webhook and not self._require_analyst_auth():
-            return
+        if not is_webhook:
+            permission = "case:read"
+            if parts == ["api", "applications"]:
+                permission = "case:create"
+            elif len(parts) == 4 and parts[:2] == ["api", "apps"]:
+                permission = {
+                    "outcome": "case:partner_outcome",
+                    "note": "case:analyst_action",
+                    "decision": "case:analyst_action",
+                    "disburse": "money:disburse",
+                }.get(parts[3], "case:read")
+            if not self._require_permission(permission):
+                return
 
         # POST /api/applications  — submit a new merchant application for scoring
         if parts == ["api", "applications"]:
@@ -2393,30 +2490,32 @@ class Handler(BaseHTTPRequestHandler):
             if body is None:
                 return
             try:
-                _validate_submission_metadata(body)
-                app = _build_application(body)
+                response = create_case(
+                    body,
+                    DB_PATH,
+                    actor=getattr(
+                        self,
+                        "auth_actor",
+                        "authenticated_partner",
+                    ),
+                )
             except (KeyError, ValueError) as exc:
                 self._json({"error": f"invalid payload: {exc}"}, 400)
                 return
-            from .scorecard import score_application
-            from .portfolio import check_portfolio
-            from .graduation import get_graduation_offer
-            from .store import ScoringLog
-            port = check_portfolio(app, DB_PATH)
-            grad = get_graduation_offer(app.clabe or "", DB_PATH)
-            result = score_application(app, portfolio_block=port, graduation=grad)
-            with ScoringLog(DB_PATH) as sl:
-                sl.log(app, result)
-                metadata = dict(body)
-                metadata["_actor"] = getattr(self, "auth_actor", "authenticated_partner")
-                _record_submission_metadata(sl, result.application_id, metadata)
-            self._json(_format_score_result(app, result), 201)
+            self._json(response, 201)
             return
 
         # POST /api/apps/{id}/outcome — partner decision for a shadow case.
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "outcome":
             body, _ = self._read_json()
             if body is None:
+                return
+            if self.auth_role == "partner" and get_case(
+                DB_PATH,
+                parts[2],
+                owner_actor=self.auth_actor,
+            ) is None:
+                self._json({"error": "not found"}, 404)
                 return
             try:
                 from .store import ScoringLog
@@ -2852,6 +2951,15 @@ def seed_demo(db_path: str) -> int:
     return inserted
 
 
+# The canonical synthetic seed goes through the same case application service
+# as an authenticated partner request.  The legacy seed above remains only
+# during the server.py extraction window and is intentionally shadowed here.
+def seed_demo(db_path: str) -> int:
+    from .api.synthetic import seed_synthetic_demo
+
+    return len(seed_synthetic_demo(db_path))
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -2871,9 +2979,9 @@ def main():
 
     DB_PATH = args.db
 
-    if is_production() and not api_keys():
+    if is_production() and not configured_users():
         raise RuntimeError(
-            "Production requires OLIN_ANALYST_TOKEN or named OLIN_API_KEYS"
+            "Production requires OLIN_USERS, OLIN_API_KEYS, or OLIN_ANALYST_TOKEN"
         )
 
     from .store import ScoringLog

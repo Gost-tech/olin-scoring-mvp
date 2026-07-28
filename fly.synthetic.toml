@@ -1,0 +1,24 @@
+app = "olin-synthetic-demo"
+primary_region = "dfw"
+
+[build]
+
+[env]
+  OLIN_MODE = "demo"
+  PORT = "8080"
+
+[processes]
+  app = "python3 -m olin.server --host 0.0.0.0 --port 8080 --db /tmp/olin_synthetic_demo.db --seed-demo --no-open"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -23,6 +23,10 @@
     h1{font-size:clamp(34px,5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;max-width:760px}
     .hero p{color:#b9c8c2;max-width:710px;margin:0}
     .mode{border:1px solid #496057;border-radius:999px;padding:9px 13px;font-size:12px;white-space:nowrap}
+    .demo-loader{display:flex;align-items:end;gap:12px;margin:18px 0;padding:16px 18px;border:1px solid #d8b255;border-radius:14px;background:#fff8df}
+    .demo-loader[hidden]{display:none}
+    .demo-loader label{flex:1;color:#5b4515}
+    .demo-loader button{background:#071713;color:#fff}
     form{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
     section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
     section.wide{grid-column:1/-1}
@@ -76,6 +80,14 @@
     </div>
     <div class="mode">SHADOW · SIN MOVIMIENTO DE DINERO</div>
   </header>
+  <div class="demo-loader" id="demo-loader" hidden>
+    <label>Escenario sintético
+      <select id="demo-scenario">
+        <option value="">Seleccionar un expediente de demostración</option>
+      </select>
+    </label>
+    <button id="load-scenario" type="button">Cargar escenario</button>
+  </div>
 
   <form id="case-form">
     <section>
@@ -170,6 +182,7 @@
             <option value="partner_api">API del socio</option>
             <option value="bank_statements">Estados de cuenta</option>
             <option value="pos_settlement">Liquidaciones TPV</option>
+            <option value="synthetic">Escenario sintético</option>
           </select>
         </label>
         <label>Referencia de evidencia
@@ -203,6 +216,7 @@
             <option value="distributor_export">Extracto del distribuidor</option>
             <option value="receipts">Recibos verificados</option>
             <option value="partner_api">API del socio</option>
+            <option value="synthetic">Escenario sintético</option>
           </select>
         </label>
         <label>Referencia de evidencia
@@ -368,6 +382,102 @@
     return payload;
   }
 
+  function populateScenario(payload) {
+    const setValue = (name, next) => {
+      const field = form.elements[name];
+      if (!field) return;
+      if (field.type === 'checkbox') field.checked = Boolean(next);
+      else field.value = next ?? '';
+    };
+    const bank = payload.bank || {};
+    const fmcg = payload.fmcg || {};
+    const tenure = payload.tenure || {};
+    const maps = payload.maps || {};
+    const pos = payload.pos || {};
+    const bureau = payload.buro || {};
+    const fraud = payload.fraud || {};
+    const values = {
+      cohort_id:payload.cohort_id,
+      partner_case_reference:`${payload.partner_case_reference}-NUEVO`,
+      consent_channel:payload.consent?.channel,
+      consent_text:payload.consent?.text,
+      merchant_name:`${payload.merchant_name} · nuevo`,
+      business_type:payload.business_type,
+      requested_mxn:payload.requested_mxn,
+      colonia:payload.colonia,
+      phone_mx:fraud.phone_mx,
+      rfc:fraud.rfc,
+      curp:fraud.curp,
+      address_stated:fraud.address_stated,
+      ine_checked:fraud.ine_checked,
+      buro_checked:bureau.checked,
+      buro_score:bureau.score,
+      active_loans_count:bureau.active_loans_count,
+      active_delinquencies:bureau.active_delinquencies,
+      worst_mob_status:bureau.worst_mob_status,
+      bank_source:bank.source,
+      bank_evidence_reference:`${bank.evidence_reference || ''}-NUEVO`,
+      bank_verified:bank.verified,
+      bank_months:bank.months_connected,
+      avg_balance:bank.avg_daily_balance_mxn,
+      min_balance:bank.min_daily_balance_mxn,
+      deposit_count:bank.monthly_deposit_count,
+      deposit_volume:bank.monthly_deposit_volume_mxn,
+      outflow_volume:bank.monthly_outflow_volume_mxn,
+      deposit_regularity:bank.deposit_regularity,
+      overdrafts:bank.overdrafts_90d,
+      balance_trend:bank.balance_trend_90d,
+      fmcg_source:fmcg.source,
+      fmcg_evidence_reference:`${fmcg.evidence_reference || ''}-NUEVO`,
+      fmcg_verified:fmcg.verified,
+      fmcg_months:fmcg.months_of_history,
+      weekly_rate:fmcg.weekly_purchase_rate,
+      missed_weeks:fmcg.missed_weeks_last_12,
+      weekly_purchase:fmcg.avg_weekly_purchase_mxn,
+      fmcg_trend:fmcg.trend_3m,
+      distributor_confirmed:fmcg.distributor_confirmed,
+      years_maps:tenure.years_on_google_maps,
+      years_imss:tenure.years_in_imss,
+      address_consistent:tenure.address_consistent,
+      maps_rating:maps.rating,
+      review_count:maps.review_count,
+      review_velocity:maps.review_velocity_6m,
+      pos_months:pos.months_of_history,
+      pos_volume:pos.avg_monthly_volume_mxn,
+      pos_consistency:pos.volume_consistency,
+      pos_trend:pos.trend_3m,
+    };
+    Object.entries(values).forEach(([name, next]) => setValue(name, next));
+    form.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  let syntheticScenarios = [];
+  async function initializeDemoScenarios() {
+    try {
+      const health = await fetch('/healthz');
+      if (!health.ok || (await health.json()).mode === 'production') return;
+      const response = await fetch('/api/demo/scenarios');
+      if (!response.ok) return;
+      syntheticScenarios = await response.json();
+      const select = document.getElementById('demo-scenario');
+      syntheticScenarios.forEach(scenario => {
+        const option = document.createElement('option');
+        option.value = scenario.id;
+        option.textContent = scenario.title;
+        select.appendChild(option);
+      });
+      document.getElementById('demo-loader').hidden = false;
+    } catch (_) {
+      // The intake remains fully usable if the optional demo loader is absent.
+    }
+  }
+
+  document.getElementById('load-scenario').addEventListener('click', () => {
+    const id = document.getElementById('demo-scenario').value;
+    const scenario = syntheticScenarios.find(item => item.id === id);
+    if (scenario) populateScenario(scenario.payload);
+  });
+
   form.addEventListener('submit', async event => {
     event.preventDefault();
     statusBox.className = '';
@@ -401,6 +511,7 @@
       submitButton.textContent = 'Evaluar expediente';
     }
   });
+  initializeDemoScenarios();
 </script>
 </body>
 </html>
