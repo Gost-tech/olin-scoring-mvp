@@ -1,0 +1,22 @@
+{
+  "industry": "Mexican B2B enterprise credit-decisioning workflow for banks and lenders",
+  "deal_size_avg": 0,
+  "customer_count": 0,
+  "value_drivers": [
+    "analyst handling minutes saved per case",
+    "percentage of cases with complete consent, provenance and reconstructable audit",
+    "percentage of missing-document cases routed to an accepted alternative"
+  ],
+  "adoption_curve": "top-down",
+  "consumption_pattern": {
+    "seat-based": 0.2,
+    "usage-based": 0.75,
+    "value-based": 0.7,
+    "hybrid": 0.9
+  },
+  "competitor_pricing_models": [
+    "enterprise quote",
+    "platform plus usage",
+    "implementation plus annual contract"
+  ]
+}

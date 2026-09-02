@@ -1,0 +1,563 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Olin Evidence API",
+    "description": "Authenticated evidence enrichment for a controlled Mexican small-business credit-decision pilot. Provider facts remain separate from the recommendation engine. No endpoint in this API moves money.",
+    "version": "2.0.0",
+    "contact": {"name": "Olin pilot operations", "email": "garnierbrice.s213@gmail.com"},
+    "license": {"name": "Proprietary pilot API"}
+  },
+  "servers": [
+    {
+      "url": "https://{host}",
+      "description": "TLS-only pilot deployment; gzip is handled at the reverse proxy",
+      "variables": {"host": {"default": "api.example.invalid", "description": "Partner-specific Olin API host"}}
+    }
+  ],
+  "tags": [
+    {"name": "Authentication", "description": "Exchange a named bootstrap credential for a short-lived signed session."},
+    {"name": "Providers", "description": "Readiness of external evidence providers."},
+    {"name": "Signals", "description": "Versioned SME-wide alternative-signal catalogue; indicators are not probabilities of default."},
+    {"name": "Evidence", "description": "Provider lookups and non-persistent pre-analysis."},
+    {"name": "Governance", "description": "Versioned consent and immutable correction workflows."},
+    {"name": "Hosted linking", "description": "Pre-scoring intake and one-time provider-link bootstrap."},
+    {"name": "Bank callback", "description": "Consent-bound derived bank metrics; raw transactions are forbidden."},
+    {"name": "Evidence Passport", "description": "Next-best-evidence guidance; never a loan approval."},
+    {"name": "Operations", "description": "Authenticated exception projection for the shadow-pilot operator."}
+    ,{"name": "Outcomes", "description": "Immutable bank-observed shadow performance and DPD labels."}
+  ],
+  "security": [{"BearerAuth": []}],
+  "paths": {
+    "/api/v1/auth/sessions": {
+      "post": {
+        "tags": ["Authentication"], "summary": "Create a short-lived API session", "description": "Exchanges a named bootstrap credential for a signed session lasting 5-60 minutes. The bootstrap credential is not returned or persisted by the endpoint.", "operationId": "createAuthSession",
+        "responses": {"201": {"description": "Short-lived bearer session created.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthSessionResponse"}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "503": {"description": "Session signing is not configured."}}
+      }
+    },
+    "/api/v1/business-policies": {
+      "get": {
+        "tags": ["Signals"], "summary": "List bank evidence policies for every supported business type", "description": "Returns all SME types, archetype routing, required evidence, operating metrics, stress factors and calibration status.", "operationId": "listBusinessPolicies",
+        "responses": {"200": {"description": "Complete business policy catalogue.", "content": {"application/json": {"schema": {"type": "object", "required": ["data", "meta"], "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/BusinessPolicy"}}, "meta": {"type": "object"}}}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      }
+    },
+    "/api/v1/evidence-passport": {
+      "get": {
+        "tags": ["Evidence Passport"], "summary": "List controlled evidence-substitution routes", "description": "Separates non-substitutable identity, consent and authority controls from capacity routes and supporting collateral evidence.", "operationId": "getEvidencePassportCatalog",
+        "responses": {"200": {"description": "Versioned route and guardrail catalogue."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      }
+    },
+    "/api/v1/evidence-passport/assessments": {
+      "post": {
+        "tags": ["Evidence Passport"], "summary": "Find the next acceptable evidence route", "description": "Resolves server-registered evidence IDs bound to the authenticated case tenant, active consent, trusted source attestation, subject, origin and expiry. Returns human-review routing only; callers cannot self-assert verification.", "operationId": "assessEvidencePassport",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["application_id", "legal_form", "evidence_ids"], "properties": {"application_id": {"type": "string", "minLength": 1, "maxLength": 120}, "legal_form": {"type": "string", "enum": ["individual_business_owner", "legal_entity"]}, "evidence_ids": {"type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 120}}}}}}},
+        "responses": {"200": {"description": "Route readiness, integrity failures, hard-control gaps and next options."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/operations/control-room": {
+      "get": {
+        "tags": ["Operations"], "summary": "Read the shadow-pilot exception queue", "description": "Projects open consent-withdrawal tasks, corrections, missing consent, stale intake, partner decision due and payment-state anomalies without mutating their systems of record.", "operationId": "getOperationsControlRoom",
+        "responses": {"200": {"description": "Severity-ranked read-only exception projection."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      }
+    },
+    "/api/v1/validation-readiness": {
+      "get": {
+        "tags": ["Outcomes"], "summary": "Check historical outcome-data sufficiency by business type", "description": "Reports sample, adverse-outcome and label-coverage gates. It does not claim model validation.", "operationId": "getHistoricalValidationReadiness",
+        "responses": {"200": {"description": "Validation-readiness gates for every supported business type."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      }
+    },
+    "/api/applications": {
+      "post": {
+        "tags": ["Evidence"], "summary": "Create and evaluate a bank-owned shadow case", "description": "Compatibility endpoint. Direct consent assertions are rejected by default in pilot/production; use the verified intake challenge flow. Runs evidence reporting and capacity v2; pharmacy cases remain committee-only.", "operationId": "createShadowCase",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ShadowCaseRequest"}}}},
+        "responses": {"201": {"description": "Auditable decision-support report with requested, evaluated and proposed amounts."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/intakes": {
+      "post": {
+        "tags": ["Hosted linking"], "summary": "Create a pre-scoring intake", "description": "Creates a partner-owned shell before consent or provider evidence exists.", "operationId": "createIntake",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/IntakeCreateRequest"}, "example": {"partner_case_reference": "BANK-UAT-001", "cohort_id": "shadow_uat", "merchant_name": "Comercio UAT"}}}},
+        "responses": {"201": {"description": "Intake created."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}": {
+      "get": {
+        "tags": ["Hosted linking"], "summary": "Read intake state and evidence", "description": "Returns only the authenticated partner's intake state and never returns a link token.", "operationId": "getIntake",
+        "parameters": [{"name": "intakeId", "in": "path", "required": true, "description": "Opaque intake identifier.", "schema": {"type": "string", "minLength": 32, "maxLength": 32}}],
+        "responses": {"200": {"description": "Partner-scoped intake without link tokens.", "headers": {"Cache-Control": {"description": "Sensitive case state is never cached.", "schema": {"type": "string", "example": "no-store"}}}, "content": {"application/json": {"schema": {"type": "object"}, "example": {"data": {"intake_id": "0123456789abcdef0123456789abcdef", "status": "created"}}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/consents": {
+      "post": {
+        "deprecated": true, "tags": ["Hosted linking"], "summary": "Legacy direct intake consent", "description": "Demo/migration-only route. Rejected by default in pilot/production; use a consent challenge and OTP verification.", "operationId": "recordLegacyIntakeConsent",
+        "parameters": [{"name": "intakeId", "in": "path", "required": true, "description": "Opaque intake identifier.", "schema": {"type": "string", "minLength": 32, "maxLength": 32}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConsentRequest"}, "example": {"channel": "in_person", "text": "Approved UAT consent text", "purpose": "credit_assessment", "policy_version": "bank-uat-v1"}}}},
+        "responses": {"201": {"description": "Consent hashed and intake moved to consented."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/consent-policies": {
+      "get": {
+        "tags": ["Governance"], "summary": "List immutable consent policy snapshots", "description": "Returns the authenticated institution's non-retired assessment, provider-access, and credit-bureau policy snapshots.", "operationId": "listConsentPolicies",
+        "responses": {"200": {"description": "Partner-scoped policy snapshots."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/consent-challenges": {
+      "post": {
+        "tags": ["Governance"], "summary": "Issue a purpose-specific consent challenge", "description": "Validates trusted identity and authority bindings, freezes one approved policy snapshot, and dispatches a short-lived one-time code. No consent exists until verification succeeds.", "operationId": "issueConsentChallenge",
+        "parameters": [{"$ref": "#/components/parameters/IntakeId"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConsentChallengeRequest"}}}},
+        "responses": {"201": {"description": "Challenge dispatched."}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "422": {"$ref": "#/components/responses/ValidationError"}, "503": {"description": "Approved OTP/e-signature provider unavailable or unconfigured."}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/consent-challenges/{challengeId}/verify": {
+      "post": {
+        "tags": ["Governance"], "summary": "Verify a one-time consent challenge", "description": "Consumes an unexpired one-time code and creates an immutable, hash-verifiable receipt. Five failed attempts lock the challenge.", "operationId": "verifyConsentChallenge",
+        "parameters": [{"$ref": "#/components/parameters/IntakeId"}, {"name": "challengeId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 16}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConsentVerifyRequest"}}}},
+        "responses": {"201": {"description": "Purpose-specific consent receipt created."}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/public/consent-challenges/{challengeId}/view": {
+      "post": {
+        "security": [], "tags": ["Governance"], "summary": "Open an applicant consent link", "description": "Uses the high-entropy token from the URL fragment to return the exact policy snapshot. The token is sent in the JSON body so it is not placed in query logs or referrer headers.", "operationId": "viewPublicConsentChallenge",
+        "parameters": [{"name": "challengeId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 16}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PublicConsentAccessRequest"}}}},
+        "responses": {"200": {"description": "Exact, immutable consent policy and challenge status."}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/public/consent-challenges/{challengeId}/verify": {
+      "post": {
+        "security": [], "tags": ["Governance"], "summary": "Accept through the applicant consent link", "description": "Requires both the high-entropy link token and the separately delivered six-digit code. The applicant never receives an institution API credential.", "operationId": "verifyPublicConsentChallenge",
+        "parameters": [{"name": "challengeId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 16}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PublicConsentVerifyRequest"}}}},
+        "responses": {"201": {"description": "Immutable consent receipt created."}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/consents/{consentId}/receipt": {
+      "get": {
+        "tags": ["Governance"], "summary": "Read and verify a consent receipt", "description": "Returns the authenticated institution's immutable receipt plus current withdrawal status after checking its SHA-256 integrity.", "operationId": "getIntakeConsentReceipt",
+        "parameters": [{"$ref": "#/components/parameters/IntakeId"}, {"$ref": "#/components/parameters/ConsentId"}],
+        "responses": {"200": {"description": "Integrity-checked consent receipt."}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/consents/{consentId}/withdraw": {
+      "post": {
+        "tags": ["Hosted linking"], "summary": "Withdraw intake consent", "description": "Revokes active consent and prevents subsequent evidence ingestion for the intake.", "operationId": "withdrawIntakeConsent",
+        "parameters": [{"name": "intakeId", "in": "path", "required": true, "description": "Opaque intake identifier.", "schema": {"type": "string", "minLength": 32, "maxLength": 32}}, {"name": "consentId", "in": "path", "required": true, "description": "Consent version identifier.", "schema": {"type": "string", "minLength": 16}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReasonRequest"}, "example": {"reason": "Merchant withdrew authorization"}}}},
+        "responses": {"201": {"description": "Consent withdrawn and active link cancelled."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/link-sessions": {
+      "post": {
+        "tags": ["Hosted linking"], "summary": "Create an expiring provider-link session", "description": "Creates a short-lived, one-time bootstrap token only after assessment consent and active provider-specific access consent are confirmed.", "operationId": "createIntakeLinkSession",
+        "parameters": [{"name": "intakeId", "in": "path", "required": true, "description": "Opaque intake identifier.", "schema": {"type": "string", "minLength": 32, "maxLength": 32}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LinkSessionRequest"}, "example": {"provider": "partner-bank-sandbox", "ttl_minutes": 15}}}},
+        "responses": {"201": {"description": "One-time client token returned; only its hash is stored."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/link-sessions/exchange": {
+      "post": {
+        "security": [], "tags": ["Hosted linking"], "summary": "Consume one-time link token", "description": "Exchanges a single-use token for the minimum provider bootstrap context; reuse is rejected.", "operationId": "exchangeLinkToken",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LinkExchangeRequest"}, "example": {"client_token": "opaque-one-time-token-at-least-32-chars"}}}},
+        "responses": {"200": {"description": "Provider adapter bootstrap; token cannot be reused."}, "401": {"$ref": "#/components/responses/Unauthorized"}}
+      }
+    },
+    "/api/v1/intakes/{intakeId}/score": {
+      "post": {
+        "tags": ["Hosted linking"], "summary": "Convert evidence-ready intake into one immutable case", "description": "Scores an evidence-ready intake once and returns decision support; the bank still makes the official decision.", "operationId": "scoreIntake",
+        "parameters": [{"name": "intakeId", "in": "path", "required": true, "description": "Opaque intake identifier.", "schema": {"type": "string", "minLength": 32, "maxLength": 32}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true, "description": "Application fields; bank evidence, consent, owner and shadow mode are forced from the intake."}, "example": {"business_type": "abarrotes", "requested_mxn": 20000, "funding_purpose": "inventory", "evidence_route": "bank_flow_led"}}}},
+        "responses": {"201": {"description": "Scored case created and linked to intake."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "tags": ["Providers"],
+        "summary": "List provider readiness without exposing secrets",
+        "description": "Returns configuration and implementation readiness. A configured API key does not imply that the end-customer consent flow is ready.",
+        "operationId": "listEvidenceProviders",
+        "parameters": [
+          {"name": "filter", "in": "query", "description": "Case-insensitive provider-id substring.", "schema": {"type": "string"}, "example": "syncfy"},
+          {"name": "limit", "in": "query", "description": "Maximum providers returned, from 1 to 20.", "schema": {"type": "integer", "minimum": 1, "maximum": 20, "default": 20}, "example": 10},
+          {"name": "offset", "in": "query", "description": "Zero-based provider offset.", "schema": {"type": "integer", "minimum": 0, "default": 0}, "example": 0},
+          {"name": "fields", "in": "query", "description": "Reserved field-selection hint for compatible clients; currently ignored.", "schema": {"type": "string"}, "example": "id,configured,mode"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider readiness list.",
+            "headers": {"Cache-Control": {"description": "Sensitive readiness is never cached.", "schema": {"type": "string", "example": "no-store"}}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProviderList"}, "example": {"data": [{"id": "syncfy", "configured": true, "mode": "connector-backend-only", "interactiveLinkingReady": false}], "meta": {"total": 1, "limit": 20, "offset": 0}}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "422": {"$ref": "#/components/responses/ValidationError"}
+        }
+      }
+    },
+    "/api/v1/signals/catalog": {
+      "get": {
+        "tags": ["Signals"],
+        "summary": "Read the versioned 28-signal catalogue",
+        "description": "Returns all signal definitions, source strategies, metric requirements, applicability and limitations. The catalogue does not make a credit decision.",
+        "operationId": "getSignalCatalog",
+        "parameters": [
+          {"name": "filter", "in": "query", "description": "Case-insensitive match across signal id, label, layer, and source strategy.", "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "description": "Maximum definitions returned.", "schema": {"type": "integer", "minimum": 1, "maximum": 28, "default": 28}},
+          {"name": "offset", "in": "query", "description": "Zero-based definition offset.", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {
+          "200": {"description": "Complete signal catalogue.", "headers": {"Cache-Control": {"description": "Authenticated responses are not cached by the current server.", "schema": {"type": "string", "example": "no-store"}}}, "content": {"application/json": {"schema": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/SignalCatalog"}}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+          ,"422": {"$ref": "#/components/responses/ValidationError"}
+        }
+      }
+    },
+    "/api/v1/evidence/google-places/lookups": {
+      "post": {
+        "tags": ["Evidence"],
+        "summary": "Run a live Google Places lookup",
+        "description": "Returns live business, location and review metadata plus the Place ID subset that may be persisted. Google content is supporting evidence, not repayment proof.",
+        "operationId": "lookupGooglePlaceEvidence",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GoogleLookupRequest"}, "example": {"query": "Cafe Real, Avenida Coyoacan 1535, CDMX"}}}},
+        "responses": {
+          "200": {"description": "Live place evidence and persistable provider reference.", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true}, "example": {"provider": "google_places", "persistable": {"source": "google_places", "verified": true, "evidence_reference": "places/abc123"}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "502": {"$ref": "#/components/responses/ProviderError"},
+          "503": {"$ref": "#/components/responses/ProviderError"}
+        }
+      }
+    },
+    "/api/v1/evidence/denue/lookups": {
+      "post": {
+        "tags": ["Evidence"],
+        "summary": "Find a nearby INEGI DENUE establishment",
+        "description": "Matches a declared merchant against the public DENUE registry by name, address and Google-provided coordinates. A match confirms public registry presence, not repayment capacity.",
+        "operationId": "lookupDenueEvidence",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DenueLookupRequest"}, "example": {"merchantName": "Cafe Real", "declaredAddress": "Avenida Coyoacan 1535, Del Valle", "latitude": 19.38, "longitude": -99.17, "radiusM": 750}}}},
+        "responses": {
+          "201": {"description": "DENUE lookup result and persistable public fields.", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true}, "example": {"data": {"provider": "inegi_denue", "candidateCount": 1, "persistable": {"denue_id": "12345", "denue_verified": true}}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "502": {"$ref": "#/components/responses/ProviderError"},
+          "503": {"$ref": "#/components/responses/ProviderError"}
+        }
+      }
+    },
+    "/api/v1/evidence/geointelligence/analyses": {
+      "post": {
+        "tags": ["Evidence"],
+        "summary": "Analyze the commercial neighborhood around an SME",
+        "description": "Uses a live INEGI DENUE radius query to derive density, competitors, complementary businesses, radial catchment bands, and partner-isolated aggregate snapshots. Results are contextual evidence, not repayment probability, observed footfall, or drive-time analysis.",
+        "operationId": "analyzeGeointelligence",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GeointelligenceRequest"}, "example": {"latitude": 19.4326, "longitude": -99.1332, "radiusM": 1000, "businessType": "healthcare", "targetScian": "464111"}}}},
+        "responses": {
+          "201": {"description": "Sector-aware market context, minimized public establishments, snapshot comparison, and attachable signal evidence.", "content": {"application/json": {"schema": {"type": "object", "required": ["data"], "properties": {"data": {"type": "object", "additionalProperties": true}}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "502": {"$ref": "#/components/responses/ProviderError"},
+          "503": {"$ref": "#/components/responses/ProviderError"}
+        }
+      }
+    },
+    "/api/v1/evidence/bank-statements/analyses": {
+      "post": {
+        "tags": ["Evidence"],
+        "summary": "Pre-analyze an authorized bank CSV without retaining rows",
+        "description": "Derives cash-flow metrics in memory and returns a content hash. The result is deliberately unverified and ineligible for a production decision until authenticated by a provider or controlled document-review process.",
+        "operationId": "analyzeBankStatementCsv",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BankCsvRequest"}, "example": {"csvText": "fecha,monto,saldo\n2026-07-01,10000,10000\n2026-07-02,-500,9500"}}}},
+        "responses": {
+          "201": {"description": "Derived, unverified metrics and a SHA-256 content reference.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BankAnalysisResponse"}, "example": {"data": {"provider": "bank_statement_csv", "bank": {"verified": false, "evidence_reference": "sha256:abc"}, "summary": {"transactionCount": 8, "statementStored": false, "eligibleForDecision": false}}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "413": {"description": "Request exceeds the 700 KB API envelope.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "PAYLOAD_TOO_LARGE", "message": "Request exceeds the pilot limit"}}}}},
+          "422": {"$ref": "#/components/responses/ValidationError"}
+        }
+      }
+    },
+    "/api/v1/evidence/weather/analyses": {
+      "post": {
+        "tags": ["Evidence"],
+        "summary": "Derive sector-context weather evidence",
+        "description": "Compares the latest 30 complete days with the same prior-year window through Open-Meteo. Weather remains contextual and cannot independently approve or decline an SME.",
+        "operationId": "analyzeWeatherEvidence",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WeatherAnalysisRequest"}, "example": {"latitude": 19.4326, "longitude": -99.1332, "asOfDate": "2026-08-14"}}}},
+        "responses": {
+          "201": {"description": "Versioned weather signal evidence.", "content": {"application/json": {"schema": {"type": "object", "required": ["data"], "properties": {"data": {"type": "object", "additionalProperties": true}}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "502": {"$ref": "#/components/responses/ProviderError"}
+        }
+      }
+    },
+    "/api/v1/cases/{applicationId}/consents": {
+      "parameters": [{"$ref": "#/components/parameters/ApplicationId"}],
+      "get": {
+        "tags": ["Governance"], "summary": "List consent history", "description": "Returns append-only consent versions visible to the authenticated case owner or authorized reviewer.", "operationId": "listCaseConsents",
+        "responses": {"200": {"description": "Append-only consent records.", "headers": {"Cache-Control": {"description": "Governance history is never cached.", "schema": {"type": "string", "example": "no-store"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ListResponse"}, "example": {"data": [{"consent_id": "consent-001-valid", "status": "active"}]}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      },
+      "post": {
+        "tags": ["Governance"], "summary": "Record a new consent version", "description": "Supersedes the active consent while preserving prior versions for audit.", "operationId": "recordCaseConsent",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConsentRequest"}, "example": {"channel": "in_person", "text": "Approved UAT consent text", "purpose": "credit_assessment", "policy_version": "bank-uat-v1"}}}},
+        "responses": {"201": {"description": "Consent recorded; any previous active version is superseded."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/cases/{applicationId}/consents/{consentId}/withdraw": {
+      "post": {
+        "tags": ["Governance"], "summary": "Withdraw active consent", "description": "Withdraws a consent version and blocks new consent-dependent bank evidence.", "operationId": "withdrawCaseConsent",
+        "parameters": [{"name": "applicationId", "in": "path", "required": true, "description": "Opaque case identifier.", "schema": {"type": "string", "minLength": 12}}, {"name": "consentId", "in": "path", "required": true, "description": "Consent version identifier.", "schema": {"type": "string", "minLength": 16}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReasonRequest"}, "example": {"reason": "Merchant withdrew authorization"}}}},
+        "responses": {"201": {"description": "Consent withdrawn; future bank ingestion is blocked."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/api/v1/cases/{applicationId}/corrections": {
+      "parameters": [{"$ref": "#/components/parameters/ApplicationId"}],
+      "get": {
+        "tags": ["Governance"], "summary": "List correction requests", "description": "Returns the immutable correction history without rewriting original evidence.", "operationId": "listCaseCorrections",
+        "responses": {"200": {"description": "Correction history.", "headers": {"Cache-Control": {"description": "Governance history is never cached.", "schema": {"type": "string", "example": "no-store"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ListResponse"}, "example": {"data": [{"request_id": "correction-001", "status": "open"}]}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      },
+      "post": {
+        "tags": ["Governance"], "summary": "Open an immutable correction request", "description": "Records a claimed correction for controlled review while preserving the original value.", "operationId": "createCaseCorrection",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CorrectionRequest"}, "example": {"field_path": "bank.months_connected", "claimed_value": 12, "reason": "Provider history was incomplete"}}}},
+        "responses": {"201": {"description": "Correction opened; original evidence remains unchanged."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/cases/{applicationId}/corrections/{requestId}/resolve": {
+      "post": {
+        "tags": ["Governance"], "summary": "Resolve a correction request", "description": "Records an authorized resolution; accepted changes require creation of a newly versioned score.", "operationId": "resolveCaseCorrection",
+        "parameters": [{"name": "applicationId", "in": "path", "required": true, "description": "Opaque case identifier.", "schema": {"type": "string", "minLength": 12}}, {"name": "requestId", "in": "path", "required": true, "description": "Correction request identifier.", "schema": {"type": "string", "minLength": 16}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CorrectionResolution"}, "example": {"status": "accepted", "note": "Provider reference confirms the claim"}}}},
+        "responses": {"201": {"description": "Correction resolved; accepted corrections require a new score."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/api/v1/cases/{applicationId}/bank-evidence": {
+      "get": {
+        "tags": ["Evidence"], "summary": "List reusable derived bank evidence", "description": "Returns consent-bound derived metrics and provenance, never raw transaction rows.", "operationId": "listCaseBankEvidence",
+        "parameters": [{"name": "applicationId", "in": "path", "required": true, "description": "Opaque case identifier.", "schema": {"type": "string", "minLength": 12}}],
+        "responses": {"200": {"description": "Verified derived metrics and provenance; never transaction rows.", "headers": {"Cache-Control": {"description": "Financial evidence is never cached.", "schema": {"type": "string", "example": "no-store"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ListResponse"}, "example": {"data": [{"provider": "partner-bank-sandbox", "verified": true, "evidence_reference": "BANK-UAT-001"}]}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}}
+      }
+    },
+    "/api/v1/cases/{applicationId}/performance-events": {
+      "parameters": [{"$ref": "#/components/parameters/ApplicationId"}],
+      "get": {
+        "tags": ["Outcomes"], "summary": "List shadow performance events", "description": "Returns immutable DPD and repayment observations visible to the authenticated case owner.", "operationId": "listShadowPerformance",
+        "responses": {"200": {"description": "Chronological shadow performance events.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ListResponse"}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}
+      },
+      "post": {
+        "tags": ["Outcomes"], "summary": "Append a shadow performance event", "description": "Derives the DPD bucket server-side and does not mark the case as disbursed. Exact event replays are idempotent.", "operationId": "recordShadowPerformance",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ShadowPerformanceRequest"}}}},
+        "responses": {"201": {"description": "Performance event recorded."}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/IdempotencyConflict"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    },
+    "/api/v1/webhooks/bank-evidence": {
+      "post": {
+        "security": [], "tags": ["Bank callback"], "summary": "Ingest signed derived bank metrics", "description": "Accepts an exact-body HMAC callback bound to consent and connection. Exact replays are safe; changed payloads under the same event ID are rejected.", "operationId": "ingestBankEvidence",
+        "parameters": [{"name": "X-Olin-Signature", "in": "header", "required": true, "description": "HMAC-SHA256 of the exact request body, prefixed with sha256=.", "schema": {"type": "string"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BankEvidenceCallback"}, "example": {"event_id": "evt-001", "intake_id": "0123456789abcdef0123456789abcdef", "link_session_id": "fedcba9876543210fedcba9876543210", "provider": "partner-bank-sandbox", "connection_id": "conn-001", "consent_id": "consent-001-valid", "observed_at": "2026-08-20T12:00:00Z", "metrics": {"months_connected": 12, "monthly_deposit_volume_mxn": 85000, "deposit_regularity": 0.88}}}}},
+        "responses": {"201": {"description": "Evidence accepted."}, "200": {"description": "Exact duplicate event acknowledged without a second write."}, "409": {"$ref": "#/components/responses/IdempotencyConflict"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "422": {"$ref": "#/components/responses/ValidationError"}}
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "olin1 short-lived session", "description": "Short-lived signed session supplied only over TLS. A named bootstrap credential is accepted only by the session-exchange endpoint when short-lived sessions are required."}
+    },
+    "parameters": {
+      "ApplicationId": {"name": "applicationId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 12}},
+      "IntakeId": {"name": "intakeId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 32, "maxLength": 32}},
+      "ConsentId": {"name": "consentId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 16}},
+      "CorrectionId": {"name": "requestId", "in": "path", "required": true, "schema": {"type": "string", "minLength": 16}}
+    },
+    "schemas": {
+      "ListResponse": {"type": "object", "description": "Collection wrapper used by bounded governance lists.", "required": ["data"], "properties": {"data": {"type": "array", "description": "Records visible to the authenticated actor.", "items": {"type": "object", "additionalProperties": true}}}, "example": {"data": []}},
+      "BusinessPolicy": {"type": "object", "required": ["business_type", "segment_id", "primary_evidence", "key_risks_to_review", "required_operating_metrics", "required_stress_factors", "routing"], "properties": {"business_type": {"type": "string"}, "segment_id": {"type": "string"}, "segment_label": {"type": "string"}, "cash_flow_pattern": {"type": "string"}, "primary_evidence": {"type": "array", "items": {"type": "string"}}, "secondary_evidence": {"type": "array", "items": {"type": "string"}}, "key_risks_to_review": {"type": "array", "items": {"type": "string"}}, "required_operating_metrics": {"type": "array", "items": {"type": "string"}}, "required_stress_factors": {"type": "array", "items": {"type": "string"}}, "policy_status": {"type": "string"}, "routing": {"type": "string"}, "calibration_note": {"type": "string"}}},
+      "ShadowCaseRequest": {
+        "type": "object", "description": "Bank-owned shadow case. The pharmacy and bank_features_v2 blocks are mandatory for the pharmacy vertical.",
+        "required": ["merchant_name", "business_type", "requested_mxn"],
+        "properties": {
+          "merchant_name": {"type": "string", "minLength": 2, "maxLength": 160},
+          "business_type": {"type": "string", "enum": ["abarrotes", "jugueria", "taqueria", "restaurant", "retail", "services", "health_beauty", "professional", "transport", "light_manufacturing", "wholesale", "ecommerce", "construction", "agriculture", "hospitality", "education", "healthcare", "pharmacy", "logistics", "other"]},
+          "requested_mxn": {"type": "number", "minimum": 1000, "maximum": 80000},
+          "data_authorization": {"$ref": "#/components/schemas/DataAuthorization"},
+          "pharmacy": {"$ref": "#/components/schemas/PharmacyEvidence"},
+          "facility": {"$ref": "#/components/schemas/FacilityTerms"},
+          "bank_features_v2": {"$ref": "#/components/schemas/BankFeatureContractV2"},
+          "operating_profile": {"$ref": "#/components/schemas/OperatingProfile"}
+        },
+        "additionalProperties": true
+      },
+      "AuthSessionResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": ["access_token", "token_type", "expires_in", "expires_at", "user"],
+            "properties": {
+              "access_token": {"type": "string", "description": "Short-lived signed bearer token."},
+              "token_type": {"type": "string", "enum": ["Bearer"]},
+              "expires_in": {"type": "integer", "minimum": 300, "maximum": 3600},
+              "expires_at": {"type": "string", "format": "date-time"},
+              "user": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "role": {"type": "string", "enum": ["partner", "analyst", "admin"]}
+                }
+              }
+            }
+          }
+        }
+      },
+      "DataAuthorization": {"type": "object", "description": "Bank/counsel-approved historical-data instruction artifact. Olin validates structure and auditability, not legal sufficiency.", "additionalProperties": false, "required": ["basis_label", "approval_reference", "approved_by", "approved_at", "scope_sha256"], "properties": {"basis_label": {"type": "string", "enum": ["bank_documented_instruction", "existing_contract", "other_counsel_approved"]}, "approval_reference": {"type": "string", "minLength": 5, "maxLength": 160}, "approved_by": {"type": "string", "minLength": 3, "maxLength": 120}, "approved_at": {"type": "string", "format": "date-time"}, "scope_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+      "PharmacyEvidence": {"type": "object", "required": ["subtype", "scian_code", "sells_controlled_medicines", "license_status", "source", "evidence_reference", "observed_at"], "properties": {"subtype": {"type": "string"}, "scian_code": {"type": "string", "enum": ["464111", "464112"]}, "sells_controlled_medicines": {"type": "boolean"}, "license_status": {"type": "string", "enum": ["active", "not_required", "pending", "expired", "not_supplied"]}, "license_reference": {"type": "string"}, "supplier_count": {"type": "integer", "minimum": 0}, "top_supplier_share": {"type": "number", "minimum": 0, "maximum": 1}, "inventory_days": {"type": "number", "minimum": 0}, "expiry_writeoff_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "gross_margin_pct": {"type": "number", "minimum": 0, "maximum": 1}, "stockout_rate": {"type": "number", "minimum": 0, "maximum": 1}, "source": {"type": "string"}, "evidence_reference": {"type": "string"}, "observed_at": {"type": "string", "format": "date-time"}}},
+      "FacilityTerms": {"type": "object", "properties": {"term_months": {"type": "integer", "minimum": 1, "maximum": 60}, "monthly_rate": {"type": "number", "minimum": 0, "maximum": 1}, "existing_monthly_debt_service_mxn": {"type": "number", "minimum": 0}, "policy_max_amount_mxn": {"type": "number", "minimum": 1000}, "target_dscr": {"type": "number", "minimum": 1, "maximum": 5}, "revenue_stress_pct": {"type": "number", "minimum": 0, "maximum": 0.9}, "cost_stress_pct": {"type": "number", "minimum": 0, "maximum": 0.9}}},
+      "OperatingProfile": {"type": "object", "description": "Archetype-specific metrics bounded by the selected business policy.", "required": ["metrics", "source", "evidence_reference", "observed_at"], "properties": {"metrics": {"type": "object", "minProperties": 2, "maxProperties": 12, "additionalProperties": {"type": "number", "minimum": 0}}, "source": {"type": "string"}, "evidence_reference": {"type": "string"}, "observed_at": {"type": "string", "format": "date-time"}}},
+      "BankFeatureContractV2": {"type": "object", "required": ["contract_version", "calculation_version", "normalization_basis", "currency", "period_start", "period_end", "account_count", "account_coverage_ratio", "account_holder_match", "classification_coverage_ratio", "operating_inflows_mxn", "operating_outflows_mxn", "source", "evidence_reference", "observed_at"], "properties": {"contract_version": {"type": "string", "enum": ["bank-feature-contract-2.0"]}, "calculation_version": {"type": "string"}, "normalization_basis": {"type": "string", "enum": ["monthly_average"]}, "currency": {"type": "string", "enum": ["MXN"]}, "period_start": {"type": "string", "format": "date"}, "period_end": {"type": "string", "format": "date"}, "account_count": {"type": "integer", "minimum": 1}, "account_coverage_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "account_holder_match": {"type": "boolean"}, "classification_coverage_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "operating_inflows_mxn": {"type": "number", "minimum": 0}, "operating_outflows_mxn": {"type": "number", "minimum": 0}, "internal_transfer_inflows_mxn": {"type": "number", "minimum": 0}, "debt_proceeds_mxn": {"type": "number", "minimum": 0}, "refunds_mxn": {"type": "number", "minimum": 0}, "existing_monthly_debt_service_mxn": {"type": "number", "minimum": 0}, "end_of_day_avg_balance_mxn": {"type": "number", "minimum": 0}, "end_of_day_min_balance_mxn": {"type": "number"}, "inflow_volatility": {"type": "number", "minimum": 0, "maximum": 1}, "top_payer_share": {"type": "number", "minimum": 0, "maximum": 1}, "source": {"type": "string"}, "evidence_reference": {"type": "string"}, "observed_at": {"type": "string", "format": "date-time"}}},
+      "ShadowPerformanceRequest": {
+        "type": "object", "additionalProperties": false,
+        "required": ["event_id", "observed_at", "period_end", "days_past_due", "outstanding_balance_mxn", "scheduled_payment_mxn", "amount_paid_mxn", "source", "evidence_reference"],
+        "properties": {
+          "event_id": {"type": "string", "minLength": 3, "maxLength": 120},
+          "event_type": {"type": "string", "enum": ["scheduled_observation", "defaulted", "restructured", "charged_off"], "default": "scheduled_observation"},
+          "observed_at": {"type": "string", "format": "date-time"},
+          "period_end": {"type": "string", "format": "date-time"},
+          "days_past_due": {"type": "integer", "minimum": 0},
+          "outstanding_balance_mxn": {"type": "number", "minimum": 0},
+          "scheduled_payment_mxn": {"type": "number", "minimum": 0},
+          "amount_paid_mxn": {"type": "number", "minimum": 0},
+          "source": {"type": "string", "minLength": 2, "maxLength": 80},
+          "evidence_reference": {"type": "string", "minLength": 2, "maxLength": 240}
+        },
+        "example": {"event_id": "OUT-001", "observed_at": "2026-10-01T00:00:00Z", "period_end": "2026-09-30T00:00:00Z", "days_past_due": 35, "outstanding_balance_mxn": 31000, "scheduled_payment_mxn": 5100, "amount_paid_mxn": 0, "source": "bank_core", "evidence_reference": "LOAN-99-M2"}
+      },
+      "IntakeCreateRequest": {"type": "object", "description": "Bank-owned case shell created before consent and evidence.", "required": ["partner_case_reference", "cohort_id", "merchant_name"], "additionalProperties": false, "properties": {"partner_case_reference": {"type": "string", "description": "Unique reference in the bank system.", "minLength": 3, "maxLength": 120}, "cohort_id": {"type": "string", "description": "Approved pilot cohort.", "minLength": 3, "maxLength": 120}, "merchant_name": {"type": "string", "description": "Merchant display name.", "minLength": 2, "maxLength": 160}}, "example": {"partner_case_reference": "BANK-UAT-001", "cohort_id": "shadow_uat", "merchant_name": "Comercio UAT"}},
+      "ConsentChallengeRequest": {"type": "object", "description": "Issue one short-lived challenge for exactly one immutable consent policy.", "required": ["policy_id", "channel", "destination", "identity_binding_id", "authority_binding_id"], "additionalProperties": false, "properties": {"policy_id": {"type": "string", "minLength": 3, "maxLength": 120}, "channel": {"type": "string", "enum": ["sms", "email", "whatsapp"]}, "destination": {"type": "string", "description": "Delivery address; only an HMAC digest is persisted.", "minLength": 5, "maxLength": 320}, "identity_binding_id": {"type": "string", "minLength": 3, "maxLength": 120}, "authority_binding_id": {"type": "string", "minLength": 3, "maxLength": 120}, "ttl_minutes": {"type": "integer", "minimum": 2, "maximum": 15, "default": 5}}},
+      "ConsentVerifyRequest": {"type": "object", "description": "One-time verification code. The raw code is never persisted.", "required": ["otp"], "additionalProperties": false, "properties": {"otp": {"type": "string", "pattern": "^[0-9]{6}$"}}},
+      "PublicConsentAccessRequest": {"type": "object", "description": "High-entropy applicant-link token, transported in the body rather than the URL query.", "required": ["access_token"], "additionalProperties": false, "properties": {"access_token": {"type": "string", "minLength": 32}}},
+      "PublicConsentVerifyRequest": {"type": "object", "description": "Applicant proof: active acceptance, possession of the link and the separately delivered code.", "required": ["access_token", "otp", "accepted"], "additionalProperties": false, "properties": {"access_token": {"type": "string", "minLength": 32}, "otp": {"type": "string", "pattern": "^[0-9]{6}$"}, "accepted": {"type": "boolean", "const": true}}},
+      "LinkSessionRequest": {"type": "object", "description": "Request for a bounded provider-link bootstrap.", "required": ["provider"], "additionalProperties": false, "properties": {"provider": {"type": "string", "description": "Configured provider identifier.", "pattern": "^[a-z0-9_-]+$", "maxLength": 64}, "ttl_minutes": {"type": "integer", "description": "Token lifetime.", "minimum": 5, "maximum": 30, "default": 15}}, "example": {"provider": "partner-bank-sandbox", "ttl_minutes": 15}},
+      "LinkExchangeRequest": {"type": "object", "description": "One-time token exchange request.", "required": ["client_token"], "additionalProperties": false, "properties": {"client_token": {"type": "string", "description": "Unpersisted one-time client token.", "minLength": 32}}, "example": {"client_token": "opaque-one-time-token-at-least-32-chars"}},
+      "ConsentRequest": {"type": "object", "description": "Versioned bank-approved consent record.", "required": ["channel", "text", "policy_version"], "additionalProperties": false, "properties": {"channel": {"type": "string", "description": "Capture channel.", "enum": ["whatsapp", "sms", "in_person"]}, "text": {"type": "string", "description": "Exact approved consent text.", "minLength": 1}, "purpose": {"type": "string", "description": "Narrow processing purpose.", "enum": ["credit_assessment"], "default": "credit_assessment"}, "policy_version": {"type": "string", "description": "Approved consent policy version.", "minLength": 1, "maxLength": 40}}, "example": {"channel": "in_person", "text": "Approved UAT consent text", "purpose": "credit_assessment", "policy_version": "bank-uat-v1"}},
+      "ReasonRequest": {"type": "object", "description": "Auditable human reason for a governance action.", "required": ["reason"], "additionalProperties": false, "properties": {"reason": {"type": "string", "description": "Non-secret justification.", "minLength": 5, "maxLength": 1000}}, "example": {"reason": "Merchant withdrew authorization"}},
+      "CorrectionRequest": {"type": "object", "description": "Claimed correction that does not mutate original evidence.", "required": ["field_path", "claimed_value", "reason"], "additionalProperties": false, "properties": {"field_path": {"type": "string", "description": "Allow-listed dotted field path.", "pattern": "^[A-Za-z0-9_.]+$", "maxLength": 160}, "claimed_value": {"description": "Claimed replacement value."}, "reason": {"type": "string", "description": "Reason for review.", "minLength": 5, "maxLength": 2000}}, "example": {"field_path": "bank.months_connected", "claimed_value": 12, "reason": "Provider history was incomplete"}},
+      "CorrectionResolution": {"type": "object", "description": "Authorized correction disposition.", "required": ["status", "note"], "additionalProperties": false, "properties": {"status": {"type": "string", "description": "Final review status.", "enum": ["accepted", "rejected"]}, "note": {"type": "string", "description": "Reviewer justification.", "minLength": 5, "maxLength": 2000}}, "example": {"status": "accepted", "note": "Provider reference confirms the claim"}},
+      "BankEvidenceCallback": {"type": "object", "description": "Signed consent-bound derived bank metrics; raw transactions are forbidden.", "required": ["event_id", "provider", "connection_id", "consent_id", "observed_at", "metrics"], "oneOf": [{"required": ["application_id"]}, {"required": ["intake_id", "link_session_id"]}], "additionalProperties": false, "properties": {"event_id": {"type": "string", "description": "Provider-unique idempotency key.", "maxLength": 160}, "application_id": {"type": "string", "description": "Existing case identifier for direct callbacks.", "maxLength": 160}, "intake_id": {"type": "string", "description": "Hosted intake identifier.", "minLength": 32, "maxLength": 32}, "link_session_id": {"type": "string", "description": "Bound one-time link session.", "minLength": 32, "maxLength": 32}, "provider": {"type": "string", "description": "Configured provider identifier.", "pattern": "^[a-zA-Z0-9_-]+$", "maxLength": 64}, "connection_id": {"type": "string", "description": "Provider connection reference.", "maxLength": 160}, "consent_id": {"type": "string", "description": "Active consent identifier.", "maxLength": 160}, "observed_at": {"type": "string", "description": "Provider observation time.", "format": "date-time"}, "metrics": {"type": "object", "description": "Minimized aggregate metrics.", "additionalProperties": false, "properties": {"months_connected": {"type": "number", "minimum": 0}, "avg_daily_balance_mxn": {"type": "number"}, "monthly_deposit_count": {"type": "number", "minimum": 0}, "monthly_deposit_volume_mxn": {"type": "number", "minimum": 0}, "monthly_outflow_volume_mxn": {"type": "number", "minimum": 0}, "deposit_regularity": {"type": "number", "minimum": 0, "maximum": 1}, "overdrafts_90d": {"type": "integer", "minimum": 0}, "balance_trend_90d": {"type": "number", "minimum": -1, "maximum": 1}, "min_daily_balance_mxn": {"type": "number"}}}}, "example": {"event_id": "evt-001", "intake_id": "0123456789abcdef0123456789abcdef", "link_session_id": "fedcba9876543210fedcba9876543210", "provider": "partner-bank-sandbox", "connection_id": "conn-001", "consent_id": "consent-001-valid", "observed_at": "2026-08-20T12:00:00Z", "metrics": {"months_connected": 12, "monthly_deposit_volume_mxn": 85000, "deposit_regularity": 0.88}}},
+      "Provider": {
+        "type": "object",
+        "description": "External evidence-provider readiness, never including credentials.",
+        "required": ["id", "configured", "mode"],
+        "properties": {
+          "id": {"type": "string", "description": "Stable provider identifier.", "example": "syncfy"},
+          "configured": {"type": "boolean", "description": "Whether server-side configuration is present.", "example": true},
+          "mode": {"type": "string", "description": "Current Olin integration mode.", "example": "connector-backend-only"},
+          "interactiveLinkingReady": {"type": "boolean", "description": "Whether the merchant consent widget is operational.", "example": false},
+          "blockingReason": {"type": "string", "description": "Human-readable missing prerequisite.", "example": "Merchant consent widget is not enabled"},
+          "actionUrl": {"type": "string", "format": "uri", "description": "Official provider setup page.", "example": "https://syncfy.com/es/products/opendata/"}
+        }
+      },
+      "ProviderList": {
+        "type": "object",
+        "description": "Paginated provider-readiness response.",
+        "required": ["data", "meta"],
+        "properties": {
+          "data": {"type": "array", "description": "Provider readiness records.", "items": {"$ref": "#/components/schemas/Provider"}},
+          "meta": {"type": "object", "description": "Pagination metadata.", "properties": {"total": {"type": "integer", "description": "Matched provider count.", "example": 4}, "limit": {"type": "integer", "description": "Applied page size.", "example": 20}, "offset": {"type": "integer", "description": "Applied result offset.", "example": 0}}}
+        },
+        "example": {"data": [{"id": "google-places", "configured": true, "mode": "live-lookup"}], "meta": {"total": 1, "limit": 20, "offset": 0}}
+      },
+      "SignalCatalog": {
+        "type": "object",
+        "description": "Versioned catalogue of the 28 SME-wide evidence signals.",
+        "required": ["engine_version", "signal_count", "decision_use", "signals"],
+        "properties": {
+          "engine_version": {"type": "string", "description": "Immutable evaluator release identifier.", "example": "alternative-signals-1.0.0"},
+          "signal_count": {"type": "integer", "minimum": 0, "maximum": 28, "example": 28},
+          "total_signal_count": {"type": "integer", "minimum": 28, "maximum": 28, "example": 28},
+          "decision_use": {"type": "string", "enum": ["context_only_not_default_probability"]},
+          "signals": {"type": "array", "minItems": 0, "maxItems": 28, "items": {"type": "object", "required": ["signal_id", "label", "layer_id", "source_strategy", "metric_schema", "limitation"], "properties": {"signal_id": {"type": "string"}, "label": {"type": "string"}, "layer_id": {"type": "string"}, "layer_label": {"type": "string"}, "pdf_weight": {"type": "number", "nullable": true}, "phase": {"type": "string"}, "source_strategy": {"type": "string"}, "metric_schema": {"type": "array", "items": {"type": "string"}}, "applicable_segments": {"type": "array", "items": {"type": "string"}}, "limitation": {"type": "string"}}}},
+          "meta": {"type": "object", "properties": {"matched": {"type": "integer"}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}}
+        }
+      },
+      "GoogleLookupRequest": {
+        "type": "object",
+        "description": "Free-text merchant and address lookup.",
+        "required": ["query"],
+        "properties": {"query": {"type": "string", "minLength": 5, "maxLength": 300, "description": "Merchant name plus declared address.", "example": "Cafe Real, Avenida Coyoacan 1535, CDMX"}},
+        "example": {"query": "Cafe Real, Avenida Coyoacan 1535, CDMX"}
+      },
+      "DenueLookupRequest": {
+        "type": "object",
+        "description": "Declared merchant and search circle for a public-registry match.",
+        "required": ["merchantName", "declaredAddress", "latitude", "longitude"],
+        "properties": {
+          "merchantName": {"type": "string", "minLength": 2, "description": "Declared commercial name.", "example": "Cafe Real"},
+          "declaredAddress": {"type": "string", "description": "Address supplied by the merchant.", "example": "Avenida Coyoacan 1535, Del Valle"},
+          "latitude": {"type": "number", "minimum": -90, "maximum": 90, "description": "Search latitude from the live place result.", "example": 19.38},
+          "longitude": {"type": "number", "minimum": -180, "maximum": 180, "description": "Search longitude from the live place result.", "example": -99.17},
+          "radiusM": {"type": "integer", "minimum": 50, "maximum": 5000, "default": 500, "description": "DENUE search radius in metres.", "example": 750}
+        },
+        "example": {"merchantName": "Cafe Real", "declaredAddress": "Avenida Coyoacan 1535", "latitude": 19.38, "longitude": -99.17, "radiusM": 750}
+      },
+      "GeointelligenceRequest": {
+        "type": "object",
+        "description": "Coordinates, radial scope, and transparent SME-sector classification inputs.",
+        "required": ["latitude", "longitude", "businessType"],
+        "additionalProperties": false,
+        "properties": {
+          "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+          "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+          "radiusM": {"type": "integer", "minimum": 50, "maximum": 5000, "default": 1000},
+          "businessType": {"type": "string", "enum": ["abarrotes", "jugueria", "taqueria", "restaurant", "retail", "services", "health_beauty", "professional", "transport", "light_manufacturing", "wholesale", "ecommerce", "construction", "agriculture", "hospitality", "education", "healthcare", "pharmacy", "logistics", "other"]},
+          "targetScian": {"type": "string", "pattern": "^[0-9]{2,6}$", "description": "Optional SCIAN prefix selected by the bank or analyst."},
+          "targetActivity": {"type": "string", "maxLength": 120, "description": "Optional transparent activity phrase when a SCIAN class is unavailable."}
+        }
+      },
+      "BankCsvRequest": {
+        "type": "object",
+        "description": "CSV content authorized for in-memory pre-analysis.",
+        "required": ["csvText"],
+        "properties": {"csvText": {"type": "string", "maxLength": 500000, "description": "UTF-8 CSV with fecha/date and monto/amount or credit/debit columns.", "example": "fecha,monto\n2026-07-01,10000"}},
+        "example": {"csvText": "fecha,monto\n2026-07-01,10000"}
+      },
+      "BankAnalysisResponse": {
+        "type": "object",
+        "description": "Pre-analysis result that intentionally excludes source transaction rows.",
+        "required": ["data"],
+        "properties": {"data": {"type": "object", "description": "Derived metrics, content hash and limitations.", "additionalProperties": true}},
+        "example": {"data": {"provider": "bank_statement_csv", "bank": {"verified": false}, "summary": {"statementStored": false, "eligibleForDecision": false}}}
+      },
+      "WeatherAnalysisRequest": {
+        "type": "object",
+        "description": "Location and optional historical cutoff for weather context.",
+        "required": ["latitude", "longitude"],
+        "additionalProperties": false,
+        "properties": {
+          "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+          "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+          "asOfDate": {"type": "string", "format": "date", "description": "Latest complete historical day, allowing the provider delay."}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Stable machine code plus an actionable human message.",
+        "required": ["error"],
+        "properties": {"error": {"type": "object", "description": "Error details.", "required": ["code", "message", "request_id", "timestamp"], "properties": {"code": {"type": "string", "description": "Stable error code.", "example": "VALIDATION_ERROR"}, "message": {"type": "string", "description": "Safe human-readable explanation.", "example": "latitude or longitude is invalid"}, "request_id": {"type": "string", "description": "Trace identifier also returned in X-Request-ID.", "example": "bank-uat-request-001"}, "timestamp": {"type": "string", "format": "date-time"}, "details": {"type": "object", "description": "Optional non-secret context.", "additionalProperties": true}}}},
+        "example": {"error": {"code": "VALIDATION_ERROR", "message": "The request is invalid", "request_id": "bank-uat-request-001", "timestamp": "2026-08-20T12:00:00Z"}}
+      }
+    },
+    "responses": {
+      "Unauthorized": {"description": "Named access token is missing or invalid.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "AUTHENTICATION_REQUIRED", "message": "Authentication required"}}}}},
+      "Forbidden": {"description": "Authenticated role lacks the required permission.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "INSUFFICIENT_ROLE", "message": "Insufficient role"}}}}},
+      "NotFound": {"description": "No matching provider record was found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "NOT_FOUND", "message": "Business not found"}}}}},
+      "ValidationError": {"description": "Payload failed bounded input validation.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "VALIDATION_ERROR", "message": "The supplied coordinates are invalid"}}}}},
+      "ProviderError": {"description": "External provider is unavailable or not configured.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "PROVIDER_UNAVAILABLE", "message": "External provider unavailable"}}}}},
+      "IdempotencyConflict": {"description": "The event ID was already used with a different payload or binding. Evidence is not overwritten.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "IDEMPOTENCY_CONFLICT", "message": "event_id already exists with different content", "request_id": "bank-uat-request-001", "timestamp": "2026-08-20T12:00:00Z"}}}}}
+    }
+  }
+}

@@ -31,16 +31,32 @@ import DecisionExplorer from "../components/DecisionExplorer";
     </div>
   </section>
 
+  <section class="section section--dark" aria-labelledby="connections-title">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="section-kicker muted-dark">02 / Fuentes</p><h2 class="section-title" id="connections-title">Una plataforma.<br />Cuatro rutas de <em>evidencia.</em></h2></div>
+        <p class="section-lede">La institución selecciona la ruta que corresponde a la operación real del negocio. En producción, la ruta no es una etiqueta: exige una fuente verificada y una referencia recuperable.</p>
+      </div>
+      <div class="business-grid">
+        <article class="card card--dark business-card"><span class="tag tag--signal">Inventario</span><h3>Compras a proveedores</h3><p>Historial, frecuencia, faltantes y tendencia de compras.</p><small>Requiere evidencia de proveedor verificada</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">TPV</span><h3>Ventas y liquidaciones</h3><p>Volumen, consistencia, estacionalidad y liquidaciones.</p><small>Requiere evidencia TPV verificada</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Flujo bancario</span><h3>Depósitos y saldos</h3><p>Entradas, salidas, sobregiros y capacidad estimada.</p><small>Requiere evidencia bancaria verificada</small></article>
+        <article class="card card--dark business-card"><span class="tag tag--dark">Híbrida</span><h3>Dos fuentes operativas</h3><p>Combina al menos dos fuentes verificadas cuando ninguna explica el caso por sí sola.</p><small>Reduce dependencia de una sola señal</small></article>
+      </div>
+      <div class="scope-note"><strong>Estado actual:</strong> las rutas y sus controles funcionan con datos sintéticos. Las conexiones reales con Círculo, banco, TPV y proveedores requieren contratos e integración con el socio.</div>
+    </div>
+  </section>
+
   <section class="section section--paper section-rule" aria-labelledby="bands-title">
     <div class="shell">
       <div class="section-heading">
-        <div><p class="section-kicker">02 / Las bandas</p><h2 class="section-title" id="bands-title">Tres dimensiones.<br />Límites <em>visibles.</em></h2></div>
+        <div><p class="section-kicker">03 / Las bandas</p><h2 class="section-title" id="bands-title">Tres dimensiones.<br />Límites <em>visibles.</em></h2></div>
         <p class="section-lede">Estos límites son la hipótesis de política actual. Todavía no están calibrados con una cohorte real de pequeños negocios.</p>
       </div>
       <div class="band-grid">
         <article class="card band-card">
           <div class="band-card__head"><h3>Círculo</h3><span class="tag">4 bandas</span></div>
-          <dl><div><dt>C1</dt><dd>Score ≥ 670</dd></div><div><dt>C2</dt><dd>Score de 600 a 669</dd></div><div><dt>C3</dt><dd>Sin expediente o score no disponible</dd></div><div><dt>C4</dt><dd>Score &lt; 600 o morosidad activa</dd></div></dl>
+          <dl><div><dt>C1</dt><dd>Puntaje ≥ 670</dd></div><div><dt>C2</dt><dd>Puntaje de 600 a 669</dd></div><div><dt>C3</dt><dd>Sin expediente o puntaje no disponible</dd></div><div><dt>C4</dt><dd>Puntaje &lt; 600 o morosidad activa</dd></div></dl>
         </article>
         <article class="card band-card">
           <div class="band-card__head"><h3>DSCR</h3><span class="tag">3 bandas</span></div>
@@ -57,7 +73,7 @@ import DecisionExplorer from "../components/DecisionExplorer";
   <section class="section section--white" aria-labelledby="tiers-title">
     <div class="shell">
       <div class="section-heading">
-        <div><p class="section-kicker">03 / Las salidas</p><h2 class="section-title" id="tiers-title">14 rutas técnicas.<br />Cuatro tratamientos <em>claros.</em></h2></div>
+        <div><p class="section-kicker">04 / Las salidas</p><h2 class="section-title" id="tiers-title">14 rutas técnicas.<br />Cuatro tratamientos <em>claros.</em></h2></div>
         <p class="section-lede">El código llama “tier” a cada ruta. Para el equipo de crédito, lo importante es el tratamiento: favorable, comité, no recomendada o bloqueo previo.</p>
       </div>
       <div class="tier-table">
@@ -77,7 +93,7 @@ import DecisionExplorer from "../components/DecisionExplorer";
 
   <section class="section explorer-wrap" id="caso" aria-labelledby="case-title">
     <div class="shell">
-      <div class="explorer-head"><div><p class="section-kicker muted-dark">04 / Explorar</p><h2 class="section-title" id="case-title">Tres giros.<br />La misma lógica <em>visible.</em></h2></div><p>Los casos son sintéticos. Muestran las rutas de la matriz actual, pero no validan que una sola política funcione igual para cada giro.</p></div>
+      <div class="explorer-head"><div><p class="section-kicker muted-dark">05 / Explorar</p><h2 class="section-title" id="case-title">Tres giros.<br />La misma lógica <em>visible.</em></h2></div><p>Los casos son sintéticos. Muestran las rutas de la matriz actual, pero no validan que una sola política funcione igual para cada giro.</p></div>
       <DecisionExplorer client:visible />
     </div>
   </section>

@@ -5,6 +5,7 @@
 *.db-shm
 backups/
 __pycache__/
+.venv*/
 *.py[cod]
 .DS_Store
 
@@ -28,6 +29,7 @@ website/public/config.js
 website/node_modules/
 website/dist/
 website/.astro/
+website/qa-artifacts/
 website/demo-output/segments/
 website/demo-output/qa/
 website/demo-output/narration/

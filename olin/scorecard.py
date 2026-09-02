@@ -64,6 +64,7 @@ from .models import (
     RepaymentAssessment, ScoreResult, SignalScore,
 )
 from . import signals as sig
+from .signal_architecture import evaluate_signal_architecture
 from .repayment import (
     MIN_DSCR_AUTO, MIN_DSCR_HARD, assess_repayment, suggest_max_affordable_amount,
 )
@@ -337,7 +338,8 @@ def _composite(signals_list: list[SignalScore]) -> float:
     return sum(s.raw_score * s.effective_weight for s in signals_list if s.raw_score is not None)
 
 
-def _bootstrap_ci(signals_list: list[SignalScore], seed: int = 7) -> Tuple[float, float]:
+def _heuristic_sensitivity_range(signals_list: list[SignalScore], seed: int = 7) -> Tuple[float, float]:
+    """Perturb designed signal scores; this is not a statistical confidence interval."""
     rng = random.Random(seed)
     avail = [s for s in signals_list if s.raw_score is not None]
     if not avail:
@@ -447,10 +449,23 @@ def score_application(
                 production_blocks.append(
                     "Verified POS evidence requires an evidence reference"
                 )
+        if app.buro is not None and app.buro.checked:
+            if is_synthetic_source(app.buro.source):
+                production_blocks.append(
+                    "Synthetic bureau data is forbidden in production underwriting"
+                )
+            elif not app.buro.verified:
+                production_blocks.append(
+                    "Bureau evidence must be verified before production underwriting"
+                )
+            elif not app.buro.evidence_reference.strip():
+                production_blocks.append(
+                    "Verified bureau evidence requires an evidence reference"
+                )
     if production_blocks:
         signals_list = _collect_signals(app)
         composite = _composite(signals_list)
-        ci_low, ci_high = _bootstrap_ci(signals_list)
+        ci_low, ci_high = _heuristic_sensitivity_range(signals_list)
         coverage = sum(s.weight for s in signals_list if s.available)
         fraud_result = assess_fraud(app, maps_address=maps_address, bank_stated=bank_stated)
         rep = assess_repayment(app, 0.0)
@@ -465,7 +480,7 @@ def score_application(
     if portfolio_block and portfolio_block.blocked:
         signals_list = _collect_signals(app)
         composite = _composite(signals_list)
-        ci_low, ci_high = _bootstrap_ci(signals_list)
+        ci_low, ci_high = _heuristic_sensitivity_range(signals_list)
         coverage = sum(s.weight for s in signals_list if s.available)
         fraud_result = assess_fraud(app, maps_address=maps_address, bank_stated=bank_stated)
         rep = assess_repayment(app, 0.0)
@@ -481,7 +496,7 @@ def score_application(
     if fraud_result.hard_blocks:
         signals_list = _collect_signals(app)
         composite = _composite(signals_list)
-        ci_low, ci_high = _bootstrap_ci(signals_list)
+        ci_low, ci_high = _heuristic_sensitivity_range(signals_list)
         coverage = sum(s.weight for s in signals_list if s.available)
         rep = assess_repayment(app, 0.0)
         return _result(
@@ -493,7 +508,7 @@ def score_application(
 
     signals_list = _collect_signals(app)
     composite = _composite(signals_list)
-    ci_low, ci_high = _bootstrap_ci(signals_list)
+    ci_low, ci_high = _heuristic_sensitivity_range(signals_list)
     coverage = sum(s.weight for s in signals_list if s.available)
     hard_failures = _phase0_hard_filters(app)
 
@@ -537,7 +552,7 @@ def score_application(
     tier, decision = _tier_lookup(buro_dim, dscr_dim, score_dim)
 
     # ── Phase 0 guard: preserve matrix Tier 1 but route to committee ─────────
-    # (AUTO_APPROVE requires all Phase 0 filters, tight CI, coverage, low fraud)
+    # (AUTO_APPROVE requires all Phase 0 filters, sensitivity floor, coverage, low fraud)
     tier1_downgrade_reason: Optional[str] = None
     if decision == Decision.AUTO_APPROVE:
         if hard_failures:
@@ -545,7 +560,7 @@ def score_application(
             tier1_downgrade_reason = "Phase 0 filter failure"
         elif ci_low < 70.0:
             decision = Decision.COMMITTEE
-            tier1_downgrade_reason = f"Score uncertain: CI [{ci_low:.1f}-{ci_high:.1f}]"
+            tier1_downgrade_reason = f"Heuristic sensitivity floor {ci_low:.1f} is below 70.0"
         elif coverage < MIN_DATA_COVERAGE:
             decision = Decision.COMMITTEE
             tier1_downgrade_reason = f"Data coverage {coverage:.0%} below {MIN_DATA_COVERAGE:.0%}"
@@ -565,7 +580,7 @@ def score_application(
 
     if decision == Decision.AUTO_APPROVE:
         reasons.append(
-            f"Score {composite:.1f} (CI [{ci_low:.1f}-{ci_high:.1f}]), "
+            f"Score {composite:.1f} (non-statistical sensitivity [{ci_low:.1f}-{ci_high:.1f}]), "
             f"coverage {coverage:.0%}, DSCR {rep.dscr}, all Phase 0 + repayment + fraud checks passed"
         )
         if app.requested_amount_mxn > approved_amount:
@@ -596,7 +611,10 @@ def score_application(
         if hard_failures:
             reasons.extend(hard_failures)
         if ci_low < 70.0 and not tier1_downgrade_reason:
-            reasons.append(f"Score uncertain: CI [{ci_low:.1f}-{ci_high:.1f}]")
+            reasons.append(
+                f"Heuristic sensitivity floor {ci_low:.1f} is below 70.0; "
+                "this is not a statistical confidence interval"
+            )
         if coverage < MIN_DATA_COVERAGE and not tier1_downgrade_reason:
             reasons.append(f"Data coverage {coverage:.0%} below {MIN_DATA_COVERAGE:.0%}")
         if fraud_result.risk_score >= 30.0 and not tier1_downgrade_reason:
@@ -666,4 +684,5 @@ def _result(
         tier_sensitivity=sensitivity or {},
         environment=app.environment,
         production_blocks=production_blocks or [],
+        alternative_signal_report=evaluate_signal_architecture(app),
     )

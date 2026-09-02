@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""Generate voiceover WAV files for olin-marketing using edge-tts."""
+"""Generate a natural Mexican Spanish female voiceover for Olin marketing."""
 import asyncio
 import subprocess
 import os
 
-VOICE = "en-US-AndrewMultilingualNeural"
-RATE = "+20%"
+VOICE = "es-MX-DaliaNeural"
+RATE = "+12%"
 ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 
-# Scene windows: f1=7s, f2=7s, f3=8s, f4=8s, f5=7s, f6=8s
 SCRIPTS = [
-    ("vo-01", "54 million micro-businesses in Mexico. Only 10 percent with bank access. Can this business repay this loan?"),
-    ("vo-02", "Olin assembles six merchant signals into one auditable credit case before any scoring begins."),
-    ("vo-03", "Olin is not a black box. Observe sources and gaps, decide with a recommendation, collect repayment events, learn from each outcome."),
-    ("vo-04", "Repayment capacity changes the offer. At 25,000 pesos the model counters with 12,000 — aligned to observed cash flow."),
-    ("vo-05", "Olin surfaces the recommendation. Your analyst records their decision — rationale required before any approval or decline."),
-    ("vo-06", "10 shadow cases, no money movement. Measure coverage, speed, analyst disagreement, and evidence gaps before deploying real credit."),
+    ("vo-01", "Ventas y depósitos viven separados. La actividad existe; la evidencia está fragmentada."),
+    ("vo-02", "Olin selecciona la evidencia correcta: inventario, terminal punto de venta, flujo bancario o una ruta híbrida."),
+    ("vo-03", "Cada expediente conserva propósito, consentimiento, identidad y una referencia recuperable para cada fuente verificada."),
+    ("vo-04", "Olin no adivina quién pagará. Reduce incertidumbre mostrando capacidad, confianza, faltantes y la regla que produjo la recomendación."),
+    ("vo-05", "Olin recomienda. La institución decide. Una razón obligatoria convierte acuerdos y diferencias en datos."),
+    ("vo-06", "Diez expedientes en paralelo, sin mover dinero. Revisemos un caso, no una promesa."),
 ]
 
 async def generate(name: str, text: str):

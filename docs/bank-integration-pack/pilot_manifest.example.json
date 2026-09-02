@@ -1,0 +1,59 @@
+{
+  "pilot_id": "TODO_BANK_OLIN_SHADOW_01",
+  "institution": "TODO_BANK_NAME",
+  "stage": "controlled_shadow",
+  "owners": {
+    "credit_risk": "TODO",
+    "model_risk": "TODO",
+    "security": "TODO",
+    "privacy": "TODO",
+    "engineering": "TODO",
+    "operations": "TODO",
+    "procurement": "TODO"
+  },
+  "cohort": {
+    "case_ceiling": 10,
+    "evidence_routes": ["inventory_led", "tpv_led", "bank_flow_led"],
+    "selection_rule": "TODO_BANK_APPROVED_COHORT_RULE"
+  },
+  "safeguards": {
+    "shadow_only": true,
+    "money_movement_disabled": true,
+    "bank_makes_decision": true,
+    "kill_switch_owner": "TODO",
+    "stop_conditions": [
+      "cross_tenant_exposure",
+      "consent_bypass",
+      "unverifiable_evidence",
+      "corrupted_audit_history",
+      "high_severity_security_event",
+      "unauthorized_money_movement"
+    ]
+  },
+  "success_criteria": {
+    "consent_coverage_pct": 100,
+    "provenance_coverage_pct": 100,
+    "reconstructable_recommendations_pct": 100,
+    "bank_outcome_coverage_pct": 100,
+    "unauthorized_money_movement_events": 0,
+    "turnaround_baseline_method": "TODO_BANK_BASELINE_METHOD",
+    "turnaround_target_minutes": 0
+  },
+  "outcome_contract": {
+    "bank_committed_to_deliver": false,
+    "outcome_label": "TODO_FOR_EXAMPLE_30_PLUS_DPD_BY_BANK_DEFINITION",
+    "observation_window_days": 0,
+    "delivery_owner": "TODO",
+    "delivery_method": "TODO_APPROVED_SECURE_CHANNEL",
+    "evidence_ref": "TODO_SIGNED_AGREEMENT_REFERENCE"
+  },
+  "approvals": {
+    "shadow_pilot_agreement": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"},
+    "security_review": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"},
+    "privacy_review": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"},
+    "consent_workflow": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"},
+    "model_risk_scope": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"},
+    "outcome_data_access": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"},
+    "paid_conversion_path": {"approved": false, "approver": "TODO", "approved_at": "TODO", "evidence_ref": "TODO"}
+  }
+}

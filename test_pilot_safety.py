@@ -49,7 +49,8 @@ def healthy_app() -> Application:
         ),
         tenure=TenureData(8, 5, True),
         maps=MapsRatingData(4.6, 100, 8),
-        buro=BuroData(True, 0, 1, "01", 720),
+        buro=BuroData(True, 0, 1, "01", 720, source="partner_bureau",
+                      verified=True, evidence_reference="BUREAU-UAT-001"),
         fraud=FraudData(
             phone_mx="5512345678", rfc="CHGU850101AB2",
             ine_checked=True, address_stated="Iztapalapa Centro",

@@ -1,0 +1,77 @@
+{
+  "bank_cashflow_service": {
+    "status": "active",
+    "evidence_types": ["bank_feature_contract_v2", "legacy_bank_cash_flow"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-approved-control-record"
+  },
+  "bank_supplier_feed": {
+    "status": "active",
+    "evidence_types": ["supplier_purchases"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-supplier-feed-record"
+  },
+  "bank_acquirer_feed": {
+    "status": "active",
+    "evidence_types": ["pos_settlements"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-acquirer-feed-record"
+  },
+  "circulo_credito": {
+    "status": "active",
+    "evidence_types": ["credit_bureau"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-circulo-contract-record"
+  },
+  "google_places": {
+    "status": "active",
+    "evidence_types": ["geo_continuity"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-google-provider-control-record"
+  },
+  "bank_operating_review": {
+    "status": "active",
+    "evidence_types": ["operating_profile"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-operating-review-record"
+  },
+  "bank_core": {
+    "status": "active",
+    "evidence_types": ["repayment_outcome"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-approved-outcome-feed-record"
+  },
+  "bank_pharmacy_review": {
+    "status": "active",
+    "evidence_types": ["pharmacy_evidence"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-pharmacy-control-record"
+  },
+  "pilot_kyc_adapter": {
+    "status": "inactive",
+    "evidence_types": [
+      "government_identity_verified",
+      "individual_business_ownership_verified",
+      "beneficial_owner_verified",
+      "account_holder_match"
+    ],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-after-kyc-contract-security-and-acceptance-review"
+  },
+  "bank_corporate_authority_review": {
+    "status": "inactive",
+    "evidence_types": ["legal_representative_authority_verified"],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-approved-authority-review-control"
+  },
+  "bank_cash_observation": {
+    "status": "inactive",
+    "evidence_types": [
+      "cash_sales_log_observed",
+      "site_visit_verified",
+      "inventory_count_verified"
+    ],
+    "valid_until": "2027-12-31",
+    "attestation_id": "replace-with-bank-approved-cash-observation-control"
+  }
+}

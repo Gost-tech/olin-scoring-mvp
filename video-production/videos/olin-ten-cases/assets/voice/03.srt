@@ -1,0 +1,8 @@
+1
+00:00:00,100 --> 00:00:03,925
+Cada fuente, faltante y regla queda visible.
+
+2
+00:00:03,875 --> 00:00:07,762
+La recomendación no llega sola: llega explicada.
+

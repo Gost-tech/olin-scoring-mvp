@@ -1,0 +1,16 @@
+control,required_owner,current_state,evidence_needed,production_gate
+Partner authentication,Bank IAM + Olin,implemented for UAT,Bearer credential issuance/revocation test,yes
+Tenant isolation,Olin,implemented and tested locally,bank UAT cross-tenant results,yes
+Webhook authenticity,Olin + provider,implemented,HMAC key ceremony and rotation test,yes
+Webhook idempotency,Olin,implemented,exact replay and changed-payload conflict test,yes
+Consent binding,Bank privacy + Olin,implemented workflow,approved text/purpose/retention and withdrawal UAT,yes
+Evidence provenance,Olin + provider,implemented contract,provider certification and retrievable references,yes
+Encryption in transit,Platform owner,not deployed,certificate/mTLS and scan evidence,yes
+Encryption at rest,Platform owner,not deployed,managed database/KMS evidence,yes
+Secrets management,Platform owner,configuration supported,secret-manager and rotation evidence,yes
+Central audit and SIEM,Bank security + Olin,local audit only,central immutable export and alert test,yes
+Backup and recovery,Platform owner,not production-ready,successful restore and RTO/RPO evidence,yes
+Vulnerability management,Olin security,not independently attested,SAST/SCA/container scans and penetration test,yes
+Model risk,Bank risk + Olin,software controls only,labeled backtest/fairness/drift/threshold approval,yes
+Incident response,Bank security + Olin,documentation required,tabletop and contact/escalation evidence,yes
+Data deletion and exit,Bank privacy + Olin,policy approval pending,tested retention deletion export and vendor exit,yes

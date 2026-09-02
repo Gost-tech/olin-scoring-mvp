@@ -1,0 +1,7 @@
+{"id":"image_001","type":"image","path":"assets/01-intake.png","source":"existing","description":"01 intake","width":1600,"height":900,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_002","type":"image","path":"assets/03-evidence.png","source":"existing","description":"03 evidence","width":1600,"height":900,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_003","type":"image","path":"assets/04-recommendation.png","source":"existing","description":"04 recommendation","width":1600,"height":900,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_004","type":"image","path":"assets/06-analyst-queue.png","source":"existing","description":"06 analyst queue","width":1600,"height":900,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_005","type":"image","path":"assets/07-analyst-review.png","source":"existing","description":"07 analyst review","width":1600,"height":900,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_006","type":"image","path":"assets/08-audit-outcome.png","source":"existing","description":"08 audit outcome","width":1600,"height":900,"provenance":{"provider":"local","adopted":true}}
+{"id":"icon_001","type":"icon","path":"assets/olin-logo.svg","source":"existing","description":"olin logo","provenance":{"provider":"local","adopted":true}}

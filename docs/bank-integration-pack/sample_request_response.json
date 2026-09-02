@@ -1,0 +1,34 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/applications",
+    "headers": {
+      "Authorization": "Bearer <bank-sandbox-token>",
+      "X-Request-ID": "bank-uat-request-001"
+    },
+    "body_excerpt": {
+      "merchant_name": "Abarrotes UAT Norte",
+      "business_type": "abarrotes",
+      "requested_mxn": 20000,
+      "case_mode": "shadow",
+      "partner_case_reference": "BANK-UAT-0001",
+      "evidence_route": "bank_flow_led"
+    }
+  },
+  "response_excerpt": {
+    "recommendation": "COMMITTEE",
+    "recommendation_scope": "decision_support_only",
+    "requires_bank_decision": true,
+    "official_bank_decision": null,
+    "amount_evaluated_mxn": 20000,
+    "recommended_amount_mxn": 15000,
+    "engine_version": "version-returned-by-runtime",
+    "business_policy": {
+      "segment_id": "inventory_retail",
+      "policy_status": "pilot_auto_eligible",
+      "routing": "bank_committee_review",
+      "missing_primary_evidence": ["supplier_purchases"]
+    },
+    "note": "Illustrative fake data. Values are not a validated credit-performance claim."
+  }
+}

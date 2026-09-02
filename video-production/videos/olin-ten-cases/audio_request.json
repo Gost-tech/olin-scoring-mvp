@@ -1,0 +1,43 @@
+{
+  "lines": [
+    {
+      "id": "01",
+      "sfx": [
+        "impact-soft"
+      ]
+    },
+    {
+      "id": "02",
+      "sfx": [
+        "whoosh-soft"
+      ]
+    },
+    {
+      "id": "03",
+      "sfx": [
+        "tick-soft"
+      ]
+    },
+    {
+      "id": "04",
+      "sfx": [
+        "click-soft"
+      ]
+    },
+    {
+      "id": "05",
+      "sfx": [
+        "pulse-soft"
+      ]
+    },
+    {
+      "id": "06",
+      "sfx": [
+        "resolve-soft"
+      ]
+    }
+  ],
+  "bgm": {
+    "mode": "none"
+  }
+}

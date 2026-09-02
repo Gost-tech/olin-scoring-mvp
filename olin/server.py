@@ -10,9 +10,13 @@ Run:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
+import os
+import re
 import sqlite3
 import threading
 import time
@@ -20,7 +24,8 @@ import webbrowser
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 try:
     from dotenv import load_dotenv
@@ -29,7 +34,11 @@ except ImportError:
     pass
 
 from .config import (
-    default_db_path, is_production, runtime_mode, webhook_secret,
+    default_database_target,
+    is_production,
+    live_lending_enabled,
+    runtime_mode,
+    webhook_secret,
 )
 from .api.auth import authenticate, configured_users, is_allowed
 from .api.cases import (
@@ -41,10 +50,54 @@ from .api.cases import (
     record_submission_metadata as _case_record_submission_metadata,
     validate_submission_metadata as _case_validate_submission_metadata,
 )
+from .store import connect_database
 
 # Set by main() before server starts
 DB_PATH: str = ""
 SHADOW_INTAKE_PATH = Path(__file__).with_name("shadow_intake.html")
+CONSENT_PAGE_PATH = Path(__file__).with_name("consent.html")
+_RATE_WINDOWS: dict[str, tuple[float, int]] = {}
+_RATE_LOCK = threading.Lock()
+
+
+class OlinHTTPServer(HTTPServer):
+    """Bounded worker-pool server for the pilot deployment."""
+
+    request_queue_size = 128
+
+    def __init__(self, *args, **kwargs):
+        try:
+            workers = int(os.getenv("OLIN_MAX_REQUEST_WORKERS", "16"))
+        except ValueError:
+            workers = 16
+        self.max_request_workers = max(4, min(64, workers))
+        self._pending_slots = threading.BoundedSemaphore(self.request_queue_size)
+        self._executor = ThreadPoolExecutor(
+            max_workers=self.max_request_workers, thread_name_prefix="olin-http"
+        )
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address):
+        self._pending_slots.acquire()
+        try:
+            self._executor.submit(self._process_request, request, client_address)
+        except BaseException:
+            self._pending_slots.release()
+            raise
+
+    def _process_request(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
+            self._pending_slots.release()
+
+    def server_close(self):
+        super().server_close()
+        self._executor.shutdown(wait=True, cancel_futures=False)
+
 
 # ---------------------------------------------------------------------------
 # Embedded HTML page
@@ -499,6 +552,15 @@ main{max-width:1440px;margin:0 auto;padding:24px}
 .source-pill.verified{color:var(--green-hi);border-color:rgba(35,134,54,.55);background:rgba(35,134,54,.1)}
 .source-pill.synthetic{color:var(--amber-hi);border-color:rgba(154,103,0,.55);background:rgba(154,103,0,.1)}
 .decision-rationale{font-size:11px;color:var(--muted);margin-left:auto;max-width:52ch;text-align:right}
+.evidence-matrix{padding:14px 20px;border-top:1px solid var(--border);background:rgba(255,255,255,.008)}
+.evidence-matrix h3{font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.evidence-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.evidence-layer{border:1px solid var(--border);border-radius:7px;padding:9px 10px;min-width:0}
+.evidence-layer strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evidence-layer span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.evidence-layer.verified{border-color:rgba(35,134,54,.55);background:rgba(35,134,54,.08)}
+.evidence-layer.available{border-color:rgba(154,103,0,.55);background:rgba(154,103,0,.08)}
+@media(max-width:800px){.evidence-grid{grid-template-columns:1fr 1fr}}
 
 /* ── Accessible input modal ───────────────────────────────────────── */
 .input-modal{
@@ -605,8 +667,28 @@ const OUTCOME_LABELS = {
 const SOURCE_LABELS = {
   partner_api:'API del socio',
   distributor_export:'archivo del distribuidor',
+  google_places:'Google Places',
+  manual_control:'control manual',
+  circulo:'Círculo de Crédito',
   synthetic:'escenario sintético',
   missing:'sin datos',
+};
+const BUSINESS_TYPE_LABELS = {
+  abarrotes:'Tienda de abarrotes',
+  jugueria:'Juguería',
+  taqueria:'Taquería',
+  restaurant:'Restaurante',
+  retail:'Comercio',
+  services:'Servicios locales',
+  health_beauty:'Salud y belleza',
+  professional:'Servicios profesionales',
+  transport:'Transporte y logística',
+  light_manufacturing:'Manufactura ligera',
+  other:'Otro pequeño negocio',
+};
+const CASE_MODE_LABELS = {
+  shadow:'piloto sin desembolso',
+  live:'modo real',
 };
 
 function localizeText(value) {
@@ -701,7 +783,7 @@ function localizeText(value) {
 
 let allApps = [];
 let activeFilter = 'all';
-let selectedAppId = null;
+let selectedAppId = new URLSearchParams(window.location.search).get('case');
 let modalResolve = null;
 let modalMinLength = 0;
 let modalPreviousFocus = null;
@@ -762,10 +844,22 @@ document.getElementById('input-modal').addEventListener('keydown', event => {
   if (event.key === 'Escape') closeInputModal(null);
 });
 
+// Access tokens deliberately live only in page memory. A refresh signs out.
+let accessToken = '';
+
+async function exchangeAccessToken(bootstrapToken) {
+  const response = await fetch('/api/v1/auth/sessions', {
+    method:'POST',
+    headers:{'Authorization':`Bearer ${bootstrapToken}`},
+  });
+  if (!response.ok) return '';
+  const payload = await response.json();
+  return payload?.data?.access_token || '';
+}
+
 async function apiFetch(url, options={}) {
   const headers = new Headers(options.headers || {});
-  const token = sessionStorage.getItem('olin_analyst_token') || '';
-  if (token) headers.set('X-Olin-Analyst-Token', token);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   let response = await fetch(url, {...options, headers});
   if (response.status === 401) {
     const supplied = await openInputModal({
@@ -775,9 +869,11 @@ async function apiFetch(url, options={}) {
       minLength:1,
     });
     if (supplied) {
-      sessionStorage.setItem('olin_analyst_token', supplied.trim());
-      headers.set('X-Olin-Analyst-Token', supplied.trim());
-      response = await fetch(url, {...options, headers});
+      accessToken = await exchangeAccessToken(supplied.trim());
+      if (accessToken) {
+        headers.set('Authorization', `Bearer ${accessToken}`);
+        response = await fetch(url, {...options, headers});
+      }
     }
   }
   return response;
@@ -797,10 +893,13 @@ async function load() {
       // Keep the case-derived fallback if the uptime endpoint is unavailable.
     }
     const banner = document.getElementById('mode-banner');
-    banner.className = `mode-banner ${mode === 'production' ? 'production' : 'demo'}`;
-    banner.textContent = mode === 'production'
-      ? 'PILOTO SOMBRA · evidencia verificada obligatoria · sin movimiento de dinero'
-      : 'DEMOSTRACIÓN SINTÉTICA · datos ficticios · sin movimiento de dinero';
+    const controlled = mode === 'pilot' || mode === 'production';
+    banner.className = `mode-banner ${controlled ? 'production' : 'demo'}`;
+    banner.textContent = mode === 'pilot'
+      ? 'PILOTO CON EVIDENCIA REAL · sin movimiento de dinero'
+      : mode === 'production'
+        ? 'PRODUCCIÓN · evidencia verificada obligatoria'
+        : 'DEMOSTRACIÓN SINTÉTICA · datos ficticios · sin movimiento de dinero';
     renderFilterBar();
     renderGrid();
     renderPortfolioBar();
@@ -882,6 +981,9 @@ function renderGrid() {
 
 function selectCase(applicationId) {
   selectedAppId = applicationId;
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.set('case', applicationId);
+  window.history.replaceState({}, '', nextUrl);
   renderGrid();
 }
 
@@ -904,16 +1006,16 @@ function cardHtml(app) {
     <div>
       <div class="merchant-name">${esc(app.merchant_name)}</div>
       <div class="merchant-meta">
-        <span class="badge badge-type">${esc(app.business_type)}</span>
+        <span class="badge badge-type">${esc(BUSINESS_TYPE_LABELS[app.business_type] || app.business_type)}</span>
         ${app.colonia ? `<span class="colonia">${esc(app.colonia)}</span>` : ''}
         <span class="app-id">app ${app.application_id}</span>
         ${app.tier > 0 ? `<span class="tier-badge t${app.tier}" title="Nivel de la matriz Círculo × DSCR × score">Nivel ${app.tier}</span>` : ''}
         ${app.buro_score != null ? `<span class="badge badge-type" title="Círculo de Crédito score">Círculo ${app.buro_score}</span>` : ''}
         ${app.graduation_tier > 0 ? `<span class="grad-badge">Grad ${app.graduation_tier}</span>` : ''}
-        ${app.case_mode ? `<span class="source-pill verified">${esc(app.case_mode)}</span>` : ''}
+        ${app.case_mode ? `<span class="source-pill verified">${esc(CASE_MODE_LABELS[app.case_mode] || app.case_mode)}</span>` : ''}
         ${app.cohort_id ? `<span class="source-pill">${esc(app.cohort_id)}</span>` : ''}
         ${app.consent_timestamp ? `<span class="source-pill verified">Consentimiento registrado</span>` : `<span class="source-pill synthetic">Falta consentimiento</span>`}
-        ${app.is_demo ? `<span class="source-pill synthetic">DATOS DE DEMO</span>` : `<span class="source-pill verified">PRODUCCIÓN</span>`}
+        ${app.is_demo ? `<span class="source-pill synthetic">ENTORNO NO PRODUCTIVO</span>` : `<span class="source-pill verified">ENTORNO CONTROLADO</span>`}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
@@ -986,6 +1088,8 @@ function cardHtml(app) {
 
   ${provenanceHtml(app)}
 
+  ${evidenceMatrixHtml(app)}
+
   ${sensitivityHintsHtml(app)}
 
   ${fraudHtml(app.fraud_assessment)}
@@ -1053,6 +1157,20 @@ function provenanceHtml(app) {
     ${pill('Compras', src.fmcg, src.fmcg_verified)}
     <span class="source-pill">Estado: ${esc(OUTCOME_LABELS[app.outcome_status] || app.outcome_status || 'sin desembolso')}</span>
     ${rationale}
+  </div>`;
+}
+
+function evidenceMatrixHtml(app) {
+  const layers = app.evidence_layers || [];
+  if (!layers.length) return '';
+  const labels = {verified:'verificada', available:'disponible, por verificar', missing:'faltante'};
+  return `<div class="evidence-matrix">
+    <h3>Seis capas de evidencia</h3>
+    <div class="evidence-grid">${layers.map(layer => `
+      <div class="evidence-layer ${esc(layer.status)}">
+        <strong>${esc(layer.label)}</strong>
+        <span>${esc(labels[layer.status] || layer.status)} · ${esc(SOURCE_LABELS[layer.source] || layer.source || 'sin fuente')}</span>
+      </div>`).join('')}</div>
   </div>`;
 }
 
@@ -1285,10 +1403,10 @@ async function renderPortfolioBar() {
     const bank = Boolean(a.data_sources?.bank_verified);
     const supplier = Boolean(a.data_sources?.fmcg_verified);
     const pos = Boolean(a.data_sources?.pos_verified);
-    if (route === 'inventory_led') return bank && supplier;
-    if (route === 'tpv_led') return bank && pos;
+    if (route === 'inventory_led') return supplier;
+    if (route === 'tpv_led') return pos;
     if (route === 'bank_flow_led') return bank;
-    return bank && (supplier || pos);
+    return [bank, supplier, pos].filter(Boolean).length >= 2;
   }).length;
   const comparable = allApps.filter(a => a.recommendation_agreement !== null && a.recommendation_agreement !== undefined);
   const agreements = comparable.filter(a => Number(a.recommendation_agreement) === 1).length;
@@ -2198,7 +2316,10 @@ def _format_score_result(app, result) -> dict:
         ],
         "scored_at": result.scored_at,
         "engine_version": result.engine_version,
-        "analyst_ui": "http://localhost:8080",
+        # Keep investor-MVP navigation deployment-agnostic. The analyst
+        # workspace is served by the same origin as this API.
+        "analyst_ui": "/",
+        "case_path": f"/api/applications/{result.application_id}",
     }
 
 
@@ -2282,6 +2403,37 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # silence access log
 
+    def _request_id(self) -> str:
+        current = getattr(self, "request_id", "")
+        if current:
+            return current
+        supplied = str(getattr(self, "headers", {}).get("X-Request-ID", "")).strip()
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", supplied):
+            supplied = uuid4().hex
+        self.request_id = supplied
+        self.request_started_monotonic = time.monotonic()
+        return supplied
+
+    def end_headers(self):
+        self.send_header("X-Request-ID", self._request_id())
+        super().end_headers()
+
+    def _waitlist_cors_origin(self) -> str:
+        origin = self.headers.get("Origin", "").strip().rstrip("/")
+        if not origin:
+            return ""
+        configured = {
+            item.strip().rstrip("/")
+            for item in os.getenv(
+                "OLIN_WAITLIST_ALLOWED_ORIGINS",
+                "https://olin-credit.olin-mx.workers.dev",
+            ).split(",")
+            if item.strip()
+        }
+        if not is_production():
+            configured.update({"http://127.0.0.1:8001", "http://localhost:8001"})
+        return origin if origin in configured else ""
+
     def _send(self, body: bytes, ctype: str = "text/html; charset=utf-8", status: int = 200):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
@@ -2289,17 +2441,97 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        is_public_waitlist = urlparse(self.path).path.rstrip("/") == "/api/v1/waitlist"
+        self.send_header(
+            "Cross-Origin-Resource-Policy",
+            "cross-origin" if is_public_waitlist else "same-origin",
+        )
+        if is_public_waitlist:
+            allowed_origin = self._waitlist_cors_origin()
+            if allowed_origin:
+                self.send_header("Access-Control-Allow-Origin", allowed_origin)
+                self.send_header("Vary", "Origin")
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
-            "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+            "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; "
+            "base-uri 'none'; object-src 'none'; form-action 'self'",
         )
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        finally:
+            started = getattr(self, "request_started_monotonic", time.monotonic())
+            event = {
+                "event": "http_request",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "request_id": self._request_id(),
+                "method": getattr(self, "command", ""),
+                "path": urlparse(getattr(self, "path", "/")).path,
+                "status": status,
+                "response_bytes": len(body),
+                "duration_ms": round((time.monotonic() - started) * 1000, 2),
+                "actor": getattr(self, "auth_actor", None),
+                "role": getattr(self, "auth_role", None),
+                "mode": runtime_mode(),
+            }
+            print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+    def do_OPTIONS(self):
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path != "/api/v1/waitlist" or not self._waitlist_cors_origin():
+            self._json({"error": "not found"}, 404)
+            return
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", self._waitlist_cors_origin())
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Request-ID")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Vary", "Origin")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _json(self, data, status: int = 200):
         body = json.dumps(data, ensure_ascii=False, default=str).encode()
         self._send(body, "application/json; charset=utf-8", status)
+
+    def _api_error(self, code: str, message: str, status: int, **details):
+        error = {
+            "code": code,
+            "message": message,
+            "request_id": self._request_id(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if details:
+            error["details"] = details
+        self._json({"error": error}, status)
+
+    def _rate_limited(self) -> bool:
+        """Small single-node guard; deploy behind a gateway for distributed limits."""
+        if not is_production():
+            return False
+        try:
+            limit = max(10, min(10_000, int(os.getenv("OLIN_RATE_LIMIT_PER_MINUTE", "120"))))
+        except ValueError:
+            limit = 120
+        key = str(self.client_address[0] if self.client_address else "unknown")
+        now = time.monotonic()
+        with _RATE_LOCK:
+            started, count = _RATE_WINDOWS.get(key, (now, 0))
+            if now - started >= 60:
+                started, count = now, 0
+            count += 1
+            _RATE_WINDOWS[key] = (started, count)
+            if len(_RATE_WINDOWS) > 10_000:
+                expired = [item for item, value in _RATE_WINDOWS.items() if now - value[0] >= 60]
+                for item in expired:
+                    _RATE_WINDOWS.pop(item, None)
+        if count > limit:
+            self._api_error("RATE_LIMITED", "Too many requests; retry later", 429)
+            return True
+        return False
 
     def _require_permission(self, permission: str) -> bool:
         try:
@@ -2338,7 +2570,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "invalid Content-Length"}, 400)
             return None, b""
         if length <= 0 or length > max_bytes:
-            self._json({"error": "request body must be between 1 byte and 64 KB"}, 413)
+            self._json({
+                "error": f"request body must be between 1 byte and {max_bytes} bytes"
+            }, 413)
             return None, b""
         raw = self.rfile.read(length)
         try:
@@ -2374,6 +2608,56 @@ class Handler(BaseHTTPRequestHandler):
             # checks without exposing the analyst API or database contents.
             self._json({"ok": True, "service": "olin", "mode": runtime_mode()})
             return
+        if path == "/readyz":
+            from .readiness import readiness
+
+            result = readiness(DB_PATH)
+            self._json(result, 200 if result["ok"] else 503)
+            return
+        if self._rate_limited():
+            return
+        if path == "/api/v1/waitlist":
+            from .waitlist import WaitlistStore
+
+            try:
+                with WaitlistStore(DB_PATH) as waitlist:
+                    count = waitlist.public_count()
+            except RuntimeError as exc:
+                self._api_error("WAITLIST_UNAVAILABLE", str(exc), 503)
+                return
+            self._json({
+                "data": {
+                    "applications_received": count,
+                    "founding_program_capacity": 10,
+                    "count_definition": "active design-partner applications received",
+                }
+            })
+            return
+        if path == "/api/v1/waitlist/leads":
+            if not self._require_permission("waitlist:manage"):
+                return
+            from .waitlist import WaitlistStore
+
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(query.get("limit", [200])[0])
+            except (TypeError, ValueError):
+                self._api_error("VALIDATION_ERROR", "limit must be an integer", 422)
+                return
+            try:
+                with WaitlistStore(DB_PATH) as waitlist:
+                    leads = waitlist.list_entries(limit)
+            except RuntimeError as exc:
+                self._api_error("WAITLIST_UNAVAILABLE", str(exc), 503)
+                return
+            self._json({"data": leads, "meta": {"returned": len(leads)}})
+            return
+        if path == "/api/v1/consent-policies":
+            if not self._require_permission("intake:consent"):
+                return
+            from .consent_flow import list_policies
+            self._json({"data": list_policies(DB_PATH, owner_actor=self.auth_actor)})
+            return
         if path == "/solicitar" or path.startswith("/solicitar/"):
             self._json({
                 "error": "Public merchant origination is disabled. "
@@ -2396,6 +2680,67 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 self._json({"error": "shadow intake page is unavailable"}, 503)
             return
+        if path == "/consentir":
+            try:
+                self._send(CONSENT_PAGE_PATH.read_bytes())
+            except OSError:
+                self._json({"error": "consent page is unavailable"}, 503)
+            return
+        case_parts = path.strip("/").split("/")
+        if (len(case_parts) == 7 and case_parts[:3] == ["api", "v1", "intakes"]
+                and case_parts[4] == "consents" and case_parts[6] == "receipt"):
+            if not self._require_permission("intake:read"):
+                return
+            try:
+                from .consent_flow import get_receipt
+                receipt = get_receipt(
+                    DB_PATH, intake_id=case_parts[3], consent_id=case_parts[5],
+                    owner_actor=self.auth_actor,
+                )
+            except LookupError:
+                self._json({"error": "not found"}, 404)
+                return
+            except RuntimeError as exc:
+                self._api_error("CONSENT_RECEIPT_INTEGRITY_ERROR", str(exc), 500)
+                return
+            self._json({"data": receipt})
+            return
+        if len(case_parts) == 4 and case_parts[:3] == ["api", "v1", "intakes"]:
+            if not self._require_permission("intake:read"):
+                return
+            from .intakes import get_intake
+
+            intake = get_intake(
+                DB_PATH, case_parts[3],
+                self.auth_actor if self.auth_role == "partner" else None,
+            )
+            if intake is None:
+                self._json({"error": "not found"}, 404)
+            else:
+                self._json({"data": intake})
+            return
+        if (len(case_parts) == 5 and case_parts[:3] == ["api", "v1", "cases"]
+                and case_parts[4] in ("consents", "corrections", "bank-evidence", "performance-events")):
+            if not self._require_permission("case:read"):
+                return
+            app_id = case_parts[3]
+            if self.auth_role == "partner" and get_case(
+                DB_PATH, app_id, owner_actor=self.auth_actor
+            ) is None:
+                self._json({"error": "not found"}, 404)
+                return
+            from .store import ScoringLog
+            with ScoringLog(DB_PATH) as sl:
+                if case_parts[4] == "consents":
+                    data = sl.list_consents(app_id)
+                elif case_parts[4] == "corrections":
+                    data = sl.list_corrections(app_id)
+                elif case_parts[4] == "performance-events":
+                    data = sl.list_shadow_performance(app_id)
+                else:
+                    data = sl.list_bank_evidence(app_id)
+            self._json({"data": data})
+            return
         if path == "/api/apps":
             if not self._require_permission("case:read"):
                 return
@@ -2403,6 +2748,133 @@ class Handler(BaseHTTPRequestHandler):
                 self.auth_actor if self.auth_role == "partner" else None
             )
             self._json(list_cases(DB_PATH, owner_actor=owner_actor))
+        elif path == "/api/v1/signals/catalog":
+            if not self._require_permission("case:read"):
+                return
+            from .signal_architecture import signal_catalog
+            query = parse_qs(urlparse(self.path).query)
+            filter_text = str(query.get("filter", [""])[0]).strip()
+            try:
+                offset = max(0, int(query.get("offset", [0])[0]))
+                limit = max(1, min(28, int(query.get("limit", [28])[0])))
+            except (TypeError, ValueError):
+                self._api_error("VALIDATION_ERROR", "limit and offset must be integers", 422)
+                return
+            self._json({"data": signal_catalog(filter_text, limit, offset)})
+        elif path == "/api/v1/business-policies":
+            if not self._require_permission("case:read"):
+                return
+            from .business_segments import business_policy_catalog
+            policies = business_policy_catalog()
+            self._json({
+                "data": policies,
+                "meta": {
+                    "business_type_count": len(policies),
+                    "decision_scope": "bank_policy_and_committee_routing",
+                    "calibration_status": "committee_only_until_model_risk_registry_approval",
+                },
+            })
+        elif path == "/api/v1/evidence-passport":
+            if not self._require_permission("evidence:guide"):
+                return
+            from .evidence_passport import evidence_catalog
+            self._json({"data": evidence_catalog()})
+        elif path == "/api/v1/validation-readiness":
+            if not self._require_permission("portfolio:read"):
+                return
+            from .historical_validation import validation_readiness
+            self._json({"data": validation_readiness(DB_PATH)})
+        elif path == "/api/v1/operations/control-room":
+            if not self._require_permission("operations:read"):
+                return
+            from .operations import control_room
+            self._json({"data": control_room(DB_PATH)})
+        elif path == "/api/v1/providers":
+            if not self._require_permission("case:create"):
+                return
+            query = parse_qs(urlparse(self.path).query)
+            provider_filter = str(query.get("filter", [""])[0]).strip().lower()
+            try:
+                offset = max(0, int(query.get("offset", [0])[0]))
+                limit = max(1, min(20, int(query.get("limit", [20])[0])))
+            except (TypeError, ValueError):
+                self._api_error(
+                    "VALIDATION_ERROR",
+                    "limit and offset must be integers",
+                    422,
+                )
+                return
+            providers = [
+                    {
+                        "id": "google-places",
+                        "configured": bool(os.getenv("GOOGLE_PLACES_API_KEY", "").strip()),
+                        "mode": "live-lookup",
+                        "actionUrl": "https://developers.google.com/maps/documentation/places/web-service",
+                    },
+                    {
+                        "id": "inegi-denue",
+                        "configured": bool(os.getenv("INEGI_DENUE_TOKEN", "").strip()),
+                        "mode": "public-registry",
+                        "actionUrl": "https://www.inegi.org.mx/servicios/api_denue.html",
+                    },
+                    {
+                        "id": "olin-geointelligence",
+                        "configured": bool(os.getenv("INEGI_DENUE_TOKEN", "").strip()),
+                        "mode": "denue-radius-analysis-and-snapshots",
+                        "decisionUse": "context-only",
+                        "blockingReason": (
+                            None if os.getenv("INEGI_DENUE_TOKEN", "").strip()
+                            else "INEGI_DENUE_TOKEN is required"
+                        ),
+                        "actionUrl": "https://www.inegi.org.mx/servicios/api_denue.html",
+                    },
+                    {
+                        "id": "syncfy",
+                        "configured": bool(os.getenv("SYNCFY_API_KEY", "").strip()),
+                        "mode": "connector-backend-only",
+                        "interactiveLinkingReady": False,
+                        "blockingReason": "Syncfy Widget must be enabled and approved for the merchant consent flow",
+                        "actionUrl": "https://syncfy.com/es/products/opendata/",
+                    },
+                    {
+                        "id": "circulo-de-credito",
+                        "configured": False,
+                        "mode": "partner-result-only",
+                        "blockingReason": "Sandbox account, commercial affiliation and express-consent workflow required",
+                        "actionUrl": "https://developer.circulodecredito.com.mx/",
+                    },
+                    {
+                        "id": "open-meteo",
+                        "configured": True,
+                        "mode": "public-weather-context",
+                        "decisionUse": "sector-context-only",
+                        "actionUrl": "https://open-meteo.com/en/docs/historical-weather-api",
+                    },
+                    {
+                        "id": "inegi-price-indices",
+                        "configured": False,
+                        "mode": "public-series-adapter-required",
+                        "blockingReason": "The bank must select and version the price series relevant to each sector",
+                        "actionUrl": "https://www.inegi.org.mx/servicios/api_indicadores.html",
+                    },
+                    {
+                        "id": "viirs-night-lights",
+                        "configured": False,
+                        "mode": "public-dataset-pipeline-required",
+                        "blockingReason": "No production tile ingestion and versioned baseline pipeline is configured",
+                        "actionUrl": "https://blackmarble.gsfc.nasa.gov/",
+                    },
+                ]
+            if provider_filter:
+                providers = [
+                    item for item in providers
+                    if provider_filter in str(item["id"]).lower()
+                ]
+            total = len(providers)
+            self._json({
+                "data": providers[offset:offset + limit],
+                "meta": {"total": total, "limit": limit, "offset": offset},
+            })
         elif path.startswith("/api/applications/"):
             if not self._require_permission("case:read"):
                 return
@@ -2412,7 +2884,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             case = get_case(DB_PATH, app_id, owner_actor=owner_actor)
             if case is None:
-                self._json({"error": "not found"}, 404)
+                self._api_error("CASE_NOT_FOUND", "Case not found", 404)
             else:
                 self._json(case)
         elif path == "/api/portfolio":
@@ -2468,12 +2940,102 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self._rate_limited():
+            return
         parts = urlparse(self.path).path.strip("/").split("/")
+
+        if parts == ["api", "v1", "auth", "sessions"]:
+            from .api.auth import issue_session
+
+            try:
+                result = issue_session(self.headers)
+            except PermissionError:
+                self._api_error("AUTHENTICATION_FAILED", "Invalid named credential", 401)
+                return
+            except RuntimeError as exc:
+                self._api_error("AUTHENTICATION_UNAVAILABLE", str(exc), 503)
+                return
+            self._json({"data": result}, 201)
+            return
+
+        if parts == ["api", "v1", "waitlist"]:
+            from .waitlist import WaitlistStore, is_honeypot_submission, parse_submission
+
+            body, _ = self._read_json(max_bytes=8_192)
+            if body is None:
+                return
+            # Bots receive the same generic response without creating a lead.
+            if is_honeypot_submission(body):
+                self._json({"data": {"status": "received"}}, 202)
+                return
+            try:
+                submission = parse_submission(body)
+                with WaitlistStore(DB_PATH) as waitlist:
+                    _, count = waitlist.submit(submission)
+                    referral_code = waitlist.last_referral_code
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            except RuntimeError as exc:
+                self._api_error("WAITLIST_UNAVAILABLE", str(exc), 503)
+                return
+            self._json({
+                "data": {
+                    "status": "received",
+                    "applications_received": count,
+                    "referral_code": referral_code,
+                    "referral_program": {
+                        "share_url": (
+                            f"{os.getenv('OLIN_PUBLIC_SITE_URL', 'https://olin-credit.olin-mx.workers.dev')}/lista-espera/?ref={referral_code}"
+                            if referral_code else None
+                        ),
+                        "message": "Comparte tu enlace: una recomendación calificada te da prioridad de revisión.",
+                    },
+                    "next_step": "Olin will review fit and contact selected teams by email.",
+                }
+            }, 202)
+            return
+
+        if (len(parts) == 6 and parts[:4] == [
+            "api", "v1", "public", "consent-challenges"
+        ] and parts[5] in {"view", "verify"}):
+            body, _ = self._read_json(max_bytes=4_096)
+            if body is None:
+                return
+            try:
+                if parts[5] == "view":
+                    from .consent_flow import get_public_challenge
+                    result = get_public_challenge(
+                        DB_PATH, challenge_id=parts[4],
+                        access_token=str(body.get("access_token", "")),
+                    )
+                    status = 200
+                else:
+                    from .consent_flow import verify_public_challenge
+                    result = verify_public_challenge(
+                        DB_PATH, challenge_id=parts[4],
+                        access_token=str(body.get("access_token", "")),
+                        otp=str(body.get("otp", "")),
+                        accepted=body.get("accepted") is True,
+                    )
+                    status = 201
+            except (LookupError, PermissionError):
+                self._api_error(
+                    "CONSENT_LINK_REJECTED", "Consent link or code is invalid", 403,
+                )
+                return
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, status)
+            return
 
         is_webhook = (
             len(parts) == 3 and parts[0] == "api"
             and parts[1] == "webhook" and parts[2] == "stp"
         )
+        is_bank_webhook = parts == ["api", "v1", "webhooks", "bank-evidence"]
+        is_link_exchange = parts == ["api", "v1", "link-sessions", "exchange"]
         is_apply = parts == ["solicitar"]
         if is_apply:
             self._json({
@@ -2481,9 +3043,35 @@ class Handler(BaseHTTPRequestHandler):
                          "Cases must be created by an authenticated pilot partner."
             }, 410)
             return
-        if not is_webhook:
+        if not is_webhook and not is_bank_webhook and not is_link_exchange:
             permission = "case:read"
             if parts == ["api", "applications"]:
+                permission = "case:create"
+            elif parts == ["api", "v1", "intakes"]:
+                permission = "intake:create"
+            elif parts == ["api", "v1", "evidence-passport", "assessments"]:
+                permission = "evidence:guide"
+            elif len(parts) == 5 and parts[:3] == ["api", "v1", "intakes"]:
+                permission = {
+                    "consents": "intake:consent",
+                    "consent-challenges": "intake:consent",
+                    "link-sessions": "intake:link",
+                    "score": "intake:score",
+                }.get(parts[4], "intake:read")
+            elif (len(parts) == 7 and parts[:3] == ["api", "v1", "intakes"]
+                  and parts[4] == "consents" and parts[6] == "withdraw"):
+                permission = "intake:consent"
+            elif (len(parts) == 7 and parts[:3] == ["api", "v1", "intakes"]
+                  and parts[4] == "consent-challenges" and parts[6] == "verify"):
+                permission = "intake:consent"
+            elif parts in (
+                ["api", "evidence", "google-places"],
+                ["api", "v1", "evidence", "google-places", "lookups"],
+                ["api", "v1", "evidence", "denue", "lookups"],
+                ["api", "v1", "evidence", "geointelligence", "analyses"],
+                ["api", "v1", "evidence", "bank-statements", "analyses"],
+                ["api", "v1", "evidence", "weather", "analyses"],
+            ):
                 permission = "case:create"
             elif len(parts) == 4 and parts[:2] == ["api", "apps"]:
                 permission = {
@@ -2492,13 +3080,456 @@ class Handler(BaseHTTPRequestHandler):
                     "decision": "case:analyst_action",
                     "disburse": "money:disburse",
                 }.get(parts[3], "case:read")
+            elif len(parts) >= 5 and parts[:3] == ["api", "v1", "cases"]:
+                if parts[4] == "performance-events":
+                    permission = "case:performance"
+                elif parts[4] == "consents":
+                    permission = "case:consent"
+                elif parts[4] == "corrections":
+                    permission = (
+                        "case:correction:resolve"
+                        if len(parts) == 7 and parts[6] == "resolve"
+                        else "case:correction:create"
+                    )
             if not self._require_permission(permission):
                 return
+
+        if parts == ["api", "v1", "evidence-passport", "assessments"]:
+            body, _raw = self._read_json(max_bytes=16_384)
+            if body is None:
+                return
+            allowed = {"application_id", "evidence_ids", "legal_form"}
+            unexpected = sorted(set(body) - allowed)
+            if unexpected:
+                self._api_error(
+                    "VALIDATION_ERROR",
+                    "unexpected fields: " + ", ".join(unexpected),
+                    422,
+                )
+                return
+            evidence_ids = body.get("evidence_ids", [])
+            if not isinstance(evidence_ids, list) or not evidence_ids or len(evidence_ids) > 100:
+                self._api_error(
+                    "VALIDATION_ERROR",
+                    "evidence_ids must be a list with between 1 and 100 items",
+                    422,
+                )
+                return
+            try:
+                from .evidence_passport import assess_case_evidence_passport
+                result = assess_case_evidence_passport(
+                    DB_PATH,
+                    application_id=str(body.get("application_id", "")).strip(),
+                    evidence_ids=evidence_ids,
+                    legal_form=str(body.get("legal_form", "")),
+                    owner_actor=self.auth_actor if self.auth_role == "partner" else None,
+                )
+            except LookupError:
+                self._api_error("NOT_FOUND", "Application not found", 404)
+                return
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 200)
+            return
+
+        if is_bank_webhook:
+            body, raw = self._read_json(max_bytes=32_768)
+            if body is None:
+                return
+            try:
+                from .bank_ingestion import (
+                    IdempotencyConflict,
+                    ingest_verified_metrics,
+                    provider_webhook_secrets,
+                )
+                secrets = provider_webhook_secrets(
+                    str(body.get("provider", "")),
+                    os.getenv("OLIN_BANK_WEBHOOK_SECRET", ""),
+                )
+                result = ingest_verified_metrics(
+                    DB_PATH, body, raw, self.headers.get("X-Olin-Signature", ""),
+                    secrets,
+                )
+            except RuntimeError as exc:
+                self._api_error("WEBHOOK_CONFIGURATION_ERROR", str(exc), 503)
+                return
+            except IdempotencyConflict as exc:
+                self._api_error("IDEMPOTENCY_CONFLICT", str(exc), 409)
+                return
+            except PermissionError as exc:
+                self._api_error("UNAUTHORIZED_EVIDENCE", str(exc), 401)
+                return
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 200 if result.get("duplicate") else 201)
+            return
+
+        if is_link_exchange:
+            body, _ = self._read_json(max_bytes=4_096)
+            if body is None:
+                return
+            try:
+                from .intakes import exchange_link_token
+                result = exchange_link_token(DB_PATH, str(body.get("client_token", "")))
+            except PermissionError as exc:
+                self._api_error("INVALID_LINK_SESSION", str(exc), 401)
+                return
+            self._json({"data": result}, 200)
+            return
+
+        if parts == ["api", "v1", "intakes"]:
+            body, _ = self._read_json(max_bytes=8_192)
+            if body is None:
+                return
+            try:
+                from .intakes import create_intake
+                result = create_intake(DB_PATH, body, self.auth_actor)
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 201)
+            return
+
+        if len(parts) == 5 and parts[:3] == ["api", "v1", "intakes"]:
+            intake_id, action = parts[3], parts[4]
+            body, _ = self._read_json(max_bytes=65_536)
+            if body is None:
+                return
+            try:
+                if action == "consents":
+                    from .intakes import record_consent
+                    result = record_consent(DB_PATH, intake_id, body, self.auth_actor)
+                elif action == "consent-challenges":
+                    from .consent_flow import issue_challenge
+                    result = issue_challenge(
+                        DB_PATH, intake_id=intake_id, owner_actor=self.auth_actor,
+                        policy_id=str(body.get("policy_id", "")),
+                        channel=str(body.get("channel", "")),
+                        destination=str(body.get("destination", "")),
+                        identity_binding_id=str(body.get("identity_binding_id", "")),
+                        authority_binding_id=str(body.get("authority_binding_id", "")),
+                        ttl_minutes=int(body.get("ttl_minutes", 5)),
+                    )
+                elif action == "link-sessions":
+                    from .intakes import create_link_session
+                    result = create_link_session(
+                        DB_PATH, intake_id, str(body.get("provider", "")), self.auth_actor,
+                        int(body.get("ttl_minutes", 15)),
+                    )
+                elif action == "score":
+                    from .intakes import score_intake
+                    result = score_intake(DB_PATH, intake_id, body, self.auth_actor)
+                else:
+                    self._json({"error": "not found"}, 404)
+                    return
+            except LookupError as exc:
+                self._json({"error": str(exc)}, 404)
+                return
+            except PermissionError as exc:
+                self._api_error("CONSENT_NOT_AUTHORIZED", str(exc), 403)
+                return
+            except RuntimeError as exc:
+                self._api_error("CONSENT_PROVIDER_UNAVAILABLE", str(exc), 503)
+                return
+            except (TypeError, ValueError) as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 201)
+            return
+
+        if (len(parts) == 7 and parts[:3] == ["api", "v1", "intakes"]
+                and parts[4] == "consent-challenges" and parts[6] == "verify"):
+            body, _ = self._read_json(max_bytes=4_096)
+            if body is None:
+                return
+            try:
+                from .consent_flow import verify_challenge
+                result = verify_challenge(
+                    DB_PATH, intake_id=parts[3], challenge_id=parts[5],
+                    otp=str(body.get("otp", "")), owner_actor=self.auth_actor,
+                )
+            except LookupError as exc:
+                self._json({"error": str(exc)}, 404)
+                return
+            except PermissionError as exc:
+                self._api_error("CONSENT_CHALLENGE_REJECTED", str(exc), 403)
+                return
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 201)
+            return
+
+        if (len(parts) == 7 and parts[:3] == ["api", "v1", "intakes"]
+                and parts[4] == "consents" and parts[6] == "withdraw"):
+            body, _ = self._read_json(max_bytes=4_096)
+            if body is None:
+                return
+            try:
+                from .intakes import withdraw_consent
+                result = withdraw_consent(
+                    DB_PATH, parts[3], parts[5], str(body.get("reason", "")),
+                    self.auth_actor,
+                )
+            except LookupError as exc:
+                self._json({"error": str(exc)}, 404)
+                return
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 201)
+            return
+
+        # Corrections are separate workflow records. Accepted requests flag a
+        # re-score; this endpoint never rewrites the original scored evidence.
+        if len(parts) >= 5 and parts[:3] == ["api", "v1", "cases"]:
+            app_id = parts[3]
+            if self.auth_role == "partner" and get_case(
+                DB_PATH, app_id, owner_actor=self.auth_actor
+            ) is None:
+                self._json({"error": "not found"}, 404)
+                return
+            body, _ = self._read_json(max_bytes=16_384)
+            if body is None:
+                return
+            try:
+                from .store import ScoringLog
+                with ScoringLog(DB_PATH) as sl:
+                    if parts[4] == "consents" and len(parts) == 5:
+                        if is_production() and os.getenv(
+                            "OLIN_ALLOW_LEGACY_CONSENT", ""
+                        ).strip() != "1":
+                            raise PermissionError(
+                                "Direct case consent is disabled; use the versioned intake challenge flow"
+                            )
+                        sl.record_consent(
+                            app_id, str(body.get("channel", "")),
+                            str(body.get("text", "")), actor=self.auth_actor,
+                            purpose=str(body.get("purpose", "credit_assessment")),
+                            policy_version=str(body.get("policy_version", "v1")),
+                        )
+                        result = sl.list_consents(app_id)[0]
+                    elif (parts[4] == "consents" and len(parts) == 7
+                          and parts[6] == "withdraw"):
+                        result = sl.withdraw_consent(
+                            app_id, parts[5], str(body.get("reason", "")), self.auth_actor
+                        )
+                    elif parts[4] == "corrections" and len(parts) == 5:
+                        result = sl.create_correction_request(
+                            app_id, body.get("field_path", ""), body.get("claimed_value"),
+                            body.get("reason", ""), self.auth_actor,
+                        )
+                    elif (parts[4] == "corrections" and len(parts) == 7
+                          and parts[6] == "resolve"):
+                        result = sl.resolve_correction_request(
+                            app_id, parts[5], body.get("status", ""),
+                            body.get("note", ""), self.auth_actor,
+                        )
+                    elif parts[4] == "performance-events" and len(parts) == 5:
+                        result = sl.record_shadow_performance(
+                            app_id, body, self.auth_actor
+                        )
+                    else:
+                        self._json({"error": "not found"}, 404)
+                        return
+            except LookupError as exc:
+                self._json({"error": str(exc)}, 404)
+                return
+            except PermissionError as exc:
+                self._api_error("CONSENT_NOT_AUTHORIZED", str(exc), 403)
+                return
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": result}, 201)
+            return
+
+        # POST /api/evidence/google-places — fetch public evidence server-side
+        # so the provider key is never exposed to the browser.
+        if parts in (
+            ["api", "evidence", "google-places"],
+            ["api", "v1", "evidence", "google-places", "lookups"],
+        ):
+            body, _ = self._read_json(max_bytes=4_096)
+            if body is None:
+                return
+            try:
+                from requests import RequestException
+                from .places import lookup_place
+
+                evidence = lookup_place(str(body.get("query", "")))
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            except EnvironmentError:
+                self._api_error(
+                    "PROVIDER_NOT_CONFIGURED",
+                    "Google Places is not configured",
+                    503,
+                    requiredEnvironment="GOOGLE_PLACES_API_KEY",
+                )
+                return
+            except RequestException:
+                self._api_error(
+                    "PROVIDER_UNAVAILABLE",
+                    "Google Places provider unavailable",
+                    502,
+                )
+                return
+            if evidence is None:
+                self._api_error(
+                    "NOT_FOUND",
+                    "Business not found in Google Places",
+                    404,
+                )
+                return
+            self._json(evidence)
+            return
+
+        # POST /api/v1/evidence/denue/lookups — persistent public registry data.
+        if parts == ["api", "v1", "evidence", "denue", "lookups"]:
+            body, _ = self._read_json(max_bytes=8_192)
+            if body is None:
+                return
+            try:
+                from requests import RequestException
+                from .denue import lookup_business
+
+                evidence = lookup_business(
+                    merchant_name=str(body.get("merchantName", "")),
+                    declared_address=str(body.get("declaredAddress", "")),
+                    latitude=float(body.get("latitude")),
+                    longitude=float(body.get("longitude")),
+                    radius_m=int(body.get("radiusM", 500)),
+                )
+            except (TypeError, ValueError) as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            except EnvironmentError:
+                self._api_error(
+                    "PROVIDER_NOT_CONFIGURED",
+                    "INEGI DENUE is not configured",
+                    503,
+                    requiredEnvironment="INEGI_DENUE_TOKEN",
+                )
+                return
+            except RequestException:
+                self._api_error("PROVIDER_UNAVAILABLE", "INEGI DENUE is unavailable", 502)
+                return
+            if evidence is None:
+                self._api_error("NOT_FOUND", "No nearby DENUE establishment found", 404)
+                return
+            self._json({"data": evidence}, 201)
+            return
+
+        # POST /api/v1/evidence/geointelligence/analyses — aggregate public
+        # market context with partner-isolated historical snapshots.
+        if parts == ["api", "v1", "evidence", "geointelligence", "analyses"]:
+            body, _ = self._read_json(max_bytes=12_288)
+            if body is None:
+                return
+            allowed_fields = {
+                "latitude", "longitude", "radiusM", "businessType",
+                "targetScian", "targetActivity",
+            }
+            unknown_fields = sorted(set(body) - allowed_fields)
+            if unknown_fields:
+                self._api_error(
+                    "VALIDATION_ERROR",
+                    f"Unknown geointelligence fields: {unknown_fields}",
+                    422,
+                )
+                return
+            if "businessType" not in body:
+                self._api_error(
+                    "VALIDATION_ERROR",
+                    "businessType is required",
+                    422,
+                )
+                return
+            try:
+                from requests import RequestException
+                from .geointelligence import analyze_neighborhood, save_snapshot
+
+                analysis = analyze_neighborhood(
+                    float(body.get("latitude")),
+                    float(body.get("longitude")),
+                    int(body.get("radiusM", 1_000)),
+                    str(body.get("businessType", "other")),
+                    target_scian=str(body.get("targetScian", "")),
+                    target_activity=str(body.get("targetActivity", "")),
+                )
+                analysis = save_snapshot(DB_PATH, self.auth_actor, analysis)
+            except (TypeError, ValueError) as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            except EnvironmentError:
+                self._api_error(
+                    "PROVIDER_NOT_CONFIGURED",
+                    "INEGI DENUE is not configured",
+                    503,
+                    requiredEnvironment="INEGI_DENUE_TOKEN",
+                )
+                return
+            except RequestException:
+                self._api_error("PROVIDER_UNAVAILABLE", "INEGI DENUE is unavailable", 502)
+                return
+            self._json({"data": analysis}, 201)
+            return
+
+        # POST /api/v1/evidence/bank-statements/analyses — analyze, do not store rows.
+        if parts == ["api", "v1", "evidence", "bank-statements", "analyses"]:
+            body, _ = self._read_json(max_bytes=700_000)
+            if body is None:
+                return
+            try:
+                from .bank_statement import analyze_csv
+
+                analysis = analyze_csv(str(body.get("csvText", "")))
+            except ValueError as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            self._json({"data": analysis}, 201)
+            return
+
+        # POST /api/v1/evidence/weather/analyses — public sector context.
+        if parts == ["api", "v1", "evidence", "weather", "analyses"]:
+            body, _ = self._read_json(max_bytes=8_192)
+            if body is None:
+                return
+            try:
+                from requests import RequestException
+                from .weather import analyze_weather
+
+                analysis = analyze_weather(
+                    float(body.get("latitude")),
+                    float(body.get("longitude")),
+                    str(body.get("asOfDate", "")).strip() or None,
+                )
+            except (TypeError, ValueError) as exc:
+                self._api_error("VALIDATION_ERROR", str(exc), 422)
+                return
+            except RequestException:
+                self._api_error("PROVIDER_UNAVAILABLE", "Open-Meteo is unavailable", 502)
+                return
+            self._json({"data": analysis}, 201)
+            return
 
         # POST /api/applications  — submit a new merchant application for scoring
         if parts == ["api", "applications"]:
             body, _ = self._read_json()
             if body is None:
+                return
+            if is_production() and os.getenv(
+                "OLIN_ALLOW_LEGACY_CONSENT", ""
+            ).strip() != "1":
+                self._api_error(
+                    "CONSENT_NOT_AUTHORIZED",
+                    "Direct application consent is disabled; use a verified intake consent receipt",
+                    403,
+                )
                 return
             try:
                 response = create_case(
@@ -2545,12 +3576,12 @@ class Handler(BaseHTTPRequestHandler):
         # POST /api/apps/{id}/disburse
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "apps" and parts[3] == "disburse":
             app_id = parts[2]
-            with closing(sqlite3.connect(DB_PATH)) as conn:
+            with closing(connect_database(DB_PATH)) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT application_id, merchant_name, clabe, approved_mxn, decision, "
                     "analyst_override, disbursed, is_demo, raw_result, case_mode, "
-                    "consent_timestamp "
+                    "consent_timestamp, partner_decision "
                     "FROM scoring_log WHERE application_id=?", (app_id,)
                 ).fetchone()
             if not row:
@@ -2558,6 +3589,15 @@ class Handler(BaseHTTPRequestHandler):
             row = dict(row)
             if row["case_mode"] != "live":
                 self._json({"error": "Disbursement blocked — shadow case"}, 403); return
+            if row["partner_decision"] != "approved":
+                self._json({
+                    "error": "Partner has not officially approved this application"
+                }, 403); return
+            if not live_lending_enabled():
+                self._json({
+                    "error": "Live money movement is disabled. "
+                    "Set OLIN_LIVE_LENDING_ENABLED only after launch approval."
+                }, 403); return
             if is_production() and not row["consent_timestamp"]:
                 self._json({"error": "Círculo consent has not been recorded"}, 403); return
             if row["analyst_override"] != "APPROVE":
@@ -2667,7 +3707,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def _load_apps(self) -> list:  # noqa: C901
-        with closing(sqlite3.connect(DB_PATH)) as conn:
+        with closing(connect_database(DB_PATH)) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT application_id, merchant_name, business_type, colonia,
@@ -2979,7 +4019,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Olin Analyst Review Interface")
     project_root = Path(__file__).parent.parent
-    parser.add_argument("--db",      default=str(default_db_path(project_root)),
+    parser.add_argument("--db",      default=default_database_target(project_root),
                         help="Path to SQLite database")
     parser.add_argument("--port",    type=int, default=8080, help="HTTP port (default 8080)")
     parser.add_argument("--host",    default="127.0.0.1", help="Bind host (default localhost only)")
@@ -2989,6 +4029,11 @@ def main():
     args = parser.parse_args()
 
     DB_PATH = args.db
+
+    if is_production():
+        from .production_preflight import assert_production_preflight
+
+        assert_production_preflight(DB_PATH)
 
     if is_production() and not configured_users():
         raise RuntimeError(
@@ -3021,11 +4066,11 @@ def main():
             print(f"  Seeded {n} demo applications → {DB_PATH}")
 
     # Count apps
-    with closing(sqlite3.connect(DB_PATH)) as conn:
+    with closing(connect_database(DB_PATH)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM scoring_log").fetchone()[0]
 
     url = f"http://{args.host}:{args.port}"
-    server = HTTPServer((args.host, args.port), Handler)
+    server = OlinHTTPServer((args.host, args.port), Handler)
 
     print(f"\n  ┌─────────────────────────────────────────┐")
     print(f"  │  Olin · Analyst Review Interface        │")

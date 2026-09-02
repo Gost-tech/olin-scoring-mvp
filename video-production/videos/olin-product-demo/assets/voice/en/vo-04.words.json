@@ -1,0 +1,122 @@
+[
+  {
+    "id": "w0",
+    "text": "The",
+    "start": 0.159,
+    "end": 0.259
+  },
+  {
+    "id": "w1",
+    "text": "engine",
+    "start": 0.379,
+    "end": 0.68
+  },
+  {
+    "id": "w2",
+    "text": "applies",
+    "start": 0.719,
+    "end": 1.199
+  },
+  {
+    "id": "w3",
+    "text": "a",
+    "start": 1.299,
+    "end": 1.339
+  },
+  {
+    "id": "w4",
+    "text": "versioned",
+    "start": 1.419,
+    "end": 1.819
+  },
+  {
+    "id": "w5",
+    "text": "policy.",
+    "start": 1.899,
+    "end": 2.339
+  },
+  {
+    "id": "w6",
+    "text": "It",
+    "start": 2.98,
+    "end": 3.059
+  },
+  {
+    "id": "w7",
+    "text": "returns",
+    "start": 3.139,
+    "end": 3.559
+  },
+  {
+    "id": "w8",
+    "text": "a",
+    "start": 3.619,
+    "end": 3.659
+  },
+  {
+    "id": "w9",
+    "text": "recommendation,",
+    "start": 3.699,
+    "end": 4.559
+  },
+  {
+    "id": "w10",
+    "text": "a",
+    "start": 5.019,
+    "end": 5.039
+  },
+  {
+    "id": "w11",
+    "text": "confidence",
+    "start": 5.179,
+    "end": 5.679
+  },
+  {
+    "id": "w12",
+    "text": "level,",
+    "start": 5.759,
+    "end": 6.059
+  },
+  {
+    "id": "w13",
+    "text": "and",
+    "start": 6.659,
+    "end": 6.779
+  },
+  {
+    "id": "w14",
+    "text": "clear",
+    "start": 6.879,
+    "end": 7.139
+  },
+  {
+    "id": "w15",
+    "text": "reasons.",
+    "start": 7.199,
+    "end": 7.659
+  },
+  {
+    "id": "w16",
+    "text": "It",
+    "start": 8.34,
+    "end": 8.42
+  },
+  {
+    "id": "w17",
+    "text": "never",
+    "start": 8.559,
+    "end": 8.72
+  },
+  {
+    "id": "w18",
+    "text": "promises",
+    "start": 8.84,
+    "end": 9.239
+  },
+  {
+    "id": "w19",
+    "text": "approval.",
+    "start": 9.359,
+    "end": 9.739
+  }
+]

@@ -1,0 +1,231 @@
+<section class="waitlist-application" data-waitlist-root aria-labelledby="waitlist-form-title">
+  <div class="waitlist-application__proof" aria-live="polite">
+    <span class="waitlist-counter__number" data-waitlist-count>Abierta</span>
+    <span class="waitlist-counter__label" data-waitlist-count-label>convocatoria fundadora</span>
+  </div>
+
+  <div class="waitlist-application__panel">
+    <div class="waitlist-progress" aria-label="Progreso de la solicitud">
+      <span class="is-active" data-progress-step="1">01 · Contacto</span>
+      <span data-progress-step="2">02 · Encaje</span>
+    </div>
+
+    <form class="waitlist-form" data-waitlist-form novalidate>
+      <div class="waitlist-step" data-waitlist-step="1">
+        <p class="section-kicker">Solicitud de acceso</p>
+        <h2 id="waitlist-form-title">Cuéntenos quién quiere probar Olin.</h2>
+        <p>Primero necesitamos identificar a la institución y a la persona responsable. Toma menos de un minuto.</p>
+
+        <div class="waitlist-fields">
+          <label>
+            <span>Correo de trabajo</span>
+            <input name="email" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="ana@institucion.mx" required />
+            <small>Usaremos este correo únicamente para revisar y responder su solicitud.</small>
+          </label>
+          <label>
+            <span>Nombre</span>
+            <input name="contact_name" type="text" autocomplete="name" maxlength="100" placeholder="Ana Martínez" required />
+          </label>
+          <label>
+            <span>Institución</span>
+            <input name="organization" type="text" autocomplete="organization" maxlength="160" placeholder="Nombre de la organización" required />
+          </label>
+          <label>
+            <span>Tipo de organización</span>
+            <select name="organization_type" required>
+              <option value="">Seleccione una opción</option>
+              <option value="bank">Banco</option>
+              <option value="sofom">SOFOM</option>
+              <option value="fintech">Fintech / otorgante digital</option>
+              <option value="acquirer">Adquirente / TPV</option>
+              <option value="merchant_network">Red de comercios</option>
+              <option value="distributor">Distribuidor</option>
+              <option value="other">Otra</option>
+            </select>
+          </label>
+        </div>
+
+        <button class="button button--signal waitlist-next" type="button" data-waitlist-next>
+          Continuar la solicitud <span aria-hidden="true">→</span>
+        </button>
+      </div>
+
+      <div class="waitlist-step" data-waitlist-step="2" hidden>
+        <p class="section-kicker">Encaje del piloto</p>
+        <h2>¿Qué tendría que resolver?</h2>
+        <p>Estas respuestas permiten priorizar equipos con un problema concreto y capacidad de probar diez expedientes autorizados.</p>
+
+        <div class="waitlist-fields">
+          <label>
+            <span>Su función</span>
+            <input name="role" type="text" autocomplete="organization-title" maxlength="100" placeholder="Riesgo, crédito, datos u operación" required />
+          </label>
+          <label>
+            <span>Pequeños negocios en su cartera o red</span>
+            <select name="portfolio_size" required>
+              <option value="">Seleccione un rango</option>
+              <option value="under_100">Menos de 100</option>
+              <option value="100_999">100–999</option>
+              <option value="1000_9999">1,000–9,999</option>
+              <option value="10000_plus">10,000 o más</option>
+              <option value="unknown">Aún no lo sé</option>
+            </select>
+          </label>
+          <label class="waitlist-field--wide">
+            <span>Principal problema a resolver <em>Opcional</em></span>
+            <textarea name="priority_problem" rows="4" maxlength="500" placeholder="Ejemplo: nuestros analistas tardan demasiado en reconciliar estados de cuenta, TPV y proveedores."></textarea>
+          </label>
+          <label class="waitlist-consent waitlist-field--wide">
+            <input name="contact_consent" type="checkbox" required />
+            <span>Acepto que Olin use estos datos para evaluar la solicitud y contactarme. Leí el <a href="/legal/privacidad/">aviso de privacidad</a>.</span>
+          </label>
+          <label class="waitlist-honeypot" aria-hidden="true">
+            <span>Sitio web</span>
+            <input name="website" type="text" tabindex="-1" autocomplete="off" />
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button class="button button--outline" type="button" data-waitlist-back>Volver</button>
+          <button class="button button--signal" type="submit" data-waitlist-submit>
+          Solicitar acceso fundador <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        <p class="waitlist-status" data-waitlist-status role="status" aria-live="polite"></p>
+      </div>
+    </form>
+
+    <div class="waitlist-success" data-waitlist-success hidden tabindex="-1">
+      <span class="waitlist-success__mark" aria-hidden="true">✓</span>
+      <p class="section-kicker">Solicitud recibida</p>
+      <h2>Ya está en la lista.</h2>
+      <p>Revisaremos el encaje para el programa fundador. Si hay una oportunidad concreta de piloto, escribiremos al correo registrado.</p>
+      <div class="waitlist-referral" data-waitlist-referral hidden>
+        <p class="section-kicker">Tu enlace fundador</p>
+        <strong>Comparte la puerta de entrada con otra institución.</strong>
+        <div class="waitlist-referral__row">
+          <input data-waitlist-referral-url type="text" readonly aria-label="Enlace de referido" />
+          <button class="button button--signal" data-waitlist-copy type="button">Copiar enlace</button>
+        </div>
+        <small data-waitlist-referral-note>Una referencia calificada puede darte prioridad de revisión.</small>
+      </div>
+      <a class="button button--outline" href="/demo/">Mientras tanto, ver el demo <span aria-hidden="true">↗</span></a>
+    </div>
+  </div>
+</section>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-waitlist-root]");
+  const form = root?.querySelector<HTMLFormElement>("[data-waitlist-form]");
+  const steps = root?.querySelectorAll<HTMLElement>("[data-waitlist-step]");
+  const progress = root?.querySelectorAll<HTMLElement>("[data-progress-step]");
+  const status = root?.querySelector<HTMLElement>("[data-waitlist-status]");
+  const submit = root?.querySelector<HTMLButtonElement>("[data-waitlist-submit]");
+  const success = root?.querySelector<HTMLElement>("[data-waitlist-success]");
+  const referral = root?.querySelector<HTMLElement>("[data-waitlist-referral]");
+  const referralUrl = root?.querySelector<HTMLInputElement>("[data-waitlist-referral-url]");
+  const copyReferral = root?.querySelector<HTMLButtonElement>("[data-waitlist-copy]");
+  const count = root?.querySelector<HTMLElement>("[data-waitlist-count]");
+  const countLabel = root?.querySelector<HTMLElement>("[data-waitlist-count-label]");
+  const endpoint = window.__OLIN_CONFIG__?.waitlistApiUrl || "/api/v1/waitlist";
+  const referralCode = new URLSearchParams(window.location.search).get("ref") || "";
+
+  const track = (event: string, detail: Record<string, unknown> = {}) => {
+    window.dispatchEvent(new CustomEvent("olin:marketing", { detail: { event, ...detail } }));
+  };
+
+  const showStep = (number: number) => {
+    steps?.forEach((step) => { step.hidden = step.dataset.waitlistStep !== String(number); });
+    progress?.forEach((item) => item.classList.toggle("is-active", item.dataset.progressStep === String(number)));
+    track("waitlist_step_view", { step: number });
+    root?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const updateCount = (value: unknown) => {
+    if (!count || !countLabel || typeof value !== "number" || value < 0) return;
+    count.textContent = new Intl.NumberFormat("es-MX").format(value);
+    countLabel.textContent = value === 1 ? "solicitud recibida" : "solicitudes recibidas";
+  };
+
+  const loadCount = async () => {
+    try {
+      const response = await fetch(endpoint, { headers: { "Accept": "application/json" } });
+      if (!response.ok) throw new Error("count unavailable");
+      const result = await response.json();
+      updateCount(result?.data?.applications_received);
+    } catch {
+      if (count) count.textContent = "Abierta";
+      if (countLabel) countLabel.textContent = "convocatoria fundadora";
+    }
+  };
+
+  root?.querySelector("[data-waitlist-next]")?.addEventListener("click", () => {
+    const firstStep = root.querySelector<HTMLElement>('[data-waitlist-step="1"]');
+    const required = firstStep?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input[required], select[required]");
+    const valid = Array.from(required || []).every((field) => field.reportValidity());
+    if (valid) showStep(2);
+  });
+  root?.querySelector("[data-waitlist-back]")?.addEventListener("click", () => showStep(1));
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity() || !submit) return;
+    submit.disabled = true;
+    submit.setAttribute("aria-busy", "true");
+    if (status) status.textContent = "Enviando solicitud…";
+    const values = new FormData(form);
+    const body = {
+      email: String(values.get("email") || ""),
+      contact_name: String(values.get("contact_name") || ""),
+      organization: String(values.get("organization") || ""),
+      organization_type: String(values.get("organization_type") || ""),
+      role: String(values.get("role") || ""),
+      portfolio_size: String(values.get("portfolio_size") || ""),
+      priority_problem: String(values.get("priority_problem") || ""),
+      contact_consent: values.get("contact_consent") === "on",
+      website: String(values.get("website") || ""),
+      source: "website_waitlist",
+      referral_code: referralCode,
+    };
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.error?.message || "No pudimos enviar la solicitud.");
+      updateCount(result?.data?.applications_received);
+      const shareUrl = result?.data?.referral_program?.share_url;
+      if (shareUrl && referral && referralUrl) {
+        referralUrl.value = shareUrl;
+        referral.hidden = false;
+      }
+      form.hidden = true;
+      if (success) {
+        success.hidden = false;
+        success.focus();
+      }
+      track("waitlist_application_submitted", { organization_type: body.organization_type, portfolio_size: body.portfolio_size });
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "No pudimos enviar la solicitud. Intente de nuevo.";
+      submit.disabled = false;
+      submit.removeAttribute("aria-busy");
+      track("waitlist_application_error");
+    }
+  });
+
+  loadCount();
+
+  copyReferral?.addEventListener("click", async () => {
+    if (!referralUrl?.value) return;
+    try {
+      await navigator.clipboard.writeText(referralUrl.value);
+      copyReferral.textContent = "Enlace copiado";
+      window.setTimeout(() => { copyReferral.textContent = "Copiar enlace"; }, 1800);
+    } catch {
+      referralUrl.select();
+      copyReferral.textContent = "Enlace seleccionado";
+    }
+  });
+</script>

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AnimatePresence, LazyMotion, MotionConfig, domMax, m, useReducedMotion } from "motion/react";
 
 type Profile = {
@@ -75,10 +75,14 @@ const profiles: Profile[] = [
 
 export default function DecisionExplorer() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const reduced = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  const prefersReduced = useReducedMotion();
+  const reduced = mounted && Boolean(prefersReduced);
   const groupId = useId();
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const active = profiles[activeIndex];
+
+  useEffect(() => setMounted(true), []);
 
   const select = (index: number, moveFocus = false) => {
     const nextIndex = (index + profiles.length) % profiles.length;

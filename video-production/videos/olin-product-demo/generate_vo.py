@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""Generate voiceover WAV files for olin-product-demo using edge-tts."""
+"""Generate the Spanish female voiceover for Olin's end-to-end product demo."""
 import asyncio
 import subprocess
 import os
 
-VOICE = "en-US-JennyNeural"
-RATE = "+5%"
+VOICE = "es-MX-DaliaNeural"
+RATE = "+4%"
 ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 
 SCRIPTS = [
-    ("vo-01", "This is Olin's analyst workflow. We will follow one synthetic merchant case from intake to outcome."),
-    ("vo-02", "First, the analyst connects the merchant. Consent is recorded, then bank flow, bureau, point of sale, and supplier evidence are linked to the case."),
-    ("vo-03", "Olin assembles the signals into an explainable recommendation. This case scores sixty-three point six, Tier ten, and routes to committee because the bureau file is missing."),
-    ("vo-04", "The analyst can inspect every signal, confidence range, and reason before deciding. The requested amount and the repayment capacity stay visible together."),
-    ("vo-05", "Olin recommends. The partner decides. A rationale is required before the case can move to approval, review, or decline."),
-    ("vo-06", "The decision, disbursement, and repayment outcome stay linked in one audit trail. This paid-on-time status is synthetic demonstration data."),
-    ("vo-07", "The safe next step is ten authorized shadow cases. No money moves. Partners measure coverage, speed, disagreement, and missing evidence."),
+    ("vo-01", "Así pasa una solicitud realista por Olin, desde el primer mensaje hasta la decisión de una institución. El caso y el dinero que verás son simulados."),
+    ("vo-02", "La dueña explica para qué necesita el financiamiento. Antes de consultar datos, el canal registra su autorización y conserva el texto exacto del consentimiento."),
+    ("vo-03", "Con autorización, el expediente reúne identidad, Círculo, flujo bancario, ventas con terminal y evidencia operativa. Cada fuente conserva su referencia y las ausencias siguen visibles."),
+    ("vo-04", "Olin crea el caso y ejecuta una política versionada. Devuelve una recomendación, un nivel de confianza y razones revisables. Nunca promete aprobación."),
+    ("vo-05", "El expediente entra a la fila del equipo de crédito. El analista revisa capacidad de pago, estrés, cobertura, identidad y la contribución de cada señal."),
+    ("vo-06", "Olin recomienda. La institución decide. Para cerrar el caso, el analista debe registrar la decisión oficial y su justificación."),
+    ("vo-07", "Después del contrato y de los controles del socio, la institución puede ordenar el depósito. Esta pantalla es una simulación: Olin no mueve dinero ni reemplaza el proceso legal."),
+    ("vo-08", "El resultado queda ligado al expediente original. Así Olin puede medir cobertura, tiempo, desacuerdos y, con casos reales del socio, aprender de los pagos. El siguiente paso es un piloto en paralelo."),
 ]
 
 async def generate(name: str, text: str):

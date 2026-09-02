@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 import uuid
 
 
@@ -34,6 +34,15 @@ class BusinessType(str, Enum):
     PROFESSIONAL = "professional"
     TRANSPORT = "transport"
     LIGHT_MANUFACTURING = "light_manufacturing"
+    WHOLESALE = "wholesale"
+    ECOMMERCE = "ecommerce"
+    CONSTRUCTION = "construction"
+    AGRICULTURE = "agriculture"
+    HOSPITALITY = "hospitality"
+    EDUCATION = "education"
+    HEALTHCARE = "healthcare"
+    PHARMACY = "pharmacy"
+    LOGISTICS = "logistics"
     OTHER = "other"
 
 
@@ -61,7 +70,7 @@ class FMCGData:
 @dataclass
 class BankData:
     """Syncfy open banking (ex-Belvo, discontinued MX June 2026).
-    Fallback: manual statement upload via WhatsApp."""
+    A manual statement may support review but is not provider-verified."""
     months_connected: float = 0.0
     avg_daily_balance_mxn: float = 0.0
     monthly_deposit_count: float = 0.0
@@ -81,7 +90,7 @@ class BankData:
 
 @dataclass
 class TenureData:
-    """Google Maps creation date + IMSS registry."""
+    """Documented continuity evidence; Google does not expose opening date."""
     years_on_google_maps: float = 0.0
     years_in_imss: float = 0.0
     address_consistent: bool = True         # same location across sources
@@ -103,10 +112,40 @@ class POSData:
 
 @dataclass
 class MapsRatingData:
-    """Google Places API."""
+    """Observed Google Places evidence.
+
+    Only ``rating``, ``review_count`` and ``review_velocity_6m`` feed the
+    current scorecard.  The remaining fields preserve provenance for the
+    analyst and must not be interpreted as validated credit predictors.
+    """
     rating: float = 0.0                     # 0..5
     review_count: int = 0
-    review_velocity_6m: int = 0             # new reviews last 6 months
+    review_velocity_6m: int = 0             # recent reviews in returned sample
+    source: str = "unknown"                 # google_places | manual
+    verified: bool = False                  # fetched server-side from provider
+    evidence_reference: str = ""            # Google place id
+    observed_at: str = ""
+    display_name: str = ""
+    formatted_address: str = ""
+    business_status: str = ""
+    primary_type: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    google_maps_uri: str = ""
+    website_uri: str = ""
+    oldest_visible_review_at: str = ""
+    review_sample_size: int = 0
+    # Public persistent geo evidence from INEGI DENUE.
+    denue_id: str = ""
+    denue_clee: str = ""
+    denue_name: str = ""
+    denue_address: str = ""
+    denue_activity: str = ""
+    denue_size_band: str = ""
+    denue_latitude: Optional[float] = None
+    denue_longitude: Optional[float] = None
+    denue_verified: bool = False
+    denue_observed_at: str = ""
 
 
 @dataclass
@@ -145,6 +184,93 @@ class BuroData:
     active_loans_count: int = 0
     worst_mob_status: str = ""              # e.g. "01" current, "97" fraud
     score: Optional[int] = None             # Círculo de Crédito score 300-850
+    source: str = "unknown"
+    verified: bool = False
+    evidence_reference: str = ""
+    observed_at: str = ""
+
+
+@dataclass
+class ExternalSignalEvidence:
+    """Normalized evidence supplied by a provider or the partner bank.
+
+    The 28-signal architecture keeps these observations separate from the
+    legacy six-signal scorecard.  ``metrics`` contains only the documented
+    inputs for one signal; a provider cannot submit a final Olin decision.
+    """
+    metrics: dict[str, Any] = field(default_factory=dict)
+    source: str = "unknown"
+    verified: bool = False
+    evidence_reference: str = ""
+    observed_at: str = ""
+
+
+@dataclass
+class PharmacyData:
+    """Pharmacy-specific facts; trust is resolved server-side, not by payload."""
+    subtype: str = "community_pharmacy"
+    scian_code: str = "464111"
+    sells_controlled_medicines: bool = False
+    license_status: str = "not_supplied"
+    license_reference: str = ""
+    supplier_count: int = 0
+    top_supplier_share: Optional[float] = None
+    inventory_days: Optional[float] = None
+    expiry_writeoff_ratio: Optional[float] = None
+    gross_margin_pct: Optional[float] = None
+    stockout_rate: Optional[float] = None
+    source: str = "partner_supplied"
+    evidence_reference: str = ""
+    observed_at: str = ""
+
+
+@dataclass
+class FacilityTerms:
+    """Terms evaluated by the capacity engine; not a lending offer."""
+    term_months: int = 12
+    monthly_rate: float = 0.03
+    existing_monthly_debt_service_mxn: float = 0.0
+    policy_max_amount_mxn: float = 80_000.0
+    target_dscr: float = 1.25
+    revenue_stress_pct: float = 0.15
+    cost_stress_pct: float = 0.10
+
+
+@dataclass
+class BankFeatureContractV2:
+    """Versioned, classified cash-flow features supplied by a trusted bank source."""
+    contract_version: str = "bank-feature-contract-2.0"
+    calculation_version: str = "bank-cashflow-2.0"
+    normalization_basis: str = "monthly_average"
+    currency: str = "MXN"
+    period_start: str = ""
+    period_end: str = ""
+    account_count: int = 0
+    account_coverage_ratio: float = 0.0
+    account_holder_match: bool = False
+    classification_coverage_ratio: float = 0.0
+    operating_inflows_mxn: float = 0.0
+    operating_outflows_mxn: float = 0.0
+    internal_transfer_inflows_mxn: float = 0.0
+    debt_proceeds_mxn: float = 0.0
+    refunds_mxn: float = 0.0
+    existing_monthly_debt_service_mxn: float = 0.0
+    end_of_day_avg_balance_mxn: float = 0.0
+    end_of_day_min_balance_mxn: float = 0.0
+    inflow_volatility: float = 0.0
+    top_payer_share: float = 0.0
+    source: str = "unknown"
+    evidence_reference: str = ""
+    observed_at: str = ""
+
+
+@dataclass
+class OperatingProfile:
+    """Archetype-specific operating metrics under a bounded bank contract."""
+    metrics: dict[str, float] = field(default_factory=dict)
+    source: str = "unknown"
+    evidence_reference: str = ""
+    observed_at: str = ""
 
 
 @dataclass
@@ -168,6 +294,11 @@ class Application:
     imss: Optional[IMSSPayrollData] = None
     buro: Optional[BuroData] = None
     fraud: Optional[FraudData] = None
+    signal_evidence: dict[str, ExternalSignalEvidence] = field(default_factory=dict)
+    pharmacy: Optional[PharmacyData] = None
+    facility: FacilityTerms = field(default_factory=FacilityTerms)
+    bank_features_v2: Optional[BankFeatureContractV2] = None
+    operating_profile: Optional[OperatingProfile] = None
 
     application_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -225,6 +356,9 @@ class ScoreResult:
     engine_version: str = "scorecard-0.4.0-circulo-tier-matrix"
     environment: str = "unspecified"
     production_blocks: list[str] = field(default_factory=list)
+    alternative_signal_report: dict[str, Any] = field(default_factory=dict)
+    capacity_v2: dict[str, Any] = field(default_factory=dict)
+    enrichment_report: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

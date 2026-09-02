@@ -1,0 +1,370 @@
+<template>
+  <style>
+    #root {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      container-type: size;
+      color: #0b1916;
+    }
+
+    .f03-explained-ground {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+    }
+
+    .f03-explained-stage {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .f03-explained-kicker {
+      position: absolute;
+      top: 53px;
+      left: 58px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #c15031;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .f03-explained-kicker::before {
+      content: "";
+      width: 42px;
+      height: 4px;
+      border-radius: 2px;
+      background: #c8fa5a;
+    }
+
+    .f03-explained-audit-stack {
+      position: absolute;
+      top: 138px;
+      left: 58px;
+      width: 330px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .f03-explained-audit-row {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .f03-explained-index {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(200, 250, 90, 0.15);
+      color: #c15031;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .f03-explained-word {
+      display: inline-block;
+      color: #9a9a9a;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      transform-origin: 0 50%;
+      text-shadow: 0 0 0 rgba(200, 250, 90, 0);
+    }
+
+    .f03-explained-card-shell {
+      position: absolute;
+      top: 104px;
+      left: 444px;
+      width: 560px;
+      height: 315px;
+      overflow: hidden;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: rgba(200, 250, 90, 0.04);
+      transform-origin: 50% 50%;
+    }
+
+    .f03-explained-card-content {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+
+    .f03-explained-card-content img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .f03-explained-card-new {
+      opacity: 0;
+    }
+
+    .f03-explained-scan {
+      position: absolute;
+      z-index: 4;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      border-radius: 3px;
+      background: #c8fa5a;
+      box-shadow: 0 0 22px rgba(200, 250, 90, 0.85);
+      transform-origin: 0 50%;
+      opacity: 0;
+    }
+
+    .f03-explained-proof-label {
+      position: absolute;
+      top: 466px;
+      left: 438px;
+      padding: 10px 16px;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 100px;
+      background: rgba(200, 250, 90, 0.08);
+      color: #c15031;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      opacity: 0;
+    }
+
+    .f03-explained-resolve {
+      position: absolute;
+      top: 528px;
+      left: 58px;
+      width: 430px;
+    }
+
+    .f03-explained-seq-item {
+      display: block;
+      width: max-content;
+      color: #0b1916;
+      font-size: 64px;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 0.96;
+      opacity: 0;
+    }
+
+    .f03-explained-seq-item + .f03-explained-seq-item {
+      margin-top: 10px;
+    }
+
+    .f03-explained-seq-item.is-accent {
+      padding: 5px 10px 9px;
+      border-radius: 12px;
+      background: #c8fa5a;
+    }
+
+    .f03-explained-rule-map {
+      position: absolute;
+      top: 508px;
+      left: 354px;
+      width: 650px;
+      height: 222px;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .f03-explained-rule-map path {
+      fill: none;
+      stroke: #c8fa5a;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .f03-explained-rule-map circle {
+      fill: #c8fa5a;
+      opacity: 0;
+    }
+
+    .f03-explained-rationale-tag {
+      position: absolute;
+      top: 705px;
+      right: 73px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #c15031;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      opacity: 0;
+    }
+
+    .f03-explained-rationale-tag::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #c8fa5a;
+    }
+
+    .f03-explained-progress {
+      position: absolute;
+      top: 872px;
+      left: 58px;
+      width: 964px;
+      height: 3px;
+      border-radius: 0;
+      background: rgba(200, 250, 90, 0.15);
+      overflow: hidden;
+    }
+
+    .f03-explained-progress-fill {
+      width: 0;
+      height: 100%;
+      background: #c8fa5a;
+      transform-origin: 0 50%;
+    }
+  </style>
+
+  <div data-hf-id="hf-grl7" id="root" data-composition-id="03-explained" data-width="1080" data-height="1080" data-start="0" data-duration="8.324">
+    <div data-hf-id="hf-7u6p" class="clip f03-explained-ground" data-start="0" data-duration="8.324" data-track-index="0"></div>
+    <div data-hf-id="hf-hh69" class="clip f03-explained-stage" data-start="0" data-duration="8.324" data-track-index="1">
+      <div data-hf-id="hf-7u7h" class="f03-explained-kicker">Trazabilidad activa</div>
+
+      <div data-hf-id="hf-0w4j" class="f03-explained-audit-stack" aria-label="Señales de auditoría">
+        <div data-hf-id="hf-c5gp" class="f03-explained-audit-row"><span data-hf-id="hf-vt2z" class="f03-explained-index">01</span><span data-hf-id="hf-ukns" class="f03-explained-word" data-word="fuente">FUENTE</span></div>
+        <div data-hf-id="hf-bm3h" class="f03-explained-audit-row"><span data-hf-id="hf-very" class="f03-explained-index">02</span><span data-hf-id="hf-sdds" class="f03-explained-word" data-word="faltante">FALTANTE</span></div>
+        <div data-hf-id="hf-guzo" class="f03-explained-audit-row"><span data-hf-id="hf-v0gx" class="f03-explained-index">03</span><span data-hf-id="hf-jco2" class="f03-explained-word" data-word="regla">REGLA</span></div>
+      </div>
+
+      <div data-hf-id="hf-xx06" class="f03-explained-card-shell">
+        <div data-hf-id="hf-eqay" class="f03-explained-card-content f03-explained-card-old"><img data-hf-id="hf-22s1" src="assets/03-evidence.png" alt="Pantalla de evidencia de Olin"></div>
+        <div data-hf-id="hf-wc7n" class="f03-explained-card-content f03-explained-card-new"><img data-hf-id="hf-9lg4" src="assets/04-recommendation.png" alt="Pantalla de recomendación explicable de Olin"></div>
+        <div data-hf-id="hf-w0ge" class="f03-explained-scan"></div>
+      </div>
+
+      <div data-hf-id="hf-bqhh" class="f03-explained-proof-label">NO LLEGA SOLA</div>
+
+      <div data-hf-id="hf-mxx2" class="f03-explained-resolve" aria-label="Llega explicada">
+        <span data-hf-id="hf-fv51" class="f03-explained-seq-item" data-seq="0">LLEGA</span>
+        <span data-hf-id="hf-h2u9" class="f03-explained-seq-item is-accent" data-seq="1">EXPLICADA</span>
+      </div>
+
+      <svg data-hf-id="hf-6hna" class="f03-explained-rule-map" viewBox="0 0 650 222" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path data-hf-id="hf-3wjy" id="03-explained-rule-path" d="M 18 166 C 122 166, 128 48, 260 48 S 438 105, 594 105" />
+        <circle data-hf-id="hf-f9b6" id="03-explained-rule-dot" cx="594" cy="105" r="7" />
+      </svg>
+      <div data-hf-id="hf-9j2r" class="f03-explained-rationale-tag">RAZÓN VISIBLE</div>
+
+      <div data-hf-id="hf-9t90" class="f03-explained-progress"><div data-hf-id="hf-lqza" class="f03-explained-progress-fill"></div></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    (() => {
+      const root = document.querySelector('[data-composition-id="03-explained"]');
+      if (!root || !window.gsap) return;
+
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["03-explained"] = tl;
+
+      const card = root.querySelector('.f03-explained-card-shell');
+      const oldContent = root.querySelector('.f03-explained-card-old');
+      const newContent = root.querySelector('.f03-explained-card-new');
+      const scan = root.querySelector('.f03-explained-scan');
+      const words = Array.from(root.querySelectorAll('.f03-explained-word'));
+      const progressFill = root.querySelector('.f03-explained-progress-fill');
+
+      tl.fromTo(card, { opacity: 0, x: 54, y: 12, rotation: 2.2 }, { opacity: 1, x: 0, y: 0, rotation: -1.6, duration: 0.48, ease: 'power2.out' }, 0.02);
+      tl.fromTo(root.querySelector('.f03-explained-kicker'), { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' }, 0.08);
+      tl.fromTo(root.querySelectorAll('.f03-explained-audit-row'), { opacity: 0, x: -22 }, { opacity: 1, x: 0, duration: 0.42, stagger: 0.58, ease: 'power2.out' }, 0.22);
+
+      const spoken = {
+        fuente: { start: 0.30, end: 0.62 },
+        faltante: { start: 0.92, end: 1.28 },
+        regla: { start: 1.58, end: 1.94 }
+      };
+      const glowDriver = { t: 0 };
+      const attack = 0.14;
+      const release = 0.34;
+      const rest = 0.10;
+      const envelope = (time, start, end) => {
+        if (time < start) return 0;
+        if (time < end) return Math.min((time - start) / attack, 1);
+        const releaseEnd = end + release;
+        if (time < releaseEnd) return 1 - ((time - end) / release) * (1 - rest);
+        return rest;
+      };
+      const channel = (a, b, amount) => Math.round(a + (b - a) * amount);
+      tl.to(glowDriver, {
+        t: 2.2,
+        duration: 2.2,
+        ease: 'none',
+        onUpdate: () => {
+          words.forEach((word) => {
+            const timing = spoken[word.dataset.word];
+            const env = envelope(glowDriver.t, timing.start, timing.end);
+            word.style.color = `rgb(${channel(154, 11, env)}, ${channel(154, 25, env)}, ${channel(154, 22, env)})`;
+            word.style.textShadow = `0 0 ${38 * env}px rgba(200,250,90,${0.78 * env})`;
+            word.style.transform = `scale(${1 + 0.19 * env})`;
+          });
+        }
+      }, 0);
+
+      tl.fromTo(scan, { opacity: 0, scaleX: 0, y: 40 }, { opacity: 1, scaleX: 1, y: 255, duration: 0.52, ease: 'power2.inOut' }, 2.20);
+      tl.to(scan, { opacity: 0, duration: 0.18, ease: 'power1.out' }, 2.70);
+
+      tl.to(card, {
+        scale: 1.12,
+        x: 10,
+        y: 80,
+        rotation: 0,
+        borderRadius: 12.5,
+        backgroundColor: 'rgba(200,250,90,0.08)',
+        duration: 0.92,
+        ease: 'power2.inOut'
+      }, 2.58);
+      tl.to(oldContent, { opacity: 0, duration: 0.36, ease: 'power1.in' }, 2.58);
+      tl.to(newContent, { opacity: 1, duration: 0.36, ease: 'power1.out' }, 3.14);
+      tl.fromTo(root.querySelector('.f03-explained-proof-label'), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.42, ease: 'power2.out' }, 3.62);
+
+      const sequenceContent = [
+        { key: 'llega', body: 'LLEGA', hold: 0.20 },
+        { key: 'explicada', body: 'EXPLICADA', hold: 0.68 }
+      ];
+      const baseDuration = 0.30;
+      const secondsPerCharacter = 0.018;
+      let cumulative = 0;
+      const sequenceTimeline = sequenceContent.map((entry) => {
+        const start = cumulative;
+        cumulative += baseDuration + entry.body.length * secondsPerCharacter + entry.hold;
+        return { ...entry, start, end: cumulative };
+      });
+      const sequenceElements = Array.from(root.querySelectorAll('.f03-explained-seq-item'));
+      sequenceTimeline.forEach((entry, index) => {
+        const el = sequenceElements[index];
+        tl.fromTo(el, { opacity: 0, x: -26, y: 12 }, { opacity: 1, x: 0, y: 0, duration: 0.48, ease: 'power2.out' }, 4.80 + entry.start);
+      });
+
+      const rulePath = root.querySelector('[id="03-explained-rule-path"]');
+      const pathLength = rulePath.getTotalLength();
+      rulePath.style.strokeDasharray = `${pathLength}`;
+      rulePath.style.strokeDashoffset = `${pathLength}`;
+      tl.to(rulePath, { strokeDashoffset: 0, duration: 0.78, ease: 'power2.out' }, 5.08);
+      tl.fromTo(root.querySelector('[id="03-explained-rule-dot"]'), { opacity: 0, scale: 0.5, transformOrigin: '50% 50%' }, { opacity: 1, scale: 1, duration: 0.28, ease: 'power2.out' }, 5.82);
+      tl.fromTo(root.querySelector('.f03-explained-rationale-tag'), { opacity: 0, x: 14 }, { opacity: 1, x: 0, duration: 0.42, ease: 'power2.out' }, 6.06);
+      tl.fromTo(progressFill, { scaleX: 0 }, { scaleX: 1, duration: 6.58, ease: 'none' }, 0.02);
+    })();
+  </script>
+</template>

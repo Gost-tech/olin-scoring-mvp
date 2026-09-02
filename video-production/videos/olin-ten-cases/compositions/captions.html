@@ -1,0 +1,215 @@
+<template id="captions-template" data-composition-id="captions" data-width="1080" data-height="1080">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+
+<style data-brand-tokens="">
+      @font-face { font-family: 'Inter'; src: url('assets/fonts/inter-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-display: block; }
+      :root {
+      --bg: #FFFFFF;
+      --primary: #C8FA5A;
+      --text: #0B1916;
+      --text-muted: #C55232;
+      --text-light: #9A9A9A;
+      --accent-light: rgba(200, 250, 90, 0.08);
+      --accent-medium: rgba(200, 250, 90, 0.15);
+      --border: rgba(200, 250, 90, 0.2);
+      --card-bg: rgba(200, 250, 90, 0.04);
+      --positive: #059669;
+      --negative: #dc2626;
+      --cap-ink: #0B1916;
+      --cap-canvas: #FFFFFF;
+      --cap-accent: #C8FA5A;
+      --cap-accent-2: #C55232;
+      --font-display: "Inter", system-ui, serif;
+      --font-body: "Inter", system-ui, sans-serif;
+      --cap-band-top: 900px;
+      --cap-band-height: 180px;
+      }
+    </style>
+
+<style>
+  #captions-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .caption-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+  }
+  /* the keep-out band, from captionBand(H) — frame content stays above it */
+  .caption-stage {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--cap-band-top, 900px);
+    height: var(--cap-band-height, 180px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .caption-group {
+    /* every group is absolutely stacked over the SAME band — exactly one shown at a
+       time via opacity. Must be absolute: in-flow groups would lay out side-by-side. */
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+  }
+
+  /* THE tinted card — 4% cobalt fill, 1.5px 20%-cobalt border, soft 14px corners,
+     NO shadow (the tinted card does the lift; cast depth is forbidden) */
+  .caption-pill {
+    max-width: 78%;
+    padding: 20px 44px 24px;
+    background: color-mix(in srgb, var(--cap-accent, #1e2bfa) 4%, var(--cap-canvas, #fdfae7));
+    border: 1.5px solid color-mix(in srgb, var(--cap-accent, #1e2bfa) 20%, transparent);
+    border-radius: 14px;
+  }
+  .caption-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.1em 0.34em;
+    font-family: "Inter", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(40px, 4.4vw, 58px);
+    line-height: 1.16;
+    letter-spacing: -0.02em;
+  }
+
+  /* upcoming — muted gray, no chip */
+  .caption-word {
+    display: inline-block;
+    padding: 0 0.18em;
+    border-radius: 0.32em;
+    color: color-mix(in srgb, var(--cap-ink, #111111) 52%, var(--cap-canvas, #fdfae7));
+  }
+  /* current word — THE solid cobalt chip (the single-accent gesture; pill-rounded
+     fill, NO shadow), cream reading on top */
+  .caption-word.is-active {
+    color: var(--cap-ink, #111111);
+    background: var(--cap-accent, #1e2bfa);
+    box-shadow: none;
+  }
+  /* already spoken — solid near-black ink, chip cleared */
+  .caption-word.is-spoken {
+    color: var(--cap-ink, #111111);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* optional per-word accents (dormant until a word-classer tags them) */
+  /* brand / key term — cobalt, the system's one accent on a key word */
+  .caption-word.cap-brand {
+    color: var(--cap-accent, #1e2bfa);
+  }
+  /* numerals / data — cobalt 700, the figure voice */
+  .caption-word.cap-num {
+    font-family: "Inter", system-ui, sans-serif;
+    font-weight: 700;
+    color: var(--cap-accent, #1e2bfa);
+  }
+  /* emphasis — a directional-red hairline underline (inline only, never a fill) */
+  .caption-word.cap-cta {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-decoration-color: var(--cap-accent-2, #dc2626);
+    text-underline-offset: 0.1em;
+  }
+
+  @media (max-aspect-ratio: 9/16) {
+    .caption-pill {
+      max-width: 92%;
+    }
+    .caption-line {
+      font-size: clamp(34px, 5.4vw, 48px);
+    }
+  }
+</style>
+
+<div data-hf-id="hf-mfou" id="captions-root" data-composition-id="captions" data-timeline-locked="" data-start="0" data-duration="37.272" data-fps="30" data-width="1080" data-height="1080">
+  <div data-hf-id="hf-9flp" class="caption-layer" aria-hidden="true">
+    <div data-hf-id="hf-ajrg" id="caption-stage" class="caption-stage"></div>
+  </div>
+</div>
+
+<script>
+  // captions.mjs injects the engine's scene-aware groups + real duration here.
+  var GROUPS = [{"id":"caption-group-0","frame":1,"start":0.1,"end":2.287,"text":"Diez casos reales.","words":[{"id":"caption-word-0-0","text":"Diez","start":0.1,"end":0.846},{"id":"caption-word-0-1","text":"casos","start":0.846,"end":1.591},{"id":"caption-word-0-2","text":"reales.","start":1.591,"end":2.337}]},{"id":"caption-group-1","frame":1,"start":2.287,"end":4.445,"text":"Sin mover dinero.","words":[{"id":"caption-word-1-0","text":"Sin","start":2.287,"end":2.966},{"id":"caption-word-1-1","text":"mover","start":2.966,"end":3.646},{"id":"caption-word-1-2","text":"dinero.","start":3.646,"end":4.325}]},{"id":"caption-group-2","frame":2,"start":4.492,"end":5.767,"text":"Olin convierte evidencia","words":[{"id":"caption-word-2-0","text":"Olin","start":4.492,"end":4.917},{"id":"caption-word-2-1","text":"convierte","start":4.917,"end":5.342},{"id":"caption-word-2-2","text":"evidencia","start":5.342,"end":5.767}]},{"id":"caption-group-3","frame":2,"start":5.767,"end":7.042,"text":"autorizada y dispersa","words":[{"id":"caption-word-3-0","text":"autorizada","start":5.767,"end":6.192},{"id":"caption-word-3-1","text":"y","start":6.192,"end":6.617},{"id":"caption-word-3-2","text":"dispersa","start":6.617,"end":7.042}]},{"id":"caption-group-4","frame":2,"start":7.042,"end":8.317,"text":"en un expediente","words":[{"id":"caption-word-4-0","text":"en","start":7.042,"end":7.467},{"id":"caption-word-4-1","text":"un","start":7.467,"end":7.892},{"id":"caption-word-4-2","text":"expediente","start":7.892,"end":8.317}]},{"id":"caption-group-5","frame":2,"start":8.317,"end":9.592,"text":"que su equipo","words":[{"id":"caption-word-5-0","text":"que","start":8.317,"end":8.742},{"id":"caption-word-5-1","text":"su","start":8.742,"end":9.167},{"id":"caption-word-5-2","text":"equipo","start":9.167,"end":9.592}]},{"id":"caption-group-6","frame":2,"start":9.592,"end":10.54,"text":"puede revisar.","words":[{"id":"caption-word-6-0","text":"puede","start":9.592,"end":10.017},{"id":"caption-word-6-1","text":"revisar.","start":10.017,"end":10.442}]},{"id":"caption-group-7","frame":3,"start":10.54,"end":11.633,"text":"Cada fuente,","words":[{"id":"caption-word-7-0","text":"Cada","start":10.54,"end":11.086},{"id":"caption-word-7-1","text":"fuente,","start":11.086,"end":11.633}]},{"id":"caption-group-8","frame":3,"start":11.633,"end":13.819,"text":"faltante y regla queda","words":[{"id":"caption-word-8-0","text":"faltante","start":11.633,"end":12.179},{"id":"caption-word-8-1","text":"y","start":12.179,"end":12.726},{"id":"caption-word-8-2","text":"regla","start":12.726,"end":13.272},{"id":"caption-word-8-3","text":"queda","start":13.272,"end":13.819}]},{"id":"caption-group-9","frame":3,"start":13.819,"end":14.315,"text":"visible.","words":[{"id":"caption-word-9-0","text":"visible.","start":13.819,"end":14.365}]},{"id":"caption-group-10","frame":3,"start":14.315,"end":16.536,"text":"La recomendación no llega","words":[{"id":"caption-word-10-0","text":"La","start":14.315,"end":14.87},{"id":"caption-word-10-1","text":"recomendación","start":14.87,"end":15.426},{"id":"caption-word-10-2","text":"no","start":15.426,"end":15.981},{"id":"caption-word-10-3","text":"llega","start":15.981,"end":16.536}]},{"id":"caption-group-11","frame":3,"start":16.536,"end":17.091,"text":"sola:","words":[{"id":"caption-word-11-0","text":"sola:","start":16.536,"end":17.091}]},{"id":"caption-group-12","frame":3,"start":17.091,"end":18.322,"text":"llega explicada.","words":[{"id":"caption-word-12-0","text":"llega","start":17.091,"end":17.647},{"id":"caption-word-12-1","text":"explicada.","start":17.647,"end":18.202}]},{"id":"caption-group-13","frame":4,"start":18.364,"end":20.008,"text":"El analista revisa,","words":[{"id":"caption-word-13-0","text":"El","start":18.364,"end":18.912},{"id":"caption-word-13-1","text":"analista","start":18.912,"end":19.46},{"id":"caption-word-13-2","text":"revisa,","start":19.46,"end":20.008}]},{"id":"caption-group-14","frame":4,"start":20.008,"end":22.151,"text":"decide y deja registro.","words":[{"id":"caption-word-14-0","text":"decide","start":20.008,"end":20.557},{"id":"caption-word-14-1","text":"y","start":20.557,"end":21.105},{"id":"caption-word-14-2","text":"deja","start":21.105,"end":21.653},{"id":"caption-word-14-3","text":"registro.","start":21.653,"end":22.201}]},{"id":"caption-group-15","frame":4,"start":22.151,"end":23.318,"text":"La decisión siempre","words":[{"id":"caption-word-15-0","text":"La","start":22.151,"end":22.54},{"id":"caption-word-15-1","text":"decisión","start":22.54,"end":22.929},{"id":"caption-word-15-2","text":"siempre","start":22.929,"end":23.318}]},{"id":"caption-group-16","frame":4,"start":23.318,"end":24.484,"text":"sigue en manos","words":[{"id":"caption-word-16-0","text":"sigue","start":23.318,"end":23.707},{"id":"caption-word-16-1","text":"en","start":23.707,"end":24.095},{"id":"caption-word-16-2","text":"manos","start":24.095,"end":24.484}]},{"id":"caption-group-17","frame":4,"start":24.484,"end":25.771,"text":"de la institución.","words":[{"id":"caption-word-17-0","text":"de","start":24.484,"end":24.873},{"id":"caption-word-17-1","text":"la","start":24.873,"end":25.262},{"id":"caption-word-17-2","text":"institución.","start":25.262,"end":25.651}]},{"id":"caption-group-18","frame":5,"start":25.804,"end":27.114,"text":"El piloto corre","words":[{"id":"caption-word-18-0","text":"El","start":25.804,"end":26.241},{"id":"caption-word-18-1","text":"piloto","start":26.241,"end":26.677},{"id":"caption-word-18-2","text":"corre","start":26.677,"end":27.114}]},{"id":"caption-group-19","frame":5,"start":27.114,"end":28.424,"text":"en paralelo para","words":[{"id":"caption-word-19-0","text":"en","start":27.114,"end":27.551},{"id":"caption-word-19-1","text":"paralelo","start":27.551,"end":27.987},{"id":"caption-word-19-2","text":"para","start":27.987,"end":28.424}]},{"id":"caption-group-20","frame":5,"start":28.424,"end":29.297,"text":"medir cobertura,","words":[{"id":"caption-word-20-0","text":"medir","start":28.424,"end":28.861},{"id":"caption-word-20-1","text":"cobertura,","start":28.861,"end":29.297}]},{"id":"caption-group-21","frame":5,"start":29.297,"end":29.734,"text":"tiempos,","words":[{"id":"caption-word-21-0","text":"tiempos,","start":29.297,"end":29.734}]},{"id":"caption-group-22","frame":5,"start":29.734,"end":31.044,"text":"diferencias y utilidad","words":[{"id":"caption-word-22-0","text":"diferencias","start":29.734,"end":30.171},{"id":"caption-word-22-1","text":"y","start":30.171,"end":30.607},{"id":"caption-word-22-2","text":"utilidad","start":30.607,"end":31.044}]},{"id":"caption-group-23","frame":5,"start":31.044,"end":32.452,"text":"antes de integrar.","words":[{"id":"caption-word-23-0","text":"antes","start":31.044,"end":31.481},{"id":"caption-word-23-1","text":"de","start":31.481,"end":31.917},{"id":"caption-word-23-2","text":"integrar.","start":31.917,"end":32.354}]},{"id":"caption-group-24","frame":6,"start":32.452,"end":34.202,"text":"Revisemos un expediente,","words":[{"id":"caption-word-24-0","text":"Revisemos","start":32.452,"end":33.035},{"id":"caption-word-24-1","text":"un","start":33.035,"end":33.619},{"id":"caption-word-24-2","text":"expediente,","start":33.619,"end":34.202}]},{"id":"caption-group-25","frame":6,"start":34.202,"end":35.902,"text":"no una promesa.","words":[{"id":"caption-word-25-0","text":"no","start":34.202,"end":34.785},{"id":"caption-word-25-1","text":"una","start":34.785,"end":35.369},{"id":"caption-word-25-2","text":"promesa.","start":35.369,"end":35.952}]},{"id":"caption-group-26","frame":6,"start":35.902,"end":37.359,"text":"Olin.","words":[{"id":"caption-word-26-0","text":"Olin.","start":35.902,"end":37.239}]}];
+  var DURATION = 37.272;
+
+  (function () {
+    var stage = document.getElementById("caption-stage");
+
+    // build DOM: one .caption-group per group, .caption-word per word
+    GROUPS.forEach(function (group, g) {
+      var groupEl = document.createElement("div");
+      groupEl.className = "caption-group";
+      groupEl.id = "caption-group-" + g;
+      var pill = document.createElement("div");
+      pill.className = "caption-pill";
+      var line = document.createElement("div");
+      line.className = "caption-line";
+      (group.words || []).forEach(function (w, i) {
+        var span = document.createElement("span");
+        span.className = "caption-word";
+        span.id = "caption-word-" + g + "-" + i;
+        span.textContent = String(w.text);
+        line.appendChild(span);
+      });
+      pill.appendChild(line);
+      groupEl.appendChild(pill);
+      stage.appendChild(groupEl);
+    });
+
+    window.__timelines = window.__timelines || {};
+    var tl = gsap.timeline({ paused: true });
+
+    GROUPS.forEach(function (group, g) {
+      var groupEl = document.getElementById("caption-group-" + g);
+      var words = group.words || [];
+      var next = GROUPS[g + 1];
+      var isLast = g === GROUPS.length - 1;
+      var start = Math.max(0, Number(group.start));
+      var end = isLast ? DURATION : Math.min(Number(next.start), Number(group.end) + 0.3);
+      if (end <= start) end = start + 0.01;
+
+      // group on/off — exactly one group visible at a time
+      tl.set(groupEl, { opacity: 1 }, start);
+      tl.set(groupEl, { opacity: 0 }, end);
+
+      // 3-state karaoke via className SETS — seek-safe (gsap.set applies on the
+      // engine's frame-by-frame seek; .call callbacks would NOT fire).
+      words.forEach(function (w, i) {
+        var el = document.getElementById("caption-word-" + g + "-" + i);
+        var at = Math.max(start, Number(w.start));
+        tl.set(el, { className: "caption-word" }, start); // upcoming (also resets on reverse-seek)
+        tl.set(el, { className: "caption-word is-active" }, at); // current
+        tl.fromTo(el, { scale: 0.985 }, { scale: 1, duration: 0.18, ease: "power1.out" }, at);
+        if (i + 1 < words.length) {
+          var nextAt = Math.max(start, Number(words[i + 1].start));
+          tl.set(el, { className: "caption-word is-spoken" }, nextAt); // demote when next activates
+        }
+      });
+      if (words.length) {
+        var lastEl = document.getElementById("caption-word-" + g + "-" + (words.length - 1));
+        var lastSpoken = Math.min(end, Number(words[words.length - 1].end) + 0.1);
+        tl.set(lastEl, { className: "caption-word is-spoken" }, lastSpoken);
+      }
+    });
+
+    // full-span anchor so the sub-comp timeline spans the whole video
+    tl.to({}, { duration: DURATION }, 0);
+    window.__timelines["captions"] = tl;
+  })();
+</script>
+
+<style>
+  .caption-line { line-height: 1.1 !important; }
+</style>
+</template>

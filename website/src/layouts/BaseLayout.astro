@@ -51,7 +51,8 @@ const socialImage = Astro.site ? new URL(image, Astro.site) : image;
     <script is:inline>
       (() => {
         const value = typeof OLIN_DEMO_URL === "string" ? OLIN_DEMO_URL.trim() : "";
-        window.__OLIN_CONFIG__ = { demoUrl: value };
+        const waitlist = typeof OLIN_WAITLIST_API_URL === "string" ? OLIN_WAITLIST_API_URL.trim() : "";
+        window.__OLIN_CONFIG__ = { demoUrl: value, waitlistApiUrl: waitlist };
       })();
     </script>
   </head>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autorizar uso de datos · Olin</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, sans-serif; color:#17211b; background:#f4f7f3; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:24px 16px; }
+    main { max-width:680px; margin:0 auto; background:#fff; border:1px solid #dce6dd; border-radius:18px; padding:clamp(22px,5vw,42px); box-shadow:0 18px 50px #17331d12; }
+    .eyebrow { color:#347343; font-weight:750; letter-spacing:.07em; text-transform:uppercase; font-size:.76rem; }
+    h1 { font-size:clamp(1.75rem,5vw,2.45rem); line-height:1.08; margin:.5rem 0 1rem; }
+    .notice { white-space:pre-wrap; padding:18px; border-radius:12px; background:#f6f8f5; border:1px solid #dce6dd; line-height:1.55; }
+    dl { display:grid; grid-template-columns:minmax(120px,1fr) 2fr; gap:8px 16px; font-size:.92rem; }
+    dt { font-weight:700; } dd { margin:0; overflow-wrap:anywhere; }
+    label.check { display:flex; gap:12px; align-items:flex-start; margin:22px 0; line-height:1.45; }
+    input[type=checkbox] { width:20px; height:20px; margin-top:2px; }
+    input[type=text] { width:100%; font:inherit; font-size:1.25rem; letter-spacing:.25em; padding:13px; border:1px solid #9caf9f; border-radius:9px; }
+    button { width:100%; border:0; border-radius:10px; padding:14px 18px; font:inherit; font-weight:750; cursor:pointer; background:#216e39; color:white; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    button.secondary { margin-top:10px; color:#294732; background:#edf3ed; }
+    .status { margin-top:16px; padding:12px; border-radius:9px; background:#eef5ee; min-height:45px; }
+    .error { background:#fff0ed; color:#812d20; }
+    .hidden { display:none; }
+    a { color:#17652f; }
+    footer { margin-top:24px; color:#526057; font-size:.84rem; line-height:1.45; }
+    @media (max-width:520px) { dl { grid-template-columns:1fr; gap:3px; } dd { margin-bottom:8px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Autorización segura</div>
+  <h1 id="title">Revisa antes de autorizar</h1>
+  <p id="intro">Estamos verificando tu enlace. Olin no decide ni garantiza un crédito.</p>
+
+  <section id="content" class="hidden" aria-live="polite">
+    <dl>
+      <dt>Institución</dt><dd id="institution"></dd>
+      <dt>Finalidad</dt><dd id="purpose"></dd>
+      <dt>Proveedor</dt><dd id="provider"></dd>
+      <dt>Versión</dt><dd id="version"></dd>
+      <dt>Conservación</dt><dd id="retention"></dd>
+    </dl>
+    <h2>Texto que autorizas</h2>
+    <div id="notice" class="notice"></div>
+    <p><a id="privacy" target="_blank" rel="noopener noreferrer">Leer aviso de privacidad integral</a></p>
+    <label class="check">
+      <input id="accepted" type="checkbox">
+      <span>Leí el texto anterior y deseo autorizar únicamente esta finalidad y, cuando se indique, este proveedor.</span>
+    </label>
+    <label for="otp"><strong>Código de 6 dígitos</strong></label>
+    <p>Escribe el código enviado a tu canal verificado. El código vence y sólo puede utilizarse una vez.</p>
+    <input id="otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" aria-describedby="otp-help">
+    <div id="otp-help" class="hidden">El código debe tener seis dígitos.</div>
+    <button id="authorize" disabled>Autorizar esta finalidad</button>
+    <button id="decline" class="secondary" type="button">No autorizar</button>
+  </section>
+  <div id="status" class="status" role="status">Verificando enlace…</div>
+  <footer>Si no reconoces esta solicitud, no ingreses ningún código y contacta directamente a la institución. Tus credenciales bancarias nunca se capturan en esta página.</footer>
+</main>
+<script>
+(() => {
+  const fragment = new URLSearchParams(location.hash.slice(1));
+  const challenge = fragment.get('challenge') || '';
+  const token = fragment.get('token') || '';
+  const status = document.querySelector('#status');
+  const content = document.querySelector('#content');
+  const accepted = document.querySelector('#accepted');
+  const otp = document.querySelector('#otp');
+  const authorize = document.querySelector('#authorize');
+  const setStatus = (message, error=false) => {
+    status.textContent = message;
+    status.classList.toggle('error', error);
+  };
+  const request = async (action, body) => {
+    const response = await fetch(`/api/v1/public/consent-challenges/${encodeURIComponent(challenge)}/${action}`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error?.message || 'No fue posible continuar.');
+    return payload.data;
+  };
+  const updateButton = () => { authorize.disabled = !(accepted.checked && /^\d{6}$/.test(otp.value)); };
+  accepted.addEventListener('change', updateButton);
+  otp.addEventListener('input', () => { otp.value = otp.value.replace(/\D/g,'').slice(0,6); updateButton(); });
+  document.querySelector('#decline').addEventListener('click', () => {
+    history.replaceState(null, '', '/consentir');
+    content.classList.add('hidden');
+    setStatus('No autorizaste. Puedes cerrar esta página y contactar a la institución para conocer alternativas.');
+  });
+  authorize.addEventListener('click', async () => {
+    authorize.disabled = true;
+    setStatus('Verificando código…');
+    try {
+      const receipt = await request('verify', {access_token:token, otp:otp.value, accepted:true});
+      history.replaceState(null, '', '/consentir');
+      content.classList.add('hidden');
+      document.querySelector('#title').textContent = 'Autorización registrada';
+      setStatus(`Tu recibo fue creado correctamente. Referencia: ${receipt.consent_id}`);
+    } catch (error) {
+      setStatus(error.message, true);
+      updateButton();
+    }
+  });
+  if (!challenge || !token) {
+    setStatus('El enlace está incompleto o ya fue retirado del navegador.', true);
+    return;
+  }
+  request('view', {access_token:token}).then(data => {
+    if (data.status !== 'pending') throw new Error(`Esta autorización ya no está disponible (${data.status}).`);
+    document.querySelector('#institution').textContent = data.institution;
+    document.querySelector('#purpose').textContent = data.purpose;
+    document.querySelector('#provider').textContent = data.provider || 'No aplica';
+    document.querySelector('#version').textContent = `${data.policy_version} · aviso ${data.notice_version}`;
+    document.querySelector('#retention').textContent = data.retention_summary;
+    document.querySelector('#notice').textContent = data.text;
+    document.querySelector('#privacy').href = data.privacy_notice_url;
+    content.classList.remove('hidden');
+    setStatus('Enlace válido. Revisa todo el texto antes de continuar.');
+  }).catch(error => setStatus(error.message, true));
+})();
+</script>
+</body>
+</html>

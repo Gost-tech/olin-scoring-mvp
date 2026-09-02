@@ -73,6 +73,9 @@ def partner_payload() -> dict:
             "active_loans_count": 1,
             "worst_mob_status": "01",
             "score": 720,
+            "source": "partner_bureau",
+            "verified": True,
+            "evidence_reference": "BUREAU-UAT-001",
         },
         "fraud": {
             "phone_mx": "5512345678",
@@ -92,9 +95,10 @@ class ProductMVPTests(unittest.TestCase):
                 queued = list_cases(tmp.name)
         self.assertEqual(len(created), 3)
         self.assertEqual(
-            {item["decision"] for item in created},
-            {"AUTO_APPROVE", "COMMITTEE", "DECLINE"},
+            {item["recommendation"] for item in created},
+            {"COMMITTEE", "DECLINE"},
         )
+        self.assertNotIn("AUTO_APPROVE", {item["recommendation"] for item in created})
         self.assertTrue(all(item["case_mode"] == "shadow" for item in queued))
         self.assertTrue(all(item["is_demo"] == 1 for item in queued))
         self.assertTrue(
@@ -124,6 +128,7 @@ class ProductMVPTests(unittest.TestCase):
             "OLIN_MODE": "production",
             "OLIN_USERS": json.dumps(users),
             "OLIN_STP_WEBHOOK_SECRET": "webhook-secret",
+            "OLIN_ALLOW_LEGACY_CONSENT": "1",
         }
         with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
             with ScoringLog(tmp.name):

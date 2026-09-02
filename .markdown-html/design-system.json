@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skill": "design-system",
+  "default_output_dir": "./output/white-label-bank/",
+  "brand": {
+    "primary": "#0B1916",
+    "accent": "#C8FA5A",
+    "bg": "#F4F0E7",
+    "text": "#0B1916"
+  },
+  "typography": {
+    "heading_font": "Inter",
+    "body_font": "Inter",
+    "scale_ratio": 1.25
+  },
+  "design_style": "executive",
+  "code_theme": "auto",
+  "toc": {
+    "behavior": "sticky-sidebar",
+    "max_depth": 2
+  },
+  "company_name": "olin",
+  "logo_url": "",
+  "derived_palette": {},
+  "setup_completed_at": "2026-08-18T18:00:00-06:00"
+}

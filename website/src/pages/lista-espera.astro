@@ -1,0 +1,64 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import WaitlistApplication from "../components/WaitlistApplication.astro";
+import FounderRewards from "../components/FounderRewards";
+---
+
+<BaseLayout
+  title="Acceso fundador | Olin"
+  description="Solicite acceso al programa fundador de Olin para instituciones que evalúan crédito a pequeños negocios en México."
+>
+  <section class="waitlist-hero" aria-labelledby="waitlist-title">
+    <div class="shell waitlist-hero__grid">
+      <div>
+        <p class="eyebrow">Círculo fundador · 10 equipos</p>
+        <h1 id="waitlist-title">Sea de los primeros en convertir evidencia dispersa en crédito <em>defendible.</em></h1>
+      </div>
+      <div class="waitlist-hero__aside">
+        <p>Probamos Olin junto a equipos que ya evalúan pequeños negocios y quieren ver, en casos reales, qué cambia cuando el expediente por fin se puede revisar.</p>
+        <ul>
+          <li>Banco, SOFOM, fintech, adquirente, red o distribuidor</li>
+          <li>Piloto en paralelo; la institución conserva la decisión</li>
+          <li>Sin movimiento de dinero durante la prueba</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--paper waitlist-offer" aria-labelledby="founding-offer-title">
+    <div class="shell waitlist-offer__grid">
+      <div>
+        <p class="section-kicker">Beneficio fundador</p>
+        <h2 class="section-title" id="founding-offer-title">Los primeros 10 equipos reciben una sesión inicial de diagnóstico del proceso <em>sin costo.</em></h2>
+      </div>
+      <div class="waitlist-offer__details">
+        <p>En 30 minutos identificamos qué evidencia suele existir, qué faltantes frenan una segunda lectura y cómo probarlo con diez casos autorizados. Esta sesión inicial no solicita archivos de cartera ni datos de acreditados.</p>
+        <div class="notice">
+          <span class="notice__icon">10</span>
+          <div><strong>Selección por encaje, no por azar.</strong><p>No es un sorteo ni una oferta de crédito. Se priorizan problemas concretos, acceso autorizado a casos y un responsable del piloto.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--white" aria-label="Programa de referidos fundador">
+    <div class="shell"><FounderRewards client:load /></div>
+  </section>
+
+  <section class="section section--dark" id="aplicar">
+    <div class="shell">
+      <WaitlistApplication />
+    </div>
+  </section>
+
+  <section class="section section--white" aria-labelledby="after-apply-title">
+    <div class="shell section-heading">
+      <div><p class="section-kicker">Después de aplicar</p><h2 class="section-title" id="after-apply-title">Una respuesta clara, no una lista <em>infinita.</em></h2></div>
+      <ol class="waitlist-next-steps">
+        <li><span>01</span><div><strong>Revisión de encaje</strong><p>Validamos tipo de institución, problema, cartera y responsable.</p></div></li>
+        <li><span>02</span><div><strong>Sesión de 30 minutos</strong><p>Los equipos con mejor encaje definen una pregunta medible para el piloto.</p></div></li>
+        <li><span>03</span><div><strong>Decisión de piloto</strong><p>Acordamos diez casos, controles, datos permitidos y criterio de avance.</p></div></li>
+      </ol>
+    </div>
+  </section>
+</BaseLayout>

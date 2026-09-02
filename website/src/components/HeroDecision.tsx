@@ -26,10 +26,13 @@ const pathVariants = {
 
 export default function HeroDecision() {
   const [ready, setReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [run, setRun] = useState(0);
-  const reduced = useReducedMotion();
+  const prefersReduced = useReducedMotion();
+  const reduced = mounted && Boolean(prefersReduced);
 
   useEffect(() => {
+    setMounted(true);
     setReady(false);
     const frame = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(frame);

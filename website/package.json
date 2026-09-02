@@ -9,8 +9,10 @@
     "preview": "astro preview --host 127.0.0.1 --port 8001",
     "check": "astro check",
     "qa:static": "node scripts/qa-static.mjs",
-    "test": "pnpm run build && pnpm run qa:static",
-    "deploy": "pnpm run test && pnpm dlx wrangler@latest deploy --config wrangler.jsonc",
+    "qa:visual": "node scripts/visual-qa.cjs",
+    "test": "pnpm run build && pnpm run qa:static && pnpm run qa:visual",
+    "config:production": "node scripts/prepare-production-config.mjs",
+    "deploy": "pnpm run config:production && pnpm run test && pnpm dlx wrangler@latest deploy --config wrangler.jsonc",
     "video:build": "zsh demo-output/build.sh"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "ffmpeg-static": "^5.3.0",
+    "playwright": "1.62.1",
     "typescript": "6.0.3"
   }
 }

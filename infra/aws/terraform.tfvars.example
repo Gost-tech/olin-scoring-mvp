@@ -1,0 +1,14 @@
+aws_region                   = "us-east-1"
+environment                  = "bank-shadow"
+vpc_id                       = "vpc-replace"
+private_subnet_ids           = ["subnet-private-a", "subnet-private-b"]
+application_security_group_id = "sg-olin-application"
+application_image             = "123456789012.dkr.ecr.us-east-1.amazonaws.com/olin@sha256:replace"
+application_secrets_arn       = "arn:aws:secretsmanager:us-east-1:123456789012:secret:olin-bank-shadow"
+application_domain            = "olin-uat.bank.example"
+certificate_arn               = "arn:aws:acm:us-east-1:123456789012:certificate/replace"
+load_balancer_subnet_ids      = ["subnet-alb-a", "subnet-alb-b"]
+allowed_ingress_cidrs         = ["203.0.113.10/32"]
+internal_load_balancer        = true
+alert_email                  = "bank-operations@example.com"
+multi_az                     = true

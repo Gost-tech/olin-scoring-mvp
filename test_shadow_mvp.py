@@ -123,8 +123,35 @@ class ShadowMVPContractTests(unittest.TestCase):
                     "funding_purpose": "inventory",
                     "project_description": "Comprar inventario para el negocio.",
                     "evidence_route": "inventory_led",
+                    "fmcg": {
+                        "verified": True,
+                        "evidence_reference": "partner://fmcg/PARTNER-001",
+                    },
                 }
             )
+
+    def test_production_evidence_route_requires_verified_source(self):
+        base = {
+            "case_mode": "shadow",
+            "consent": {
+                "channel": "in_person",
+                "text": "Autorizo la evaluación para el piloto sombra.",
+            },
+            "cohort_id": "shadow_2026_07",
+            "partner_case_reference": "PARTNER-ROUTE-001",
+            "funding_purpose": "inventory",
+            "project_description": "Comprar inventario para el negocio.",
+            "evidence_route": "inventory_led",
+        }
+        with patch.dict(os.environ, {"OLIN_MODE": "production"}):
+            with self.assertRaisesRegex(ValueError, "verified fmcg"):
+                server._validate_submission_metadata(base)
+            valid = json.loads(json.dumps(base))
+            valid["fmcg"] = {
+                "verified": True,
+                "evidence_reference": "FMCG-ROUTE-001",
+            }
+            server._validate_submission_metadata(valid)
 
     def test_public_merchant_origination_is_disabled(self):
         with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
@@ -231,6 +258,7 @@ class ShadowMVPContractTests(unittest.TestCase):
             "OLIN_MODE": "production",
             "OLIN_API_KEYS": json.dumps({"monex_test": token}),
             "OLIN_STP_WEBHOOK_SECRET": "shadow-test-webhook",
+            "OLIN_ALLOW_LEGACY_CONSENT": "1",
         }
         payload = {
             "merchant_name": "Abarrotes Piloto Uno",
@@ -285,6 +313,9 @@ class ShadowMVPContractTests(unittest.TestCase):
                 "active_loans_count": 1,
                 "worst_mob_status": "01",
                 "score": 720,
+                "source": "partner_bureau",
+                "verified": True,
+                "evidence_reference": "BUREAU-UAT-001",
             },
             "fraud": {
                 "phone_mx": "5512345678",
@@ -329,7 +360,7 @@ class ShadowMVPContractTests(unittest.TestCase):
                 ).fetchall()
 
         self.assertEqual(intake_status, 200)
-        self.assertIn(b"Crear expediente sombra", intake_html)
+        self.assertIn(b"Crear un expediente verificable", intake_html)
         self.assertEqual(create_status, 201)
         self.assertEqual(list_status, 200)
         self.assertEqual(listed[0]["case_mode"], "shadow")

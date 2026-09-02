@@ -45,16 +45,25 @@ for (const path of htmlFiles) {
 }
 
 const home = readFileSync(join(dist, "index.html"), "utf8");
-record(home.includes("¿Puede este negocio"), "accueil: question principale explicite");
-record(home.includes("Nadie puede garantizar el pago"), "accueil: aucune promesse de remboursement");
 record(
-  home.includes("Comercio y retail")
-    && home.includes("Alimentos y hospitalidad")
-    && home.includes("Servicios y profesionales")
-    && home.includes("Producción y transporte"),
+  home.includes("De evidencia dispersa a una recomendación que su equipo puede"),
+  "accueil: proposition principale explicite",
+);
+record(home.includes("El resultado sigue siendo una estimación, no una garantía"), "accueil: aucune promesse de remboursement");
+record(
+  home.includes("Abarrotes")
+    && home.includes("Taquería")
+    && home.includes("Papelería"),
   "accueil: plusieurs routes de preuve pour petits commerces",
 );
 record(!/microcomercios|corner stores|tiendas de esquina|un abarrotes|garantiza el reembolso/i.test(home), "accueil: terminologie interdite absente");
+
+const waitlist = readFileSync(join(dist, "lista-espera", "index.html"), "utf8");
+record(waitlist.includes("Solicitar acceso fundador"), "liste d'attente: CTA spécifique");
+record(waitlist.includes('type="email"') && waitlist.includes('name="email"'), "liste d'attente: email requis");
+record(waitlist.includes("solicitudes recibidas"), "liste d'attente: compteur public présent");
+record(waitlist.includes("Selección por encaje, no por azar"), "liste d'attente: avantage sans loterie");
+record(waitlist.includes("no es una solicitud de crédito") || waitlist.includes("No es un sorteo"), "liste d'attente: frontière crédit explicite");
 
 const explorer = readFileSync(join(root, "src", "components", "DecisionExplorer.tsx"), "utf8");
 record(explorer.includes('C3 · D2 · S1 a la Ruta 11'), "cas synthétique: C3 · D2 · S1 mène à la route 11");

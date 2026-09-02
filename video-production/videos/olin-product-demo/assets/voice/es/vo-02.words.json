@@ -1,0 +1,140 @@
+[
+  {
+    "id": "w0",
+    "text": "La",
+    "start": 0.14,
+    "end": 0.219
+  },
+  {
+    "id": "w1",
+    "text": "dueña",
+    "start": 0.299,
+    "end": 0.599
+  },
+  {
+    "id": "w2",
+    "text": "explica",
+    "start": 0.699,
+    "end": 1.22
+  },
+  {
+    "id": "w3",
+    "text": "para",
+    "start": 1.339,
+    "end": 1.5
+  },
+  {
+    "id": "w4",
+    "text": "qué",
+    "start": 1.639,
+    "end": 1.779
+  },
+  {
+    "id": "w5",
+    "text": "necesita",
+    "start": 1.86,
+    "end": 2.44
+  },
+  {
+    "id": "w6",
+    "text": "el",
+    "start": 2.539,
+    "end": 2.639
+  },
+  {
+    "id": "w7",
+    "text": "dinero.",
+    "start": 2.679,
+    "end": 3.139
+  },
+  {
+    "id": "w8",
+    "text": "Antes",
+    "start": 4.199,
+    "end": 4.46
+  },
+  {
+    "id": "w9",
+    "text": "de",
+    "start": 4.48,
+    "end": 4.579
+  },
+  {
+    "id": "w10",
+    "text": "consultar",
+    "start": 4.619,
+    "end": 5.219
+  },
+  {
+    "id": "w11",
+    "text": "cualquier",
+    "start": 5.259,
+    "end": 5.619
+  },
+  {
+    "id": "w12",
+    "text": "dato,",
+    "start": 5.699,
+    "end": 6.059
+  },
+  {
+    "id": "w13",
+    "text": "Olin",
+    "start": 6.279,
+    "end": 6.559
+  },
+  {
+    "id": "w14",
+    "text": "registra",
+    "start": 6.619,
+    "end": 7.159
+  },
+  {
+    "id": "w15",
+    "text": "su",
+    "start": 7.199,
+    "end": 7.279
+  },
+  {
+    "id": "w16",
+    "text": "consentimiento,",
+    "start": 7.319,
+    "end": 8.24
+  },
+  {
+    "id": "w17",
+    "text": "el",
+    "start": 8.46,
+    "end": 8.519
+  },
+  {
+    "id": "w18",
+    "text": "canal",
+    "start": 8.619,
+    "end": 9.059
+  },
+  {
+    "id": "w19",
+    "text": "y",
+    "start": 9.119,
+    "end": 9.14
+  },
+  {
+    "id": "w20",
+    "text": "el",
+    "start": 9.179,
+    "end": 9.22
+  },
+  {
+    "id": "w21",
+    "text": "texto",
+    "start": 9.319,
+    "end": 9.679
+  },
+  {
+    "id": "w22",
+    "text": "exacto.",
+    "start": 9.8,
+    "end": 10.38
+  }
+]

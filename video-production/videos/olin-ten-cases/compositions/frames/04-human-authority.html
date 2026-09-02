@@ -1,0 +1,398 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-400-normal.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-600-normal.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-700-normal.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Inter", sans-serif;
+      color: #0b1916;
+    }
+
+    .f04-human-authority-ground {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+    }
+
+    .f04-human-authority-evidence {
+      position: absolute;
+      inset: 0;
+    }
+
+    .f04-human-authority-kicker {
+      position: absolute;
+      left: 54px;
+      top: 52px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #0b1916;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+    }
+
+    .f04-human-authority-kicker::before {
+      content: "";
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: #c8fa5a;
+    }
+
+    .f04-human-authority-rail {
+      position: absolute;
+      left: 54px;
+      top: 146px;
+      width: 218px;
+    }
+
+    .f04-human-authority-step {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      align-items: center;
+      min-height: 84px;
+      border-top: 1.5px solid rgba(200, 250, 90, 0.2);
+    }
+
+    .f04-human-authority-step:last-child {
+      border-bottom: 1.5px solid rgba(200, 250, 90, 0.2);
+    }
+
+    .f04-human-authority-step-number {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .f04-human-authority-step-copy {
+      display: inline-flex;
+      align-items: center;
+      min-width: 152px;
+      white-space: nowrap;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .f04-human-authority-type-cursor {
+      display: inline-block;
+      width: 8px;
+      margin-left: 4px;
+      color: #c55232;
+    }
+
+    .f04-human-authority-surface {
+      position: absolute;
+      left: 306px;
+      top: 116px;
+      width: 720px;
+      height: 472px;
+      overflow: hidden;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: rgba(200, 250, 90, 0.04);
+    }
+
+    .f04-human-authority-surface img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 48%;
+    }
+
+    .f04-human-authority-review-tag {
+      position: absolute;
+      left: 326px;
+      top: 136px;
+      z-index: 2;
+      padding: 8px 14px;
+      border-radius: 100px;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .f04-human-authority-target-button {
+      position: absolute;
+      left: 813px;
+      top: 518px;
+      z-index: 4;
+      display: grid;
+      place-items: center;
+      width: 152px;
+      height: 46px;
+      border-radius: 100px;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .f04-human-authority-audit-card {
+      position: absolute;
+      left: 553px;
+      top: 614px;
+      z-index: 3;
+      width: 473px;
+      height: 232px;
+      overflow: hidden;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    .f04-human-authority-audit-card img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 64% 100%;
+    }
+
+    .f04-human-authority-proof-label {
+      position: absolute;
+      left: 575px;
+      top: 630px;
+      z-index: 4;
+      padding: 8px 13px;
+      border-radius: 100px;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .f04-human-authority-cursor {
+      position: absolute;
+      left: 697px;
+      top: 390px;
+      z-index: 20;
+      width: 31px;
+      height: 38px;
+      pointer-events: none;
+      transform-origin: 6px 6px;
+    }
+
+    .f04-human-authority-cursor svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .f04-human-authority-ripple {
+      position: absolute;
+      left: 889px;
+      top: 541px;
+      z-index: 15;
+      width: 54px;
+      height: 54px;
+      margin: -27px 0 0 -27px;
+      border: 2px solid #c8fa5a;
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .f04-human-authority-authority {
+      position: absolute;
+      left: 54px;
+      top: 92px;
+      z-index: 30;
+      width: 972px;
+      pointer-events: none;
+    }
+
+    .f04-human-authority-authority-line {
+      display: inline-block;
+      padding: 7px 16px 9px;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 57px;
+      font-weight: 700;
+      line-height: 0.98;
+      letter-spacing: -0.035em;
+    }
+
+    .f04-human-authority-authority-line + .f04-human-authority-authority-line {
+      margin-top: 7px;
+      font-size: 82px;
+    }
+
+    .f04-human-authority-lock-rule {
+      width: 0;
+      height: 5px;
+      margin-top: 14px;
+      border-radius: 3px;
+      background: #c8fa5a;
+    }
+
+    .f04-human-authority-progress {
+      position: absolute;
+      left: 54px;
+      top: 878px;
+      width: 972px;
+      height: 3px;
+      background: rgba(200, 250, 90, 0.15);
+    }
+
+    .f04-human-authority-progress span {
+      display: block;
+      width: 40%;
+      height: 100%;
+      background: #c8fa5a;
+    }
+  </style>
+
+  <div data-hf-id="hf-ermq" id="root" data-composition-id="04-human-authority" data-width="1080" data-height="1080" data-start="0" data-duration="8.04">
+    <div data-hf-id="hf-mnam" class="clip f04-human-authority-ground" data-start="0" data-duration="8.04" data-track-index="0"></div>
+
+    <div data-hf-id="hf-mokh" class="clip f04-human-authority-evidence" data-start="0" data-duration="8.04" data-track-index="1">
+      <div data-hf-id="hf-qudh" class="f04-human-authority-kicker">CONTROL HUMANO</div>
+
+      <div data-hf-id="hf-au3n" class="f04-human-authority-rail">
+        <div data-hf-id="hf-77iw" class="f04-human-authority-step" id="f04-human-authority-step-1">
+          <div data-hf-id="hf-54m6" class="f04-human-authority-step-number">01</div>
+          <div data-hf-id="hf-tnhl" class="f04-human-authority-step-copy"><span data-hf-id="hf-i4fd" id="f04-human-authority-step-copy-1"></span><span data-hf-id="hf-cpsi" class="f04-human-authority-type-cursor" id="f04-human-authority-type-cursor-1">_</span></div>
+        </div>
+        <div data-hf-id="hf-fver" class="f04-human-authority-step" id="f04-human-authority-step-2">
+          <div data-hf-id="hf-5ix7" class="f04-human-authority-step-number">02</div>
+          <div data-hf-id="hf-f3ml" class="f04-human-authority-step-copy"><span data-hf-id="hf-oa56" id="f04-human-authority-step-copy-2"></span><span data-hf-id="hf-12nj" class="f04-human-authority-type-cursor" id="f04-human-authority-type-cursor-2">_</span></div>
+        </div>
+      </div>
+
+      <div data-hf-id="hf-mjgy" class="f04-human-authority-surface" id="f04-human-authority-surface">
+        <img data-hf-id="hf-afqh" src="assets/07-analyst-review.png" alt="Pantalla real de revisión del analista">
+      </div>
+      <div data-hf-id="hf-f70f" class="f04-human-authority-review-tag" id="f04-human-authority-review-tag">REVISIÓN DEL ANALISTA</div>
+
+      <div data-hf-id="hf-n04b" class="f04-human-authority-target-button" id="f04-human-authority-target-button">REGISTRAR</div>
+      <div data-hf-id="hf-5lqo" class="f04-human-authority-ripple f04-human-authority-ripple-1"></div>
+      <div data-hf-id="hf-e9mj" class="f04-human-authority-ripple f04-human-authority-ripple-2"></div>
+      <div data-hf-id="hf-abii" class="f04-human-authority-ripple f04-human-authority-ripple-3"></div>
+      <div data-hf-id="hf-eqgf" class="f04-human-authority-cursor" id="f04-human-authority-cursor" aria-hidden="true">
+        <svg data-hf-id="hf-wudk" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path data-hf-id="hf-8ctm" d="M3 2L27 23H16L11 36L3 2Z" fill="#0B1916" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" />
+        </svg>
+      </div>
+
+      <div data-hf-id="hf-fxxy" class="f04-human-authority-audit-card" id="f04-human-authority-audit-card">
+        <img data-hf-id="hf-5cav" src="assets/08-audit-outcome.png" alt="Resultado real registrado en la bitácora de auditoría">
+      </div>
+      <div data-hf-id="hf-nmsi" class="f04-human-authority-proof-label" id="f04-human-authority-proof-label">REGISTRO DE AUDITORÍA</div>
+
+      <div data-hf-id="hf-4y5u" class="f04-human-authority-progress"><span data-hf-id="hf-uckh"></span></div>
+    </div>
+
+    <div data-hf-id="hf-khqq" class="clip f04-human-authority-authority" data-layout-allow-overlap="" data-start="0" data-duration="8.04" data-track-index="2">
+      <div data-hf-id="hf-n1ob" class="f04-human-authority-authority-line" id="f04-human-authority-authority-1" data-layout-allow-overlap="">LA INSTITUCIÓN</div><br data-hf-id="hf-x5px">
+      <div data-hf-id="hf-0gqm" class="f04-human-authority-authority-line" id="f04-human-authority-authority-2" data-layout-allow-overlap="">DECIDE</div>
+      <div data-hf-id="hf-t3w0" class="f04-human-authority-lock-rule" id="f04-human-authority-lock-rule"></div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["04-human-authority"] = tl;
+
+      const stepOne = document.getElementById("f04-human-authority-step-copy-1");
+      const stepTwo = document.getElementById("f04-human-authority-step-copy-2");
+      const cursorOne = document.getElementById("f04-human-authority-type-cursor-1");
+      const cursorTwo = document.getElementById("f04-human-authority-type-cursor-2");
+      const sequence = [
+        { t: 0.00, one: "", two: "" },
+        { t: 0.42, one: "REV", two: "" },
+        { t: 0.66, one: "REVIS", two: "" },
+        { t: 0.90, one: "REVISAR", two: "" },
+        { t: 1.38, one: "REVISAR", two: "DEC" },
+        { t: 1.66, one: "REVISAR", two: "DECIDI" },
+        { t: 1.92, one: "REVISAR", two: "DECIDIR" }
+      ];
+      const textAt = (time) => {
+        for (let i = sequence.length - 1; i >= 0; i -= 1) {
+          if (time >= sequence[i].t) return sequence[i];
+        }
+        return sequence[0];
+      };
+      const textDriver = { t: 0 };
+      const blinkDriver = { p: 0 };
+
+      tl.fromTo("#f04-human-authority-surface", { opacity: 0, y: 20, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power3.out" }, 0);
+      tl.fromTo(".f04-human-authority-kicker", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out" }, 0.08);
+      tl.fromTo("#f04-human-authority-review-tag", { opacity: 0, scale: 0.86 }, { opacity: 1, scale: 1, duration: 0.36, ease: "back.out(1.3)" }, 0.28);
+      tl.fromTo("#f04-human-authority-step-1", { opacity: 0, x: -22 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out" }, 0.36);
+      tl.fromTo("#f04-human-authority-step-2", { opacity: 0, x: -22 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out" }, 1.28);
+      tl.to(textDriver, {
+        t: 2.45,
+        duration: 2.45,
+        ease: "none",
+        onUpdate: () => {
+          const state = textAt(textDriver.t);
+          stepOne.textContent = state.one;
+          stepTwo.textContent = state.two;
+        }
+      }, 0);
+      tl.to(blinkDriver, {
+        p: Math.PI * 8,
+        duration: 2.45,
+        ease: "none",
+        onUpdate: () => {
+          const visible = Math.sin(blinkDriver.p) > 0 ? "1" : "0";
+          cursorOne.style.opacity = visible;
+          cursorTwo.style.opacity = visible;
+        }
+      }, 0);
+
+      tl.fromTo("#f04-human-authority-target-button", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.34, ease: "back.out(1.3)" }, 2.48);
+      tl.fromTo("#f04-human-authority-cursor", { opacity: 0, x: 0, y: 0 }, { opacity: 1, x: 0, y: 0, duration: 0.18, ease: "none" }, 2.55);
+      tl.to("#f04-human-authority-cursor", { x: 187, y: 143, duration: 0.7, ease: "power2.inOut" }, 2.66);
+      tl.to("#f04-human-authority-cursor", { scale: 0.84, duration: 0.08, ease: "power2.in", yoyo: true, repeat: 1 }, 3.47);
+      tl.to("#f04-human-authority-target-button", { scale: 0.95, duration: 0.08, ease: "power2.in", yoyo: true, repeat: 1 }, 3.47);
+      tl.set([".f04-human-authority-ripple-1", ".f04-human-authority-ripple-2", ".f04-human-authority-ripple-3"], { opacity: 1, scale: 0 }, 3.51);
+      tl.to([".f04-human-authority-ripple-1", ".f04-human-authority-ripple-2", ".f04-human-authority-ripple-3"], { scale: 3.4, opacity: 0, duration: 0.72, ease: "power3.out", stagger: 0.08, immediateRender: false }, 3.51);
+      tl.fromTo("#f04-human-authority-audit-card", { opacity: 0, x: 88, y: 20 }, { opacity: 1, x: 0, y: 0, duration: 0.62, ease: "expo.out" }, 3.62);
+      tl.fromTo("#f04-human-authority-proof-label", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.38, ease: "circ.out" }, 3.94);
+
+      const PULSE = 0.4;
+      const BEATS = [PULSE * 11, PULSE * 12, PULSE * 13];
+      tl.to(["#f04-human-authority-surface", "#f04-human-authority-review-tag", ".f04-human-authority-rail", "#f04-human-authority-target-button", "#f04-human-authority-cursor", "#f04-human-authority-audit-card", "#f04-human-authority-proof-label"], { opacity: 0.42, duration: 0.46, ease: "power2.out" }, BEATS[0]);
+      tl.fromTo("#f04-human-authority-authority-1", { scale: 1.45, filter: "blur(14px)", opacity: 0 }, { scale: 1, filter: "blur(0px)", opacity: 1, duration: 0.5, ease: "power4.out" }, BEATS[0]);
+      tl.fromTo("#f04-human-authority-authority-2", { x: -300, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: "expo.out" }, BEATS[1]);
+      tl.to("#f04-human-authority-lock-rule", { width: 246, duration: 0.55, ease: "circ.out" }, BEATS[2]);
+    })();
+  </script>
+</template>

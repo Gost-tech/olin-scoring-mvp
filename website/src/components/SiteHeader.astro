@@ -3,10 +3,9 @@ import OlinLogo from "./OlinLogo.astro";
 
 const currentPath = Astro.url.pathname;
 const nav = [
-  { href: "/demo/", label: "Demo" },
-  { href: "/analyst-demo/", label: "Mesa" },
-  { href: "/como-funciona/", label: "Cómo funciona" },
+  { href: "/como-funciona/", label: "Producto" },
   { href: "/piloto/", label: "Piloto" },
+  { href: "/lista-espera/", label: "Acceso" },
   { href: "/empresa/", label: "Empresa" }
 ];
 ---
@@ -26,9 +25,9 @@ const nav = [
     </nav>
 
     <div class="site-header__actions">
-      <a class="text-link desktop-only" href="/#casos">Ver casos</a>
-      <a class="button button--small button--signal" href="/demo/" data-demo-link data-demo-fallback="/demo/">
-        Abrir producto <span aria-hidden="true">↗</span>
+      <a class="text-link desktop-only" href="/#mercado">Por qué ahora</a>
+      <a class="button button--small button--signal" href="/lista-espera/#aplicar">
+        Solicitar acceso <span aria-hidden="true">↗</span>
       </a>
     </div>
 
@@ -40,9 +39,9 @@ const nav = [
         <nav aria-label="Navegación móvil">
           <a href="/">Inicio</a>
           {nav.map((item) => <a href={item.href}>{item.label}</a>)}
-          <a href="/#casos">Casos sintéticos</a>
+          <a href="/#mercado">Por qué ahora</a>
         </nav>
-        <a class="button button--signal" href="/demo/" data-demo-link data-demo-fallback="/demo/">Abrir producto <span aria-hidden="true">↗</span></a>
+        <a class="button button--signal" href="/lista-espera/#aplicar">Solicitar acceso <span aria-hidden="true">↗</span></a>
         <p>Sitio para instituciones · no acepta solicitudes de crédito</p>
       </div>
     </details>

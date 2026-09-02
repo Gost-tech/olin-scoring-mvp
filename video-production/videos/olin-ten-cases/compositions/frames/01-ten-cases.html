@@ -1,0 +1,338 @@
+<template>
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      font-family: sans-serif;
+      color: #ffffff;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .f01-ten-cases-ground {
+      background:
+        radial-gradient(circle at 50% 34%, rgba(200, 250, 90, 0.055), transparent 32%),
+        #0b1916;
+    }
+
+    .f01-ten-cases-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.22;
+      background-image: radial-gradient(rgba(255,255,255,0.18) 0.7px, transparent 0.7px);
+      background-size: 10px 10px;
+      -webkit-mask-image: linear-gradient(to bottom, black, transparent 76%);
+      mask-image: linear-gradient(to bottom, black, transparent 76%);
+    }
+
+    .f01-ten-cases-rail {
+      position: absolute;
+      left: 540px;
+      top: 96px;
+      width: 1px;
+      height: 565px;
+      background: linear-gradient(to bottom, transparent, rgba(200,250,90,0.34) 20%, rgba(200,250,90,0.18) 80%, transparent);
+      transform-origin: 50% 0%;
+    }
+
+    .f01-ten-cases-rail::before,
+    .f01-ten-cases-rail::after {
+      content: "";
+      position: absolute;
+      left: -420px;
+      width: 840px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(200,250,90,0.18), transparent);
+    }
+
+    .f01-ten-cases-rail::before { top: 119px; }
+    .f01-ten-cases-rail::after { top: 459px; }
+
+    .f01-ten-cases-index-ticks {
+      position: absolute;
+      left: 526px;
+      top: 116px;
+      width: 28px;
+      height: 520px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .f01-ten-cases-index-ticks i {
+      width: 28px;
+      height: 1px;
+      background: rgba(200,250,90,0.35);
+    }
+
+    .f01-ten-cases-burst-wrap {
+      position: absolute;
+      inset: 0 0 270px 0;
+    }
+
+    .f01-ten-cases-tile {
+      position: absolute;
+      top: 385px;
+      left: 540px;
+      width: 142px;
+      height: 92px;
+      box-sizing: border-box;
+      display: grid;
+      place-items: center;
+      border: 1.5px solid rgba(200,250,90,0.2);
+      border-radius: 14px;
+      background: rgba(200,250,90,0.04);
+      color: rgba(255,255,255,0.7);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      font-variant-numeric: tabular-nums;
+      will-change: transform, opacity;
+    }
+
+    .f01-ten-cases-tile::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #c8fa5a;
+      opacity: 0.78;
+    }
+
+    .f01-ten-cases-counter-wrap {
+      position: absolute;
+      top: 234px;
+      left: 340px;
+      width: 400px;
+      height: 300px;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+    }
+
+    .f01-ten-cases-counter {
+      display: inline-block;
+      width: 400px;
+      color: #c8fa5a;
+      text-align: center;
+      font-size: 270px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.075em;
+      padding-right: 0.075em;
+      font-variant-numeric: tabular-nums;
+      transform-origin: center center;
+      will-change: transform, opacity;
+    }
+
+    .f01-ten-cases-slam {
+      position: absolute;
+      left: 80px;
+      top: 675px;
+      width: 920px;
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      gap: 22px;
+      color: #c8fa5a;
+      font-size: 67px;
+      line-height: 0.95;
+      font-weight: 800;
+      letter-spacing: -0.045em;
+      white-space: nowrap;
+    }
+
+    .f01-ten-cases-slam span {
+      display: inline-block;
+      will-change: transform, opacity, filter;
+    }
+
+    .f01-ten-cases-beat-bar {
+      position: absolute;
+      left: 390px;
+      top: 771px;
+      width: 300px;
+      height: 4px;
+      border-radius: 6px;
+      background: rgba(200,250,90,0.15);
+      overflow: hidden;
+    }
+
+    .f01-ten-cases-beat-bar i {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: #c8fa5a;
+      transform-origin: 0 50%;
+    }
+
+    .f01-ten-cases-lockup {
+      position: absolute;
+      left: 514px;
+      top: 822px;
+      width: 52px;
+      height: 52px;
+      box-sizing: border-box;
+      padding: 7px;
+      border: 1px solid rgba(200,250,90,0.2);
+      border-radius: 50%;
+      background: rgba(200,250,90,0.08);
+    }
+
+    .f01-ten-cases-lockup img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      filter: invert(93%) sepia(79%) saturate(634%) hue-rotate(24deg) brightness(103%);
+    }
+  </style>
+
+  <div data-hf-id="hf-4gie" id="root" data-composition-id="01-ten-cases" data-width="1080" data-height="1080" data-start="0" data-duration="4.892">
+    <div data-hf-id="hf-i0am" class="clip f01-ten-cases-ground" data-start="0" data-duration="4.892" data-track-index="0">
+      <div data-hf-id="hf-if14" class="f01-ten-cases-grain" aria-hidden="true"></div>
+    </div>
+
+    <div data-hf-id="hf-wrz5" class="clip f01-ten-cases-content" data-start="0" data-duration="4.892" data-track-index="1">
+      <div data-hf-id="hf-qut3" class="f01-ten-cases-rail" aria-hidden="true"></div>
+      <div data-hf-id="hf-cvzs" class="f01-ten-cases-index-ticks" aria-hidden="true">
+        <i data-hf-id="hf-wt6k"></i><i data-hf-id="hf-zeb8"></i><i data-hf-id="hf-y7e5"></i><i data-hf-id="hf-ylp6"></i><i data-hf-id="hf-0l8b"></i><i data-hf-id="hf-0zjc"></i><i data-hf-id="hf-zsm9"></i><i data-hf-id="hf-06xa"></i><i data-hf-id="hf-26gf"></i><i data-hf-id="hf-2krg"></i>
+      </div>
+
+      <div data-hf-id="hf-k0rj" class="f01-ten-cases-burst-wrap" aria-label="Ten case identifiers">
+        <div data-hf-id="hf-fiyl" class="f01-ten-cases-tile" data-target-x="-380" data-target-y="-170">C-01</div>
+        <div data-hf-id="hf-jq9b" class="f01-ten-cases-tile" data-target-x="-190" data-target-y="-170">C-02</div>
+        <div data-hf-id="hf-7zyb" class="f01-ten-cases-tile" data-target-x="0" data-target-y="-170">C-03</div>
+        <div data-hf-id="hf-8zzg" class="f01-ten-cases-tile" data-target-x="190" data-target-y="-170">C-04</div>
+        <div data-hf-id="hf-voh8" class="f01-ten-cases-tile" data-target-x="380" data-target-y="-170">C-05</div>
+        <div data-hf-id="hf-n93d" class="f01-ten-cases-tile" data-target-x="-380" data-target-y="170">C-06</div>
+        <div data-hf-id="hf-ijlr" class="f01-ten-cases-tile" data-target-x="-190" data-target-y="170">C-07</div>
+        <div data-hf-id="hf-o7cz" class="f01-ten-cases-tile" data-target-x="0" data-target-y="170">C-08</div>
+        <div data-hf-id="hf-qfeu" class="f01-ten-cases-tile" data-target-x="190" data-target-y="170">C-09</div>
+        <div data-hf-id="hf-j2zl" class="f01-ten-cases-tile" data-target-x="380" data-target-y="170">C-10</div>
+      </div>
+
+      <div data-hf-id="hf-l073" class="f01-ten-cases-counter-wrap">
+        <span data-hf-id="hf-xx2l" id="f01-ten-cases-counter" class="f01-ten-cases-counter">0</span>
+      </div>
+
+      <div data-hf-id="hf-5zy6" class="f01-ten-cases-slam" aria-label="Sin mover dinero">
+        <span data-hf-id="hf-0i84" id="f01-ten-cases-sin">SIN</span>
+        <span data-hf-id="hf-7f4c" id="f01-ten-cases-mover">MOVER</span>
+        <span data-hf-id="hf-ezuu" id="f01-ten-cases-dinero">DINERO</span>
+      </div>
+      <div data-hf-id="hf-vrjv" class="f01-ten-cases-beat-bar" aria-hidden="true"><i data-hf-id="hf-oz7w"></i></div>
+      <div data-hf-id="hf-n7e3" class="f01-ten-cases-lockup" aria-label="Olin">
+        <img data-hf-id="hf-j2g8" src="assets/olin-logo.svg" alt="Olin">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.querySelector('[data-composition-id="01-ten-cases"]');
+      const counter = root.querySelector('#f01-ten-cases-counter');
+      const state = { value: 0 };
+      const tl = gsap.timeline({ paused: true });
+      const PULSE = 0.15;
+      const BEATS = [2.6, 2.6 + PULSE, 2.6 + PULSE * 2];
+
+      tl.fromTo(
+        counter,
+        { scale: 0.46, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 1.15, ease: 'power3.out' },
+        0
+      );
+      tl.to(
+        state,
+        {
+          value: 10,
+          duration: 1.15,
+          ease: 'power3.out',
+          onUpdate: () => { counter.textContent = String(Math.round(state.value)); }
+        },
+        0
+      );
+
+      tl.fromTo(
+        root.querySelector('.f01-ten-cases-rail'),
+        { scaleY: 0, opacity: 0 },
+        { scaleY: 1, opacity: 1, duration: 0.9, ease: 'power2.out' },
+        0.2
+      );
+      tl.fromTo(
+        root.querySelectorAll('.f01-ten-cases-index-ticks i'),
+        { scaleX: 0, opacity: 0 },
+        { scaleX: 1, opacity: 1, duration: 0.28, stagger: 0.065, ease: 'power2.out' },
+        0.3
+      );
+
+      root.querySelectorAll('.f01-ten-cases-tile').forEach((tile, index) => {
+        tl.fromTo(
+          tile,
+          {
+            xPercent: -50,
+            yPercent: -50,
+            x: Number(tile.dataset.targetX) * 0.18,
+            y: Number(tile.dataset.targetY) * 0.18,
+            scale: 0.62,
+            opacity: 0
+          },
+          {
+            x: Number(tile.dataset.targetX),
+            y: Number(tile.dataset.targetY),
+            scale: 1,
+            opacity: 1,
+            duration: 0.82,
+            ease: 'power3.out'
+          },
+          1.2 + index * 0.06
+        );
+      });
+
+      tl.fromTo(
+        root.querySelector('#f01-ten-cases-sin'),
+        { scale: 1.65, filter: 'blur(16px)', opacity: 0 },
+        { scale: 1, filter: 'blur(0px)', opacity: 1, duration: 0.42, ease: 'power4.out' },
+        BEATS[0]
+      );
+      tl.fromTo(
+        root.querySelector('#f01-ten-cases-mover'),
+        { x: -180, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.42, ease: 'expo.out' },
+        BEATS[1]
+      );
+      tl.fromTo(
+        root.querySelector('#f01-ten-cases-dinero'),
+        { y: 64, rotation: 5, opacity: 0 },
+        { y: 0, rotation: 0, opacity: 1, duration: 0.5, ease: 'circ.out' },
+        BEATS[2]
+      );
+      tl.fromTo(
+        root.querySelector('.f01-ten-cases-beat-bar i'),
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.72, ease: 'power3.out' },
+        BEATS[0]
+      );
+      tl.fromTo(
+        root.querySelector('.f01-ten-cases-lockup'),
+        { y: 18, scale: 0.8, opacity: 0 },
+        { y: 0, scale: 1, opacity: 1, duration: 0.48, ease: 'power2.out' },
+        3.42
+      );
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines['01-ten-cases'] = tl;
+    })();
+  </script>
+</template>

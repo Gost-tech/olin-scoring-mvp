@@ -1,0 +1,8 @@
+1
+00:00:00,100 --> 00:00:03,937
+El analista revisa, decide y deja registro.
+
+2
+00:00:03,887 --> 00:00:07,387
+La decisión siempre sigue en manos de la institución.
+

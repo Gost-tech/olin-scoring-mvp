@@ -1,0 +1,489 @@
+{
+  "bgm": null,
+  "bgm_pending": false,
+  "voices": [
+    {
+      "frame": 1,
+      "path": "assets/voice/01.mp3",
+      "duration_s": 4.392,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Diez",
+          "start": 0.1,
+          "end": 0.846
+        },
+        {
+          "id": "w1",
+          "text": "casos",
+          "start": 0.846,
+          "end": 1.591
+        },
+        {
+          "id": "w2",
+          "text": "reales.",
+          "start": 1.591,
+          "end": 2.337
+        },
+        {
+          "id": "w3",
+          "text": "Sin",
+          "start": 2.287,
+          "end": 2.966
+        },
+        {
+          "id": "w4",
+          "text": "mover",
+          "start": 2.966,
+          "end": 3.646
+        },
+        {
+          "id": "w5",
+          "text": "dinero.",
+          "start": 3.646,
+          "end": 4.325
+        }
+      ]
+    },
+    {
+      "frame": 2,
+      "path": "assets/voice/02.mp3",
+      "duration_s": 6.048,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Olin",
+          "start": 0.1,
+          "end": 0.525
+        },
+        {
+          "id": "w1",
+          "text": "convierte",
+          "start": 0.525,
+          "end": 0.95
+        },
+        {
+          "id": "w2",
+          "text": "evidencia",
+          "start": 0.95,
+          "end": 1.375
+        },
+        {
+          "id": "w3",
+          "text": "autorizada",
+          "start": 1.375,
+          "end": 1.8
+        },
+        {
+          "id": "w4",
+          "text": "y",
+          "start": 1.8,
+          "end": 2.225
+        },
+        {
+          "id": "w5",
+          "text": "dispersa",
+          "start": 2.225,
+          "end": 2.65
+        },
+        {
+          "id": "w6",
+          "text": "en",
+          "start": 2.65,
+          "end": 3.075
+        },
+        {
+          "id": "w7",
+          "text": "un",
+          "start": 3.075,
+          "end": 3.5
+        },
+        {
+          "id": "w8",
+          "text": "expediente",
+          "start": 3.5,
+          "end": 3.925
+        },
+        {
+          "id": "w9",
+          "text": "que",
+          "start": 3.925,
+          "end": 4.35
+        },
+        {
+          "id": "w10",
+          "text": "su",
+          "start": 4.35,
+          "end": 4.775
+        },
+        {
+          "id": "w11",
+          "text": "equipo",
+          "start": 4.775,
+          "end": 5.2
+        },
+        {
+          "id": "w12",
+          "text": "puede",
+          "start": 5.2,
+          "end": 5.625
+        },
+        {
+          "id": "w13",
+          "text": "revisar.",
+          "start": 5.625,
+          "end": 6.05
+        }
+      ]
+    },
+    {
+      "frame": 3,
+      "path": "assets/voice/03.mp3",
+      "duration_s": 7.824,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Cada",
+          "start": 0.1,
+          "end": 0.646
+        },
+        {
+          "id": "w1",
+          "text": "fuente,",
+          "start": 0.646,
+          "end": 1.193
+        },
+        {
+          "id": "w2",
+          "text": "faltante",
+          "start": 1.193,
+          "end": 1.739
+        },
+        {
+          "id": "w3",
+          "text": "y",
+          "start": 1.739,
+          "end": 2.286
+        },
+        {
+          "id": "w4",
+          "text": "regla",
+          "start": 2.286,
+          "end": 2.832
+        },
+        {
+          "id": "w5",
+          "text": "queda",
+          "start": 2.832,
+          "end": 3.379
+        },
+        {
+          "id": "w6",
+          "text": "visible.",
+          "start": 3.379,
+          "end": 3.925
+        },
+        {
+          "id": "w7",
+          "text": "La",
+          "start": 3.875,
+          "end": 4.43
+        },
+        {
+          "id": "w8",
+          "text": "recomendación",
+          "start": 4.43,
+          "end": 4.986
+        },
+        {
+          "id": "w9",
+          "text": "no",
+          "start": 4.986,
+          "end": 5.541
+        },
+        {
+          "id": "w10",
+          "text": "llega",
+          "start": 5.541,
+          "end": 6.096
+        },
+        {
+          "id": "w11",
+          "text": "sola:",
+          "start": 6.096,
+          "end": 6.651
+        },
+        {
+          "id": "w12",
+          "text": "llega",
+          "start": 6.651,
+          "end": 7.207
+        },
+        {
+          "id": "w13",
+          "text": "explicada.",
+          "start": 7.207,
+          "end": 7.762
+        }
+      ]
+    },
+    {
+      "frame": 4,
+      "path": "assets/voice/04.mp3",
+      "duration_s": 7.44,
+      "words": [
+        {
+          "id": "w0",
+          "text": "El",
+          "start": 0.1,
+          "end": 0.648
+        },
+        {
+          "id": "w1",
+          "text": "analista",
+          "start": 0.648,
+          "end": 1.196
+        },
+        {
+          "id": "w2",
+          "text": "revisa,",
+          "start": 1.196,
+          "end": 1.744
+        },
+        {
+          "id": "w3",
+          "text": "decide",
+          "start": 1.744,
+          "end": 2.293
+        },
+        {
+          "id": "w4",
+          "text": "y",
+          "start": 2.293,
+          "end": 2.841
+        },
+        {
+          "id": "w5",
+          "text": "deja",
+          "start": 2.841,
+          "end": 3.389
+        },
+        {
+          "id": "w6",
+          "text": "registro.",
+          "start": 3.389,
+          "end": 3.937
+        },
+        {
+          "id": "w7",
+          "text": "La",
+          "start": 3.887,
+          "end": 4.276
+        },
+        {
+          "id": "w8",
+          "text": "decisión",
+          "start": 4.276,
+          "end": 4.665
+        },
+        {
+          "id": "w9",
+          "text": "siempre",
+          "start": 4.665,
+          "end": 5.054
+        },
+        {
+          "id": "w10",
+          "text": "sigue",
+          "start": 5.054,
+          "end": 5.443
+        },
+        {
+          "id": "w11",
+          "text": "en",
+          "start": 5.443,
+          "end": 5.831
+        },
+        {
+          "id": "w12",
+          "text": "manos",
+          "start": 5.831,
+          "end": 6.22
+        },
+        {
+          "id": "w13",
+          "text": "de",
+          "start": 6.22,
+          "end": 6.609
+        },
+        {
+          "id": "w14",
+          "text": "la",
+          "start": 6.609,
+          "end": 6.998
+        },
+        {
+          "id": "w15",
+          "text": "institución.",
+          "start": 6.998,
+          "end": 7.387
+        }
+      ]
+    },
+    {
+      "frame": 5,
+      "path": "assets/voice/05.mp3",
+      "duration_s": 6.648,
+      "words": [
+        {
+          "id": "w0",
+          "text": "El",
+          "start": 0.1,
+          "end": 0.537
+        },
+        {
+          "id": "w1",
+          "text": "piloto",
+          "start": 0.537,
+          "end": 0.973
+        },
+        {
+          "id": "w2",
+          "text": "corre",
+          "start": 0.973,
+          "end": 1.41
+        },
+        {
+          "id": "w3",
+          "text": "en",
+          "start": 1.41,
+          "end": 1.847
+        },
+        {
+          "id": "w4",
+          "text": "paralelo",
+          "start": 1.847,
+          "end": 2.283
+        },
+        {
+          "id": "w5",
+          "text": "para",
+          "start": 2.283,
+          "end": 2.72
+        },
+        {
+          "id": "w6",
+          "text": "medir",
+          "start": 2.72,
+          "end": 3.157
+        },
+        {
+          "id": "w7",
+          "text": "cobertura,",
+          "start": 3.157,
+          "end": 3.593
+        },
+        {
+          "id": "w8",
+          "text": "tiempos,",
+          "start": 3.593,
+          "end": 4.03
+        },
+        {
+          "id": "w9",
+          "text": "diferencias",
+          "start": 4.03,
+          "end": 4.467
+        },
+        {
+          "id": "w10",
+          "text": "y",
+          "start": 4.467,
+          "end": 4.903
+        },
+        {
+          "id": "w11",
+          "text": "utilidad",
+          "start": 4.903,
+          "end": 5.34
+        },
+        {
+          "id": "w12",
+          "text": "antes",
+          "start": 5.34,
+          "end": 5.777
+        },
+        {
+          "id": "w13",
+          "text": "de",
+          "start": 5.777,
+          "end": 6.213
+        },
+        {
+          "id": "w14",
+          "text": "integrar.",
+          "start": 6.213,
+          "end": 6.65
+        }
+      ]
+    },
+    {
+      "frame": 6,
+      "path": "assets/voice/06.mp3",
+      "duration_s": 4.92,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Revisemos",
+          "start": 0.1,
+          "end": 0.683
+        },
+        {
+          "id": "w1",
+          "text": "un",
+          "start": 0.683,
+          "end": 1.267
+        },
+        {
+          "id": "w2",
+          "text": "expediente,",
+          "start": 1.267,
+          "end": 1.85
+        },
+        {
+          "id": "w3",
+          "text": "no",
+          "start": 1.85,
+          "end": 2.433
+        },
+        {
+          "id": "w4",
+          "text": "una",
+          "start": 2.433,
+          "end": 3.017
+        },
+        {
+          "id": "w5",
+          "text": "promesa.",
+          "start": 3.017,
+          "end": 3.6
+        },
+        {
+          "id": "w6",
+          "text": "Olin.",
+          "start": 3.55,
+          "end": 4.887
+        }
+      ]
+    }
+  ],
+  "sfx": [
+    {
+      "frame": 4,
+      "file": "assets/sfx/click-soft.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    }
+  ]
+}

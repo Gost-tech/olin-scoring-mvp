@@ -1,0 +1,122 @@
+[
+  {
+    "id": "w0",
+    "text": "The",
+    "start": 0.099,
+    "end": 0.199
+  },
+  {
+    "id": "w1",
+    "text": "case",
+    "start": 0.239,
+    "end": 0.459
+  },
+  {
+    "id": "w2",
+    "text": "enters",
+    "start": 0.539,
+    "end": 0.859
+  },
+  {
+    "id": "w3",
+    "text": "the",
+    "start": 0.899,
+    "end": 0.959
+  },
+  {
+    "id": "w4",
+    "text": "credit",
+    "start": 1.039,
+    "end": 1.259
+  },
+  {
+    "id": "w5",
+    "text": "team's",
+    "start": 1.339,
+    "end": 1.74
+  },
+  {
+    "id": "w6",
+    "text": "queue.",
+    "start": 1.819,
+    "end": 2.119
+  },
+  {
+    "id": "w7",
+    "text": "The",
+    "start": 2.559,
+    "end": 2.619
+  },
+  {
+    "id": "w8",
+    "text": "analyst",
+    "start": 2.72,
+    "end": 3.119
+  },
+  {
+    "id": "w9",
+    "text": "reviews",
+    "start": 3.199,
+    "end": 3.619
+  },
+  {
+    "id": "w10",
+    "text": "repayment",
+    "start": 3.699,
+    "end": 4.139
+  },
+  {
+    "id": "w11",
+    "text": "capacity,",
+    "start": 4.199,
+    "end": 4.759
+  },
+  {
+    "id": "w12",
+    "text": "stress,",
+    "start": 5.239,
+    "end": 5.619
+  },
+  {
+    "id": "w13",
+    "text": "identity,",
+    "start": 6,
+    "end": 6.5
+  },
+  {
+    "id": "w14",
+    "text": "and",
+    "start": 6.859,
+    "end": 7
+  },
+  {
+    "id": "w15",
+    "text": "every",
+    "start": 7.199,
+    "end": 7.46
+  },
+  {
+    "id": "w16",
+    "text": "signal",
+    "start": 7.619,
+    "end": 7.899
+  },
+  {
+    "id": "w17",
+    "text": "behind",
+    "start": 7.96,
+    "end": 8.26
+  },
+  {
+    "id": "w18",
+    "text": "the",
+    "start": 8.279,
+    "end": 8.34
+  },
+  {
+    "id": "w19",
+    "text": "recommendation.",
+    "start": 8.399,
+    "end": 9.199
+  }
+]

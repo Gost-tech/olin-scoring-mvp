@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Nuevo expediente sombra | Olin</title>
+  <title>Nuevo expediente con evidencia real | Olin</title>
   <style>
     :root {
       --ink:#071713; --paper:#f4f7f1; --card:#fff; --line:#cfdbd3;
@@ -23,10 +23,11 @@
     h1{font-size:clamp(34px,5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;max-width:760px}
     .hero p{color:#b9c8c2;max-width:710px;margin:0}
     .mode{border:1px solid #496057;border-radius:999px;padding:9px 13px;font-size:12px;white-space:nowrap}
-    .demo-loader{display:flex;align-items:end;gap:12px;margin:18px 0;padding:16px 18px;border:1px solid #d8b255;border-radius:14px;background:#fff8df}
-    .demo-loader[hidden]{display:none}
-    .demo-loader label{flex:1;color:#5b4515}
-    .demo-loader button{background:#071713;color:#fff}
+    .geo-lookup{grid-column:1/-1;display:flex;align-items:end;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#f3f7f1}
+    .geo-lookup label{flex:1}
+    .geo-lookup button{background:var(--ink);color:white}
+    .geo-result{grid-column:1/-1;font-size:13px;color:var(--muted);padding:0 2px}
+    .geo-result.ok{color:#285700}.geo-result.error{color:var(--red)}
     form{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
     section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
     section.wide{grid-column:1/-1}
@@ -74,20 +75,12 @@
   </div>
   <header class="hero">
     <div>
-      <div class="eyebrow">Piloto de observación</div>
-      <h1>Crear expediente sombra</h1>
-      <p>Olin organiza evidencia y genera una ruta explicable. La institución conserva la decisión final. Este flujo no origina ni desembolsa crédito.</p>
+      <div class="eyebrow">Piloto con evidencia real</div>
+      <h1>Crear un expediente verificable</h1>
+      <p>Usa información autorizada del comercio y referencias recuperables. Olin organiza la evidencia y genera una recomendación; la institución decide. Este flujo no desembolsa crédito.</p>
     </div>
-    <div class="mode">SHADOW · SIN MOVIMIENTO DE DINERO</div>
+    <div class="mode">DATOS REALES · SIN MOVIMIENTO DE DINERO</div>
   </header>
-  <div class="demo-loader" id="demo-loader" hidden>
-    <label>Escenario sintético
-      <select id="demo-scenario">
-        <option value="">Seleccionar un expediente de demostración</option>
-      </select>
-    </label>
-    <button id="load-scenario" type="button">Cargar escenario</button>
-  </div>
 
   <form id="case-form">
     <section>
@@ -95,7 +88,7 @@
       <p class="help">Identifica la cohorte, la referencia del socio y el consentimiento utilizado.</p>
       <div class="grid">
         <label>Cohorte
-          <input name="cohort_id" value="shadow_2026_07" required>
+          <input name="cohort_id" value="piloto_real_2026_08" required>
         </label>
         <label>Referencia del socio
           <input name="partner_case_reference" placeholder="MONEX-001" required>
@@ -190,6 +183,7 @@
     <section>
       <h2>3. Círculo de Crédito</h2>
       <p class="help">Carga el resultado de la consulta autorizada. Un expediente sin archivo puede pasar a revisión, nunca a autoaprobación.</p>
+      <p class="help"><a href="https://developer.circulodecredito.com.mx/" target="_blank" rel="noopener">Abrir API Hub de Círculo</a> · La cuenta sandbox es gratuita; producción requiere afiliación, consentimiento expreso y firma de las peticiones.</p>
       <div class="grid">
         <label class="check full"><input name="buro_checked" type="checkbox"> Consulta realizada</label>
         <label>Score Círculo
@@ -209,22 +203,29 @@
 
     <section>
       <h2>4. Evidencia bancaria</h2>
-      <p class="help">En producción, los datos deben estar verificados y vinculados a una referencia de evidencia.</p>
+      <p class="help">En producción, los datos deben estar verificados y vinculados a una referencia recuperable. Un CSV manual sirve para preanálisis, pero no equivale a una conexión bancaria.</p>
       <div class="grid">
         <label>Fuente
           <select name="bank_source">
             <option value="">Sin evidencia bancaria</option>
             <option value="syncfy_api">Syncfy API</option>
             <option value="partner_api">API del socio</option>
-            <option value="bank_statements">Estados de cuenta</option>
+            <option value="bank_statement_csv">Estado de cuenta CSV analizado</option>
             <option value="pos_settlement">Liquidaciones TPV</option>
-            <option value="synthetic">Escenario sintético</option>
           </select>
         </label>
         <label>Referencia de evidencia
           <input name="bank_evidence_reference" placeholder="SYNC-CASE-001">
         </label>
         <label class="check full"><input name="bank_verified" type="checkbox"> Evidencia verificada</label>
+        <label class="full">Archivo bancario CSV
+          <input id="bank-csv" type="file" accept=".csv,text/csv">
+        </label>
+        <div class="geo-lookup full">
+          <button id="analyze-bank-csv" type="button">Analizar CSV bancario</button>
+          <button id="check-providers" type="button" class="secondary">Ver estado de APIs</button>
+        </div>
+        <div class="geo-result full" id="bank-result">El archivo se analiza en memoria. Olin no conserva las filas ni las descripciones de transacciones.</div>
       </div>
       <details>
         <summary>Métricas de flujo de efectivo</summary>
@@ -252,7 +253,6 @@
             <option value="distributor_export">Extracto del distribuidor</option>
             <option value="receipts">Recibos verificados</option>
             <option value="partner_api">API del socio</option>
-            <option value="synthetic">Escenario sintético</option>
           </select>
         </label>
         <label>Referencia de evidencia
@@ -275,9 +275,18 @@
 
     <section>
       <h2>6. Continuidad operativa</h2>
-      <p class="help">Señales complementarias. Deja un campo vacío cuando la evidencia no existe.</p>
+      <p class="help">Busca el negocio en Google Places para una verificación en vivo. Olin conserva únicamente el Place ID permitido; los datos mostrados no se guardan ni modifican el score.</p>
       <div class="grid">
-        <label>Años en Google Maps<input name="years_maps" type="number" min="0" step=".1"></label>
+        <div class="geo-lookup">
+          <label>Nombre y domicilio a buscar
+            <input name="places_query" placeholder="Nombre comercial, calle, colonia, CDMX">
+          </label>
+          <button id="lookup-places" type="button">Buscar en Google</button>
+          <button id="lookup-denue" type="button" disabled>Buscar en DENUE</button>
+        </div>
+        <div class="geo-result" id="geo-result">Sin consulta. Los datos manuales quedan como no verificados.</div>
+        <div class="geo-result" id="denue-result">DENUE requiere primero coordenadas Google y el token INEGI.</div>
+        <label>Antigüedad documentada por otra fuente<input name="years_maps" type="number" min="0" step=".1"></label>
         <label>Años en IMSS<input name="years_imss" type="number" min="0" step=".1"></label>
         <label>Calificación Google<input name="maps_rating" type="number" min="0" max="5" step=".1"></label>
         <label>Número de reseñas<input name="review_count" type="number" min="0"></label>
@@ -294,7 +303,6 @@
               <option value="partner_api">API del socio</option>
               <option value="pos_settlement">Liquidaciones TPV</option>
               <option value="statements">Estado de liquidaciones</option>
-              <option value="synthetic">Escenario sintético</option>
             </select>
           </label>
           <label>Referencia TPV<input name="pos_evidence_reference" placeholder="TPV-CASE-001"></label>
@@ -336,6 +344,19 @@
   const number = name => value(name) === '' ? 0 : Number(value(name));
   const checked = name => Boolean(form.elements[name]?.checked);
   let tokenResolver = null;
+  let geoEvidence = null;
+  let denueEvidence = null;
+  let googleLocation = null;
+  ['years_maps','maps_rating','review_count','review_velocity'].forEach(name => {
+    form.elements[name].addEventListener('input', () => {
+      if (geoEvidence) {
+        geoEvidence = null;
+        const result = document.getElementById('geo-result');
+        result.className = 'geo-result';
+        result.textContent = 'Datos editados manualmente: Google Places ya no se marca como fuente de esas métricas.';
+      }
+    });
+  });
 
   function closeTokenModal(value) {
     document.getElementById('token-modal').hidden = true;
@@ -370,20 +391,38 @@
     if (event.key === 'Escape') closeTokenModal(null);
   });
 
+  // Access tokens deliberately live only in page memory. A refresh signs out.
+  let accessToken = '';
+
+  async function exchangeAccessToken(bootstrapToken) {
+    const response = await fetch('/api/v1/auth/sessions', {
+      method:'POST',
+      headers:{'Authorization':`Bearer ${bootstrapToken}`},
+    });
+    if (!response.ok) return '';
+    const payload = await response.json();
+    return payload?.data?.access_token || '';
+  }
+
   async function apiFetch(url, options={}) {
     const headers = new Headers(options.headers || {});
-    let token = sessionStorage.getItem('olin_analyst_token') || '';
-    if (token) headers.set('X-Olin-Analyst-Token', token);
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
     let response = await fetch(url, {...options, headers});
     if (response.status === 401) {
-      token = await requestAccessToken();
-      if (token) {
-        sessionStorage.setItem('olin_analyst_token', token);
-        headers.set('X-Olin-Analyst-Token', token);
+      const bootstrapToken = (await requestAccessToken()) || '';
+      accessToken = bootstrapToken ? await exchangeAccessToken(bootstrapToken) : '';
+      if (accessToken) {
+        headers.set('Authorization', `Bearer ${accessToken}`);
         response = await fetch(url, {...options, headers});
       }
     }
     return response;
+  }
+
+  function errorMessage(data, fallback) {
+    if (typeof data?.error === 'string') return data.error;
+    if (data?.error?.message) return data.error.message;
+    return fallback;
   }
 
   function buildPayload() {
@@ -421,9 +460,11 @@
       avg_weekly_purchase_mxn:number('weekly_purchase'), trend_3m:number('fmcg_trend'),
       distributor_confirmed:checked('distributor_confirmed')
     };
-    if (value('maps_rating') || value('review_count') || value('review_velocity')) payload.maps = {
+    if (value('maps_rating') || value('review_count') || value('review_velocity') || geoEvidence || denueEvidence) payload.maps = {
       rating:number('maps_rating'), review_count:number('review_count'),
-      review_velocity_6m:number('review_velocity')
+      review_velocity_6m:number('review_velocity'),
+      ...(geoEvidence || {source:'manual', verified:false}),
+      ...(denueEvidence || {})
     };
     if (value('employees') !== '') payload.imss = {registered_employees:number('employees')};
     if (value('pos_source')) payload.pos = {
@@ -435,107 +476,129 @@
     return payload;
   }
 
-  function populateScenario(payload) {
-    const setValue = (name, next) => {
-      const field = form.elements[name];
-      if (!field) return;
-      if (field.type === 'checkbox') field.checked = Boolean(next);
-      else field.value = next ?? '';
-    };
-    const bank = payload.bank || {};
-    const fmcg = payload.fmcg || {};
-    const tenure = payload.tenure || {};
-    const maps = payload.maps || {};
-    const pos = payload.pos || {};
-    const bureau = payload.buro || {};
-    const fraud = payload.fraud || {};
-    const values = {
-      cohort_id:payload.cohort_id,
-      partner_case_reference:`${payload.partner_case_reference}-NUEVO`,
-      consent_channel:payload.consent?.channel,
-      consent_text:payload.consent?.text,
-      merchant_name:`${payload.merchant_name} · nuevo`,
-      business_type:payload.business_type,
-      business_description:payload.business_description,
-      funding_purpose:payload.funding_purpose,
-      project_description:payload.project_description,
-      evidence_route:payload.evidence_route,
-      requested_mxn:payload.requested_mxn,
-      colonia:payload.colonia,
-      phone_mx:fraud.phone_mx,
-      rfc:fraud.rfc,
-      curp:fraud.curp,
-      address_stated:fraud.address_stated,
-      ine_checked:fraud.ine_checked,
-      buro_checked:bureau.checked,
-      buro_score:bureau.score,
-      active_loans_count:bureau.active_loans_count,
-      active_delinquencies:bureau.active_delinquencies,
-      worst_mob_status:bureau.worst_mob_status,
-      bank_source:bank.source,
-      bank_evidence_reference:`${bank.evidence_reference || ''}-NUEVO`,
-      bank_verified:bank.verified,
-      bank_months:bank.months_connected,
-      avg_balance:bank.avg_daily_balance_mxn,
-      min_balance:bank.min_daily_balance_mxn,
-      deposit_count:bank.monthly_deposit_count,
-      deposit_volume:bank.monthly_deposit_volume_mxn,
-      outflow_volume:bank.monthly_outflow_volume_mxn,
-      deposit_regularity:bank.deposit_regularity,
-      overdrafts:bank.overdrafts_90d,
-      balance_trend:bank.balance_trend_90d,
-      fmcg_source:fmcg.source,
-      fmcg_evidence_reference:`${fmcg.evidence_reference || ''}-NUEVO`,
-      fmcg_verified:fmcg.verified,
-      fmcg_months:fmcg.months_of_history,
-      weekly_rate:fmcg.weekly_purchase_rate,
-      missed_weeks:fmcg.missed_weeks_last_12,
-      weekly_purchase:fmcg.avg_weekly_purchase_mxn,
-      fmcg_trend:fmcg.trend_3m,
-      distributor_confirmed:fmcg.distributor_confirmed,
-      years_maps:tenure.years_on_google_maps,
-      years_imss:tenure.years_in_imss,
-      address_consistent:tenure.address_consistent,
-      maps_rating:maps.rating,
-      review_count:maps.review_count,
-      review_velocity:maps.review_velocity_6m,
-      pos_months:pos.months_of_history,
-      pos_source:pos.source,
-      pos_evidence_reference:`${pos.evidence_reference || ''}-NUEVO`,
-      pos_verified:pos.verified,
-      pos_volume:pos.avg_monthly_volume_mxn,
-      pos_consistency:pos.volume_consistency,
-      pos_trend:pos.trend_3m,
-    };
-    Object.entries(values).forEach(([name, next]) => setValue(name, next));
-    form.scrollIntoView({behavior:'smooth', block:'start'});
-  }
-
-  let syntheticScenarios = [];
-  async function initializeDemoScenarios() {
+  document.getElementById('lookup-places').addEventListener('click', async () => {
+    const button = document.getElementById('lookup-places');
+    const result = document.getElementById('geo-result');
+    const query = value('places_query') || [value('merchant_name'), value('address_stated'), value('colonia'), 'CDMX'].filter(Boolean).join(', ');
+    button.disabled = true;
+    button.textContent = 'Buscando...';
+    result.className = 'geo-result';
+    result.textContent = 'Consultando Google Places...';
     try {
-      const health = await fetch('/healthz');
-      if (!health.ok || (await health.json()).mode === 'production') return;
-      const response = await fetch('/api/demo/scenarios');
-      if (!response.ok) return;
-      syntheticScenarios = await response.json();
-      const select = document.getElementById('demo-scenario');
-      syntheticScenarios.forEach(scenario => {
-        const option = document.createElement('option');
-        option.value = scenario.id;
-        option.textContent = scenario.title;
-        select.appendChild(option);
+      const response = await apiFetch('/api/v1/evidence/google-places/lookups', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query})
       });
-      document.getElementById('demo-loader').hidden = false;
-    } catch (_) {
-      // The intake remains fully usable if the optional demo loader is absent.
+      const data = await response.json();
+      if (!response.ok) throw new Error(errorMessage(data, 'No fue posible consultar Google Places'));
+      const maps = data.maps || {};
+      const tenure = data.tenure || {};
+      geoEvidence = data.persistable || null;
+      googleLocation = maps.latitude != null && maps.longitude != null
+        ? {latitude:Number(maps.latitude), longitude:Number(maps.longitude)} : null;
+      document.getElementById('lookup-denue').disabled = !googleLocation;
+      form.elements.address_consistent.checked = Boolean(tenure.address_consistent);
+      result.className = 'geo-result ok';
+      result.textContent = `${maps.display_name || 'Negocio encontrado'} · ${maps.formatted_address || ''} · ${maps.rating || 0}★ · ${maps.review_count || 0} reseñas · se conservará únicamente el Place ID`;
+    } catch (error) {
+      geoEvidence = null;
+      googleLocation = null;
+      document.getElementById('lookup-denue').disabled = true;
+      result.className = 'geo-result error';
+      result.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Buscar en Google';
     }
-  }
+  });
 
-  document.getElementById('load-scenario').addEventListener('click', () => {
-    const id = document.getElementById('demo-scenario').value;
-    const scenario = syntheticScenarios.find(item => item.id === id);
-    if (scenario) populateScenario(scenario.payload);
+  document.getElementById('lookup-denue').addEventListener('click', async () => {
+    const button = document.getElementById('lookup-denue');
+    const result = document.getElementById('denue-result');
+    if (!googleLocation) return;
+    button.disabled = true;
+    result.className = 'geo-result';
+    result.textContent = 'Consultando el registro público DENUE...';
+    try {
+      const response = await apiFetch('/api/v1/evidence/denue/lookups', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          merchantName:value('merchant_name'), declaredAddress:value('address_stated'),
+          latitude:googleLocation.latitude, longitude:googleLocation.longitude, radiusM:750
+        })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(errorMessage(body, 'No fue posible consultar DENUE'));
+      const data = body.data || {};
+      const match = data.bestMatch || {};
+      denueEvidence = data.persistable || null;
+      if (denueEvidence?.denue_verified) form.elements.address_consistent.checked = true;
+      result.className = `geo-result ${denueEvidence?.denue_verified ? 'ok' : 'error'}`;
+      result.textContent = `${match.name || 'Registro encontrado'} · ${match.activity || 'actividad no disponible'} · ${match.address || ''} · ${match.distanceM ?? '?'} m de Google · ${data.candidateCount || 1} candidato(s)`;
+    } catch (error) {
+      denueEvidence = null;
+      result.className = 'geo-result error';
+      result.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.getElementById('analyze-bank-csv').addEventListener('click', async () => {
+    const input = document.getElementById('bank-csv');
+    const result = document.getElementById('bank-result');
+    const file = input.files?.[0];
+    if (!file) {
+      result.className = 'geo-result error';
+      result.textContent = 'Selecciona primero un archivo CSV.';
+      return;
+    }
+    result.className = 'geo-result';
+    result.textContent = 'Analizando movimientos sin guardar las filas...';
+    try {
+      const response = await apiFetch('/api/v1/evidence/bank-statements/analyses', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({csvText:await file.text()})
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(errorMessage(body, 'No fue posible analizar el CSV'));
+      const analysis = body.data || {};
+      const bank = analysis.bank || {};
+      const values = {
+        bank_source:bank.source, bank_evidence_reference:bank.evidence_reference,
+        bank_months:bank.months_connected, avg_balance:bank.avg_daily_balance_mxn,
+        min_balance:bank.min_daily_balance_mxn, deposit_count:bank.monthly_deposit_count,
+        deposit_volume:bank.monthly_deposit_volume_mxn,
+        outflow_volume:bank.monthly_outflow_volume_mxn,
+        deposit_regularity:bank.deposit_regularity, overdrafts:bank.overdrafts_90d,
+        balance_trend:bank.balance_trend_90d
+      };
+      Object.entries(values).forEach(([name, val]) => {
+        if (form.elements[name]) form.elements[name].value = val ?? '';
+      });
+      form.elements.bank_verified.checked = Boolean(bank.verified);
+      const summary = analysis.summary || {};
+      result.className = 'geo-result';
+      result.textContent = `${summary.transactionCount || 0} movimientos · ${summary.firstDate || ''} a ${summary.lastDate || ''} · preanálisis solamente; requiere Syncfy o revisión documental para usarse en la decisión`;
+    } catch (error) {
+      result.className = 'geo-result error';
+      result.textContent = error.message;
+    }
+  });
+
+  document.getElementById('check-providers').addEventListener('click', async () => {
+    const result = document.getElementById('bank-result');
+    try {
+      const response = await apiFetch('/api/v1/providers');
+      const body = await response.json();
+      if (!response.ok) throw new Error(errorMessage(body, 'No fue posible consultar proveedores'));
+      result.className = 'geo-result ok';
+      result.textContent = body.data
+        .map(item => `${item.id}: ${item.configured ? 'configurado' : 'pendiente'}`)
+        .join(' · ');
+    } catch (error) {
+      result.className = 'geo-result error';
+      result.textContent = error.message;
+    }
   });
 
   form.addEventListener('submit', async event => {
@@ -549,8 +612,8 @@
         body:JSON.stringify(buildPayload())
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No fue posible evaluar el expediente');
-      const route = {AUTO_APPROVE:'Ruta de aprobación', COMMITTEE:'Revisión requerida', DECLINE:'No recomendar'}[data.decision] || data.decision;
+      if (!response.ok) throw new Error(errorMessage(data, 'No fue posible evaluar el expediente'));
+      const route = {AUTO_APPROVE:'Ruta recomendada', COMMITTEE:'Revisión requerida', DECLINE:'No recomendar'}[data.recommendation] || data.recommendation;
       statusBox.className = 'ok';
       statusBox.innerHTML = `<strong>Expediente registrado</strong>
         <div class="result-grid">
@@ -559,9 +622,15 @@
           <div class="metric"><span>Tier</span><strong>${data.tier}</strong></div>
           <div class="metric"><span>Score</span><strong>${Number(data.score).toFixed(1)}</strong></div>
         </div>
-        <a href="/">Abrir la mesa de decisión</a>`;
+        <a href="/?case=${encodeURIComponent(data.application_id)}">Abrir este expediente en la mesa de decisión</a>`;
       statusBox.scrollIntoView({behavior:'smooth',block:'center'});
       form.reset();
+      geoEvidence = null;
+      denueEvidence = null;
+      googleLocation = null;
+      document.getElementById('lookup-denue').disabled = true;
+      document.getElementById('geo-result').className = 'geo-result';
+      document.getElementById('geo-result').textContent = 'Sin consulta. Los datos manuales quedan como no verificados.';
     } catch (error) {
       statusBox.className = 'error';
       statusBox.textContent = error.message;
@@ -571,7 +640,6 @@
       submitButton.textContent = 'Evaluar expediente';
     }
   });
-  initializeDemoScenarios();
 </script>
 </body>
 </html>

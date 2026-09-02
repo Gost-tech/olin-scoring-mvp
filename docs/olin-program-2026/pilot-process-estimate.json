@@ -1,0 +1,62 @@
+{
+  "process_name": "Olin controlled shadow case",
+  "wip": 3,
+  "stages": [
+    {
+      "name": "Partner selects and authorizes case",
+      "owner": "Partner operations",
+      "type": "value-add",
+      "duration_minutes_p50": 15,
+      "duration_minutes_p90": 45
+    },
+    {
+      "name": "Wait for applicant evidence and consent",
+      "owner": "Applicant and partner",
+      "type": "wait",
+      "duration_minutes_p50": 1440,
+      "duration_minutes_p90": 4320
+    },
+    {
+      "name": "Verify identity, consent and evidence route",
+      "owner": "Pilot operations",
+      "type": "value-add",
+      "duration_minutes_p50": 35,
+      "duration_minutes_p90": 90
+    },
+    {
+      "name": "Rework missing or conflicting evidence",
+      "owner": "Applicant and pilot operations",
+      "type": "rework",
+      "duration_minutes_p50": 240,
+      "duration_minutes_p90": 1440
+    },
+    {
+      "name": "Olin reconstructs recommendation",
+      "owner": "Olin system",
+      "type": "value-add",
+      "duration_minutes_p50": 5,
+      "duration_minutes_p90": 15
+    },
+    {
+      "name": "Wait for bank analyst queue",
+      "owner": "Partner credit",
+      "type": "wait",
+      "duration_minutes_p50": 480,
+      "duration_minutes_p90": 1440
+    },
+    {
+      "name": "Bank records independent decision and reasons",
+      "owner": "Partner credit",
+      "type": "value-add",
+      "duration_minutes_p50": 30,
+      "duration_minutes_p90": 75
+    },
+    {
+      "name": "Resolve audit or outcome-feed defects",
+      "owner": "Partner operations and Olin",
+      "type": "rework",
+      "duration_minutes_p50": 60,
+      "duration_minutes_p90": 360
+    }
+  ]
+}

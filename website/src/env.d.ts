@@ -3,5 +3,6 @@
 interface Window {
   __OLIN_CONFIG__?: {
     demoUrl?: string;
+    waitlistApiUrl?: string;
   };
 }

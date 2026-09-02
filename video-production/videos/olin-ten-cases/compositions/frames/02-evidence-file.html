@@ -1,0 +1,424 @@
+<template>
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      color: #0b1916;
+      font-family: inherit;
+    }
+
+    [id="02-evidence-file-ground"] {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+    }
+
+    [id="02-evidence-file-ground"]::before {
+      content: "";
+      position: absolute;
+      width: 640px;
+      height: 640px;
+      left: -300px;
+      top: 20px;
+      border-radius: 50%;
+      background: rgba(200, 250, 90, 0.08);
+    }
+
+    [id="02-evidence-file-ground"]::after {
+      content: "";
+      position: absolute;
+      left: 54px;
+      right: 54px;
+      top: 846px;
+      height: 3px;
+      border-radius: 0;
+      background: rgba(200, 250, 90, 0.2);
+    }
+
+    [id="02-evidence-file-stage"] {
+      position: absolute;
+      inset: 0;
+      perspective: 1500px;
+    }
+
+    [id="02-evidence-file-stage-label"] {
+      position: absolute;
+      top: 78px;
+      left: 72px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: #c55232;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    [id="02-evidence-file-stage-label"]::before {
+      content: "";
+      width: 60px;
+      height: 4px;
+      border-radius: 2px;
+      background: #c8fa5a;
+    }
+
+    [data-02e-chip] {
+      position: absolute;
+      top: 43%;
+      left: 50%;
+      width: 276px;
+      height: 92px;
+      display: flex;
+      align-items: center;
+      padding: 0 30px;
+      box-sizing: border-box;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: rgba(200, 250, 90, 0.08);
+      color: #0b1916;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      will-change: transform, opacity;
+    }
+
+    [data-02e-chip]::before {
+      content: "";
+      width: 13px;
+      height: 13px;
+      margin-right: 18px;
+      border-radius: 50%;
+      background: #c8fa5a;
+      box-shadow: 0 0 0 7px rgba(200, 250, 90, 0.15);
+    }
+
+    [id="02-evidence-file-path"] {
+      position: absolute;
+      left: 370px;
+      top: 241px;
+      width: 410px;
+      height: 360px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    [id="02-evidence-file-path"] svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    [id="02-evidence-file-screen-wrap"] {
+      position: absolute;
+      left: 145px;
+      top: 272px;
+      width: 790px;
+      height: 445px;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: rgba(200, 250, 90, 0.04);
+      overflow: visible;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [id="02-evidence-file-folder-tab"] {
+      position: absolute;
+      left: 26px;
+      top: -34px;
+      width: 218px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      padding: 0 22px;
+      box-sizing: border-box;
+      border-radius: 12px 12px 0 0;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    [id="02-evidence-file-swap"] {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      border-radius: 13px;
+      background: #ffffff;
+    }
+
+    [data-02e-surface] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity, filter;
+    }
+
+    [id="02-evidence-file-intake"] {
+      z-index: 1;
+    }
+
+    [id="02-evidence-file-evidence"] {
+      z-index: 2;
+    }
+
+    [id="02-evidence-file-signal"] {
+      position: absolute;
+      inset: -12px;
+      z-index: 4;
+      border: 3px solid #c8fa5a;
+      border-radius: 18px;
+      pointer-events: none;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [id="02-evidence-file-signal"]::before,
+    [id="02-evidence-file-signal"]::after {
+      content: "";
+      position: absolute;
+      width: 72px;
+      height: 72px;
+      border-color: #0b1916;
+      opacity: 0.8;
+    }
+
+    [id="02-evidence-file-signal"]::before {
+      left: -8px;
+      top: -8px;
+      border-left: 3px solid;
+      border-top: 3px solid;
+      border-radius: 18px 0 0 0;
+    }
+
+    [id="02-evidence-file-signal"]::after {
+      right: -8px;
+      bottom: -8px;
+      border-right: 3px solid;
+      border-bottom: 3px solid;
+      border-radius: 0 0 18px 0;
+    }
+
+    [id="02-evidence-file-hacker-text"] {
+      position: absolute;
+      top: 158px;
+      left: 0;
+      right: 0;
+      height: 78px;
+      text-align: center;
+      color: #0b1916;
+      font-family: inherit;
+      font-size: 68px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      white-space: pre;
+    }
+
+    [class~="02-evidence-file-hacker-char"] {
+      display: inline-block;
+      min-width: 0.74em;
+      transform-origin: bottom;
+      transform-style: preserve-3d;
+      will-change: transform, opacity;
+    }
+
+    [class~="02-evidence-file-hacker-ghost"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+
+  <div data-hf-id="hf-do6j" id="root" data-composition-id="02-evidence-file" data-width="1080" data-height="1080" data-start="0" data-duration="6.648">
+    <div data-hf-id="hf-ary3" id="02-evidence-file-ground" class="clip" data-start="0" data-duration="6.648" data-track-index="0"></div>
+    <div data-hf-id="hf-zgrx" id="02-evidence-file-stage" class="clip" data-start="0" data-duration="6.648" data-track-index="1">
+      <div data-hf-id="hf-t6j6" id="02-evidence-file-stage-label">Evidencia autorizada</div>
+
+      <div data-hf-id="hf-xh8h" id="02-evidence-file-chip-history" data-02e-chip="" data-layout-allow-occlusion="" data-target-x="-315" data-target-y="-178">HISTORIAL</div>
+      <div data-hf-id="hf-lum3" id="02-evidence-file-chip-flow" data-02e-chip="" data-layout-allow-occlusion="" data-target-x="-300" data-target-y="-58">FLUJO</div>
+      <div data-hf-id="hf-ogb7" id="02-evidence-file-chip-operation" data-02e-chip="" data-layout-allow-occlusion="" data-target-x="-282" data-target-y="62">OPERACIÓN</div>
+
+      <div data-hf-id="hf-e0jn" id="02-evidence-file-path" aria-hidden="true">
+        <svg data-hf-id="hf-45ab" viewBox="0 0 410 360" fill="none">
+          <path data-hf-id="hf-spug" d="M0 38 C180 38 220 180 410 180" stroke="rgba(200,250,90,.55)" stroke-width="3" stroke-dasharray="9 12" />
+          <path data-hf-id="hf-jfxw" d="M0 158 C184 158 224 180 410 180" stroke="rgba(200,250,90,.55)" stroke-width="3" stroke-dasharray="9 12" />
+          <path data-hf-id="hf-1vb6" d="M0 278 C180 278 220 180 410 180" stroke="rgba(200,250,90,.55)" stroke-width="3" stroke-dasharray="9 12" />
+        </svg>
+      </div>
+
+      <div data-hf-id="hf-rwms" id="02-evidence-file-screen-wrap">
+        <div data-hf-id="hf-5jib" id="02-evidence-file-folder-tab" data-layout-allow-overflow="">EXPEDIENTE</div>
+        <div data-hf-id="hf-e13q" id="02-evidence-file-swap">
+          <img data-hf-id="hf-xq5a" id="02-evidence-file-intake" data-02e-surface="" src="assets/01-intake.png" alt="Pantalla real de registro de expediente de Olin">
+          <img data-hf-id="hf-phdf" id="02-evidence-file-evidence" data-02e-surface="" src="assets/03-evidence.png" alt="Pantalla real de evidencia de Olin">
+        </div>
+        <div data-hf-id="hf-cn0v" id="02-evidence-file-signal"></div>
+      </div>
+
+      <div data-hf-id="hf-eek5" id="02-evidence-file-hacker-text" data-target="REVISABLE"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (() => {
+      const composition = document.querySelector('[data-composition-id="02-evidence-file"]');
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["02-evidence-file"] = tl;
+
+      const chips = Array.from(composition.querySelectorAll('[data-02e-chip]'));
+      const CONTENT = chips.map((element) => ({
+        element,
+        title: element.textContent.trim(),
+        hold: 0.08,
+      }));
+      const BASE_DURATION = 0.28;
+      const SEC_PER_CHAR = 0.012;
+      let cumulative = 0.08;
+      const TIMELINE = CONTENT.map((entry) => {
+        const duration = BASE_DURATION + entry.title.length * SEC_PER_CHAR + entry.hold;
+        const start = cumulative;
+        cumulative += duration;
+        return { ...entry, start, end: cumulative };
+      });
+
+      TIMELINE.forEach((entry) => {
+        const targetX = Number(entry.element.dataset.targetX);
+        const targetY = Number(entry.element.dataset.targetY);
+        tl.fromTo(
+          entry.element,
+          { xPercent: -50, yPercent: -50, x: targetX - 74, y: targetY, opacity: 0, scale: 0.92 },
+          { xPercent: -50, yPercent: -50, x: targetX, y: targetY, opacity: 1, scale: 1, duration: 0.5, ease: "power3.out" },
+          entry.start,
+        );
+      });
+
+      tl.fromTo(
+        composition.querySelector('[id="02-evidence-file-stage-label"]'),
+        { opacity: 0, y: -14 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" },
+        0.04,
+      );
+
+      tl.fromTo(
+        composition.querySelector('[id="02-evidence-file-path"]'),
+        { opacity: 0 },
+        { opacity: 1, duration: 0.25, ease: "none" },
+        1.72,
+      );
+
+      chips.forEach((chip, index) => {
+        tl.to(
+          chip,
+          {
+            x: 0,
+            y: 0,
+            scale: 0.58,
+            opacity: 0,
+            duration: 0.72,
+            ease: "power3.out",
+          },
+          1.8 + index * 0.055,
+        );
+      });
+
+      tl.to(
+        composition.querySelector('[id="02-evidence-file-path"]'),
+        { opacity: 0, duration: 0.38, ease: "power2.out" },
+        2.1,
+      );
+
+      const screenWrap = composition.querySelector('[id="02-evidence-file-screen-wrap"]');
+      const intake = composition.querySelector('[id="02-evidence-file-intake"]');
+      const evidence = composition.querySelector('[id="02-evidence-file-evidence"]');
+      const signal = composition.querySelector('[id="02-evidence-file-signal"]');
+
+      gsap.set(screenWrap, { opacity: 0, scale: 0.72, y: 34 });
+      gsap.set(intake, { opacity: 1, scale: 1 });
+      gsap.set(evidence, { opacity: 0, scale: 0.72 });
+      gsap.set(signal, { opacity: 0, scaleX: 0.84, scaleY: 0.9 });
+
+      tl.to(
+        screenWrap,
+        { opacity: 1, scale: 1, y: 0, duration: 0.68, ease: "back.out(1.4)" },
+        2.22,
+      );
+
+      const SWAP_TRIGGER = 3.34;
+      const EXIT_DURATION = 0.38;
+      const OVERLAP = 0.14;
+      tl.to(
+        intake,
+        { scale: 0.72, opacity: 0, duration: EXIT_DURATION, ease: "power2.in" },
+        SWAP_TRIGGER,
+      );
+      tl.to(
+        evidence,
+        { scale: 1, opacity: 1, duration: 0.62, ease: "back.out(1.4)" },
+        SWAP_TRIGGER + EXIT_DURATION - OVERLAP,
+      );
+
+      tl.fromTo(
+        signal,
+        { opacity: 0, scaleX: 0.84, scaleY: 0.9 },
+        { opacity: 1, scaleX: 1, scaleY: 1, duration: 0.52, ease: "power3.out" },
+        4.3,
+      );
+
+      const hackerWrap = composition.querySelector('[id="02-evidence-file-hacker-text"]');
+      const targetWord = hackerWrap.dataset.target;
+      const ghost = document.createElement('div');
+      ghost.className = '02-evidence-file-hacker-ghost';
+      ghost.textContent = targetWord;
+      hackerWrap.appendChild(ghost);
+
+      const charElements = Array.from(targetWord).map((character) => {
+        const span = document.createElement('span');
+        span.className = '02-evidence-file-hacker-char';
+        span.textContent = character;
+        span.dataset.target = character;
+        hackerWrap.appendChild(span);
+        return span;
+      });
+
+      const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*';
+      function pseudoGlyph(seed) {
+        const hash = ((seed * 9301 + 49297) % 233280) / 233280;
+        return GLYPHS[Math.floor(hash * GLYPHS.length)];
+      }
+
+      charElements.forEach((element, index) => {
+        const state = { progress: 0 };
+        tl.to(
+          state,
+          {
+            progress: 1,
+            duration: 0.72,
+            ease: "power3.out",
+            onUpdate: () => {
+              if (state.progress < 0.62) {
+                element.textContent = pseudoGlyph(index * 1000 + Math.floor(state.progress * 8));
+              } else {
+                element.textContent = element.dataset.target;
+              }
+              element.style.transform = `rotateX(${90 - state.progress * 90}deg)`;
+              element.style.opacity = String(Math.min(1, state.progress * 2));
+            },
+          },
+          4.42 + index * 0.055,
+        );
+      });
+    })();
+  </script>
+</template>

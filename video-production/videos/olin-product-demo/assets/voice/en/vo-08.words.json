@@ -1,0 +1,146 @@
+[
+  {
+    "id": "w0",
+    "text": "The",
+    "start": 0.119,
+    "end": 0.299
+  },
+  {
+    "id": "w1",
+    "text": "outcome",
+    "start": 0.379,
+    "end": 0.699
+  },
+  {
+    "id": "w2",
+    "text": "stays",
+    "start": 0.819,
+    "end": 1.139
+  },
+  {
+    "id": "w3",
+    "text": "connected",
+    "start": 1.179,
+    "end": 1.599
+  },
+  {
+    "id": "w4",
+    "text": "to",
+    "start": 1.599,
+    "end": 1.699
+  },
+  {
+    "id": "w5",
+    "text": "the",
+    "start": 1.74,
+    "end": 1.779
+  },
+  {
+    "id": "w6",
+    "text": "original",
+    "start": 1.819,
+    "end": 2.319
+  },
+  {
+    "id": "w7",
+    "text": "evidence",
+    "start": 2.359,
+    "end": 2.72
+  },
+  {
+    "id": "w8",
+    "text": "and",
+    "start": 2.74,
+    "end": 2.859
+  },
+  {
+    "id": "w9",
+    "text": "decision.",
+    "start": 2.879,
+    "end": 3.339
+  },
+  {
+    "id": "w10",
+    "text": "That",
+    "start": 4.119,
+    "end": 4.299
+  },
+  {
+    "id": "w11",
+    "text": "creates",
+    "start": 4.339,
+    "end": 4.679
+  },
+  {
+    "id": "w12",
+    "text": "an",
+    "start": 4.719,
+    "end": 4.94
+  },
+  {
+    "id": "w13",
+    "text": "auditable",
+    "start": 5.019,
+    "end": 5.699
+  },
+  {
+    "id": "w14",
+    "text": "learning",
+    "start": 5.759,
+    "end": 6.099
+  },
+  {
+    "id": "w15",
+    "text": "loop.",
+    "start": 6.179,
+    "end": 6.879
+  },
+  {
+    "id": "w16",
+    "text": "The",
+    "start": 6.94,
+    "end": 6.98
+  },
+  {
+    "id": "w17",
+    "text": "next",
+    "start": 7.079,
+    "end": 7.259
+  },
+  {
+    "id": "w18",
+    "text": "step",
+    "start": 7.319,
+    "end": 7.559
+  },
+  {
+    "id": "w19",
+    "text": "is",
+    "start": 7.579,
+    "end": 7.719
+  },
+  {
+    "id": "w20",
+    "text": "a",
+    "start": 7.919,
+    "end": 7.939
+  },
+  {
+    "id": "w21",
+    "text": "ten-case",
+    "start": 7.96,
+    "end": 8.439
+  },
+  {
+    "id": "w22",
+    "text": "parallel",
+    "start": 8.479,
+    "end": 8.819
+  },
+  {
+    "id": "w23",
+    "text": "pilot.",
+    "start": 8.92,
+    "end": 9.319
+  }
+]

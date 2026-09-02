@@ -1,0 +1,80 @@
+[
+  {
+    "id": "w0",
+    "text": "Olin",
+    "start": 0.159,
+    "end": 0.479
+  },
+  {
+    "id": "w1",
+    "text": "recommends.",
+    "start": 0.5,
+    "end": 1.139
+  },
+  {
+    "id": "w2",
+    "text": "The",
+    "start": 1.559,
+    "end": 1.659
+  },
+  {
+    "id": "w3",
+    "text": "institution",
+    "start": 1.719,
+    "end": 2.359
+  },
+  {
+    "id": "w4",
+    "text": "decides.",
+    "start": 2.399,
+    "end": 2.959
+  },
+  {
+    "id": "w5",
+    "text": "Its",
+    "start": 3.319,
+    "end": 3.5
+  },
+  {
+    "id": "w6",
+    "text": "final",
+    "start": 3.599,
+    "end": 3.879
+  },
+  {
+    "id": "w7",
+    "text": "decision",
+    "start": 3.919,
+    "end": 4.44
+  },
+  {
+    "id": "w8",
+    "text": "and",
+    "start": 4.48,
+    "end": 4.579
+  },
+  {
+    "id": "w9",
+    "text": "rationale",
+    "start": 4.639,
+    "end": 5.139
+  },
+  {
+    "id": "w10",
+    "text": "are",
+    "start": 5.239,
+    "end": 5.339
+  },
+  {
+    "id": "w11",
+    "text": "recorded",
+    "start": 5.359,
+    "end": 5.799
+  },
+  {
+    "id": "w12",
+    "text": "separately.",
+    "start": 5.839,
+    "end": 6.279
+  }
+]

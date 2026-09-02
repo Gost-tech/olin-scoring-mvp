@@ -1,0 +1,116 @@
+[
+  {
+    "id": "w0",
+    "text": "A",
+    "start": 0.159,
+    "end": 0.239
+  },
+  {
+    "id": "w1",
+    "text": "small",
+    "start": 0.28,
+    "end": 0.5
+  },
+  {
+    "id": "w2",
+    "text": "business",
+    "start": 0.62,
+    "end": 0.959
+  },
+  {
+    "id": "w3",
+    "text": "asks",
+    "start": 1.12,
+    "end": 1.439
+  },
+  {
+    "id": "w4",
+    "text": "for",
+    "start": 1.519,
+    "end": 1.579
+  },
+  {
+    "id": "w5",
+    "text": "funding.",
+    "start": 1.699,
+    "end": 2.059
+  },
+  {
+    "id": "w6",
+    "text": "Olin",
+    "start": 2.759,
+    "end": 3.039
+  },
+  {
+    "id": "w7",
+    "text": "turns",
+    "start": 3.059,
+    "end": 3.379
+  },
+  {
+    "id": "w8",
+    "text": "authorized",
+    "start": 3.46,
+    "end": 3.959
+  },
+  {
+    "id": "w9",
+    "text": "data",
+    "start": 4,
+    "end": 4.299
+  },
+  {
+    "id": "w10",
+    "text": "into",
+    "start": 4.339,
+    "end": 4.759
+  },
+  {
+    "id": "w11",
+    "text": "one",
+    "start": 4.839,
+    "end": 4.94
+  },
+  {
+    "id": "w12",
+    "text": "decision-ready",
+    "start": 5.019,
+    "end": 5.759
+  },
+  {
+    "id": "w13",
+    "text": "credit",
+    "start": 5.819,
+    "end": 6.079
+  },
+  {
+    "id": "w14",
+    "text": "file.",
+    "start": 6.199,
+    "end": 6.459
+  },
+  {
+    "id": "w15",
+    "text": "This",
+    "start": 7.019,
+    "end": 7.199
+  },
+  {
+    "id": "w16",
+    "text": "case",
+    "start": 7.259,
+    "end": 7.619
+  },
+  {
+    "id": "w17",
+    "text": "is",
+    "start": 7.679,
+    "end": 7.819
+  },
+  {
+    "id": "w18",
+    "text": "synthetic.",
+    "start": 7.859,
+    "end": 8.399
+  }
+]

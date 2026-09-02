@@ -1,0 +1,435 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-400-normal.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Inter";
+      src: url("assets/fonts/inter-latin-700-normal.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      color: #0b1916;
+      font-family: "Inter", sans-serif;
+    }
+
+    .\30 5-measure-background {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .\30 5-measure-queue {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 50%;
+      opacity: 0.6;
+      filter: saturate(0.78) contrast(0.88);
+    }
+
+    .\30 5-measure-veil {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.48);
+    }
+
+    .\30 5-measure-content {
+      position: absolute;
+      inset: 0;
+      padding: 58px 58px 0;
+      box-sizing: border-box;
+    }
+
+    .\30 5-measure-topline {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 68px;
+    }
+
+    .\30 5-measure-terminal {
+      display: flex;
+      align-items: baseline;
+      min-width: 520px;
+      padding: 15px 22px 14px;
+      box-sizing: border-box;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 100px;
+      background: rgba(255, 255, 255, 0.88);
+      white-space: pre;
+      font-size: 23px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .\30 5-measure-terminal-mark {
+      width: 9px;
+      height: 9px;
+      margin-right: 14px;
+      border-radius: 50%;
+      background: #c8fa5a;
+      flex: 0 0 auto;
+    }
+
+    .\30 5-measure-text-wrap {
+      display: inline-flex;
+      align-items: baseline;
+      min-width: 344px;
+      white-space: pre;
+    }
+
+    .\30 5-measure-type {
+      white-space: pre;
+    }
+
+    .\30 5-measure-cursor {
+      display: inline-block;
+      width: 12px;
+      height: 22px;
+      margin-left: 5px;
+      background: #c55232;
+      vertical-align: -3px;
+      border-radius: 2px;
+    }
+
+    .\30 5-measure-swap-wrap {
+      position: relative;
+      width: 100%;
+      height: 620px;
+      margin-top: 28px;
+    }
+
+    .\30 5-measure-grid,
+    .\30 5-measure-signal {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+    }
+
+    .\30 5-measure-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 18px;
+      z-index: 1;
+    }
+
+    .\30 5-measure-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+      padding: 28px 30px 26px;
+      box-sizing: border-box;
+      overflow: hidden;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .\30 5-measure-card-index {
+      color: #c55232;
+      font-size: 14px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .\30 5-measure-card-label {
+      margin-top: 18px;
+      color: #0b1916;
+      font-size: 34px;
+      line-height: 1.05;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .\30 5-measure-placeholder {
+      margin-top: 18px;
+      color: #9a9a9a;
+      font-size: 22px;
+      line-height: 1;
+      font-weight: 400;
+    }
+
+    .\30 5-measure-track {
+      position: relative;
+      width: 100%;
+      height: 14px;
+      margin-top: 24px;
+      overflow: hidden;
+      border-radius: 6px;
+      background: rgba(200, 250, 90, 0.15);
+    }
+
+    .\30 5-measure-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      background: #c8fa5a;
+      transform-origin: left center;
+    }
+
+    .\30 5-measure-signal {
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .\30 5-measure-rail {
+      position: relative;
+      width: 100%;
+      height: 236px;
+      display: grid;
+      grid-template-columns: 1fr 58px 1fr 58px 1fr;
+      align-items: center;
+      padding: 30px 34px;
+      box-sizing: border-box;
+      overflow: hidden;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.94);
+    }
+
+    .\30 5-measure-rail::before {
+      content: "";
+      position: absolute;
+      left: 58px;
+      right: 58px;
+      bottom: 25px;
+      height: 8px;
+      border-radius: 6px;
+      background: rgba(200, 250, 90, 0.15);
+    }
+
+    .\30 5-measure-rail-fill {
+      position: absolute;
+      left: 58px;
+      right: 58px;
+      bottom: 25px;
+      height: 8px;
+      border-radius: 6px;
+      background: #c8fa5a;
+      transform-origin: left center;
+    }
+
+    .\30 5-measure-step {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .\30 5-measure-node {
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #c8fa5a;
+      color: #0b1916;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .\30 5-measure-step-label {
+      color: #0b1916;
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .\30 5-measure-arrow {
+      position: relative;
+      z-index: 1;
+      color: #c55232;
+      font-size: 36px;
+      line-height: 1;
+      text-align: center;
+    }
+  </style>
+
+  <div data-hf-id="hf-xjb8" id="root" data-composition-id="05-measure" data-width="1080" data-height="1080" data-start="0" data-duration="7.148">
+    <div data-hf-id="hf-coh9" class="clip 05-measure-background" data-start="0" data-duration="7.148" data-track-index="0">
+      <img data-hf-id="hf-59r9" class="05-measure-queue" src="assets/06-analyst-queue.png" alt="">
+      <div data-hf-id="hf-msrv" class="05-measure-veil"></div>
+    </div>
+
+    <div data-hf-id="hf-mmfh" class="clip 05-measure-content" data-start="0" data-duration="7.148" data-track-index="1">
+      <div data-hf-id="hf-zr5u" class="05-measure-topline">
+        <div data-hf-id="hf-4wmj" class="05-measure-terminal">
+          <span data-hf-id="hf-nz5q" class="05-measure-terminal-mark"></span>
+          <span data-hf-id="hf-roxa" class="05-measure-text-wrap"><span data-hf-id="hf-cagh" class="05-measure-type" id="05-measure-type"></span><span data-hf-id="hf-ybk1" class="05-measure-cursor" id="05-measure-cursor"></span></span>
+        </div>
+      </div>
+
+      <div data-hf-id="hf-89xf" class="05-measure-swap-wrap">
+        <div data-hf-id="hf-vu00" class="05-measure-grid" id="05-measure-grid">
+          <div data-hf-id="hf-3272" class="05-measure-card" id="05-measure-card-1">
+            <div data-hf-id="hf-yeow">
+              <div data-hf-id="hf-030p" class="05-measure-card-index">01</div>
+              <div data-hf-id="hf-vuet" class="05-measure-card-label">COBERTURA</div>
+              <div data-hf-id="hf-wrhi" class="05-measure-placeholder">—</div>
+            </div>
+            <div data-hf-id="hf-0z64" class="05-measure-track"><div data-hf-id="hf-uo3g" class="05-measure-fill" id="05-measure-fill-1"></div></div>
+          </div>
+          <div data-hf-id="hf-z431" class="05-measure-card" id="05-measure-card-2">
+            <div data-hf-id="hf-y7yw">
+              <div data-hf-id="hf-19xs" class="05-measure-card-index">02</div>
+              <div data-hf-id="hf-8bbk" class="05-measure-card-label">TIEMPO</div>
+              <div data-hf-id="hf-3zqi" class="05-measure-placeholder">—</div>
+            </div>
+            <div data-hf-id="hf-w2lg" class="05-measure-track"><div data-hf-id="hf-5jl3" class="05-measure-fill" id="05-measure-fill-2"></div></div>
+          </div>
+          <div data-hf-id="hf-w4tg" class="05-measure-card" id="05-measure-card-3">
+            <div data-hf-id="hf-x11t">
+              <div data-hf-id="hf-0vmr" class="05-measure-card-index">03</div>
+              <div data-hf-id="hf-w65v" class="05-measure-card-label">DIFERENCIAS</div>
+              <div data-hf-id="hf-4e1j" class="05-measure-placeholder">—</div>
+            </div>
+            <div data-hf-id="hf-uvod" class="05-measure-track"><div data-hf-id="hf-1lh2" class="05-measure-fill" id="05-measure-fill-3"></div></div>
+          </div>
+          <div data-hf-id="hf-jmaz" class="05-measure-card" id="05-measure-card-4">
+            <div data-hf-id="hf-xfcu">
+              <div data-hf-id="hf-yw3m" class="05-measure-card-index">04</div>
+              <div data-hf-id="hf-ur54" class="05-measure-card-label">UTILIDAD</div>
+              <div data-hf-id="hf-4sck" class="05-measure-placeholder">—</div>
+            </div>
+            <div data-hf-id="hf-v9ze" class="05-measure-track"><div data-hf-id="hf-a9cx" class="05-measure-fill" id="05-measure-fill-4"></div></div>
+          </div>
+        </div>
+
+        <div data-hf-id="hf-78x8" class="05-measure-signal" id="05-measure-signal">
+          <div data-hf-id="hf-yowj" class="05-measure-rail">
+            <div data-hf-id="hf-qssm" class="05-measure-rail-fill" id="05-measure-rail-fill"></div>
+            <div data-hf-id="hf-vm45" class="05-measure-step">
+              <div data-hf-id="hf-q0gk" class="05-measure-node">01</div>
+              <div data-hf-id="hf-x4op" class="05-measure-step-label">MEDIR</div>
+            </div>
+            <div data-hf-id="hf-rf8w" class="05-measure-arrow">→</div>
+            <div data-hf-id="hf-9815" class="05-measure-step">
+              <div data-hf-id="hf-otjh" class="05-measure-node">02</div>
+              <div data-hf-id="hf-sege" class="05-measure-step-label">DECIDIR</div>
+            </div>
+            <div data-hf-id="hf-vi6g" class="05-measure-arrow">→</div>
+            <div data-hf-id="hf-aey8" class="05-measure-step">
+              <div data-hf-id="hf-p7ui" class="05-measure-node">03</div>
+              <div data-hf-id="hf-oadm" class="05-measure-step-label">INTEGRAR</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (() => {
+      const duration = 6.648;
+      const typeEl = document.getElementById("05-measure-type");
+      const cursorEl = document.getElementById("05-measure-cursor");
+      const sequence = [
+        { t: 0.00, text: "", color: "#c55232" },
+        { t: 0.12, text: "PIL", color: "#c55232" },
+        { t: 0.28, text: "PILOTO", color: "#0b1916" },
+        { t: 0.52, text: "PILOTO ", color: "#9a9a9a" },
+        { t: 0.70, text: "PILOTO EN", color: "#c55232" },
+        { t: 0.92, text: "PILOTO EN PAR", color: "#c55232" },
+        { t: 1.12, text: "PILOTO EN PARALELO", color: "#c8fa5a" }
+      ];
+      const changeTimes = sequence.slice(1).map((entry) => entry.t);
+      const typeDriver = { t: 0 };
+      const blinkDriver = { p: 0 };
+
+      function entryAt(time) {
+        for (let index = sequence.length - 1; index >= 0; index -= 1) {
+          if (time >= sequence[index].t) return sequence[index];
+        }
+        return sequence[0];
+      }
+
+      const tl = gsap.timeline({ paused: true });
+
+      tl.to(typeDriver, {
+        t: 1.6,
+        duration: 1.6,
+        ease: "none",
+        onUpdate: () => {
+          const entry = entryAt(typeDriver.t);
+          typeEl.textContent = entry.text;
+          cursorEl.style.background = entry.color;
+        }
+      }, 0);
+
+      tl.to(blinkDriver, {
+        p: Math.PI * 4,
+        duration: 1.6,
+        ease: "none",
+        onUpdate: () => {
+          const typing = changeTimes.some((time) => time <= typeDriver.t && typeDriver.t - time < 0.15);
+          cursorEl.style.opacity = typing || Math.sin(blinkDriver.p) > 0 ? "1" : "0";
+        }
+      }, 0);
+
+      [1, 2, 3, 4].forEach((number, index) => {
+        const at = 1.6 + index * 0.76;
+        tl.fromTo(document.getElementById(`05-measure-card-${number}`),
+          { opacity: 0, y: 30, scale: 0.96 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.46, ease: "power3.out" },
+          at
+        );
+        tl.fromTo(document.getElementById(`05-measure-fill-${number}`),
+          { scaleX: 0 },
+          { scaleX: 1, duration: 0.82, ease: "power2.out" },
+          at + 0.12
+        );
+      });
+
+      tl.to(document.getElementById("05-measure-grid"), {
+        scale: 0.72,
+        opacity: 0,
+        duration: 0.4,
+        ease: "power2.in"
+      }, 4.8);
+
+      tl.fromTo(document.getElementById("05-measure-signal"),
+        { scale: 0.72, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.62, ease: "back.out(1.8)" },
+        5.04
+      );
+
+      tl.fromTo(document.getElementById("05-measure-rail-fill"),
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.72, ease: "power2.out" },
+        5.42
+      );
+
+      tl.to({}, { duration: duration - 6.14 }, 6.14);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["05-measure"] = tl;
+    })();
+  </script>
+</template>

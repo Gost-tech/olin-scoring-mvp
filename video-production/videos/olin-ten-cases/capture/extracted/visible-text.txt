@@ -1,0 +1,10 @@
+OLIN
+Software para equipos de crédito · prototipo funcional
+De evidencia dispersa a una recomendación crediticia que su equipo puede defender.
+Un expediente que se puede revisar.
+Fuentes claras. Recomendación explicada. Decisión registrada.
+10 expedientes reales. Decisión oficial intacta.
+Olin analiza casos autorizados en paralelo al proceso del otorgante.
+El objetivo es medir cobertura, tiempo, diferencias y utilidad antes de integrar o mover dinero.
+La institución financiera conserva la decisión final.
+Revisemos un expediente, no una promesa.

@@ -1,0 +1,365 @@
+<template>
+  <style>
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      color: #0b1916;
+      font-family: sans-serif;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .f06-cta-ground {
+      background: #ffffff;
+    }
+
+    .f06-cta-safe-field {
+      position: absolute;
+      inset: 0 0 184px 0;
+      overflow: hidden;
+    }
+
+    .f06-cta-ring {
+      position: absolute;
+      left: 50%;
+      top: 430px;
+      border: 1.5px solid rgba(200, 250, 90, 0.2);
+      border-radius: 50%;
+      box-sizing: border-box;
+      opacity: 0.68;
+    }
+
+    .f06-cta-ring-a { width: 520px; height: 520px; margin: -260px 0 0 -260px; }
+    .f06-cta-ring-b { width: 720px; height: 720px; margin: -360px 0 0 -360px; opacity: 0.44; }
+    .f06-cta-ring-c { width: 920px; height: 920px; margin: -460px 0 0 -460px; opacity: 0.25; }
+
+    .f06-cta-dot-grid {
+      position: absolute;
+      right: 74px;
+      top: 68px;
+      width: 82px;
+      height: 82px;
+      opacity: 0.48;
+      background-image: radial-gradient(circle, #c8fa5a 0 3px, transparent 3.5px);
+      background-size: 28px 28px;
+    }
+
+    .f06-cta-scene {
+      position: absolute;
+      inset: 0 0 184px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .f06-cta-argument {
+      width: 900px;
+      margin-top: -38px;
+      text-align: center;
+    }
+
+    .f06-cta-line {
+      display: flex;
+      justify-content: center;
+      gap: 25px;
+      min-height: 112px;
+      font-size: 88px;
+      line-height: 1.04;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      white-space: nowrap;
+    }
+
+    .f06-cta-line + .f06-cta-line { margin-top: 14px; }
+
+    .f06-cta-word {
+      position: relative;
+      display: inline-block;
+    }
+
+    .f06-cta-promise-wrap {
+      position: relative;
+      display: inline-block;
+    }
+
+    .f06-cta-strike {
+      position: absolute;
+      z-index: 2;
+      left: -7px;
+      right: -9px;
+      top: 51%;
+      height: 8px;
+      border-radius: 6px;
+      background: #c55232;
+      transform-origin: left center;
+    }
+
+    .f06-cta-pilot-wrap {
+      width: 930px;
+      margin-top: 98px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+    }
+
+    .f06-cta-signal-mask {
+      overflow: hidden;
+      border-radius: 100px;
+    }
+
+    .f06-cta-signal-pill {
+      display: flex;
+      align-items: center;
+      min-height: 78px;
+      padding: 0 38px;
+      box-sizing: border-box;
+      border: 1.5px solid rgba(200, 250, 90, 0.42);
+      border-radius: 100px;
+      background: rgba(200, 250, 90, 0.15);
+      color: #0b1916;
+      font-size: 26px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      white-space: nowrap;
+    }
+
+    .f06-cta-draw-mark {
+      width: 86px;
+      height: 86px;
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+
+    .f06-cta-draw-mark path,
+    .f06-cta-draw-mark circle {
+      fill: none;
+      stroke: #0b1916;
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .f06-cta-lockup {
+      width: 820px;
+      margin-top: 14px;
+      text-align: center;
+    }
+
+    .f06-cta-brand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .f06-cta-final-mark {
+      width: 102px;
+      height: 102px;
+      overflow: visible;
+    }
+
+    .f06-cta-final-mark path,
+    .f06-cta-final-mark circle {
+      fill: none;
+      stroke: #0b1916;
+      stroke-width: 2.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .f06-cta-wordmark {
+      font-size: 126px;
+      line-height: 0.9;
+      font-weight: 700;
+      letter-spacing: -0.07em;
+    }
+
+    .f06-cta-url {
+      margin-top: 55px;
+      color: #c55232;
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 500;
+      letter-spacing: 0.035em;
+    }
+
+    .f06-cta-mineral-rule {
+      width: 360px;
+      height: 3px;
+      margin: 28px auto 0;
+      border-radius: 6px;
+      background: #c8fa5a;
+      transform-origin: left center;
+    }
+  </style>
+
+  <div data-hf-id="hf-40xq" id="root" data-composition-id="06-cta" data-width="1080" data-height="1080" data-start="0" data-duration="4.92">
+    <div data-hf-id="hf-nd2s" class="clip f06-cta-ground" data-start="0" data-duration="4.92" data-track-index="0">
+      <div data-hf-id="hf-axti" class="f06-cta-safe-field">
+        <span data-hf-id="hf-91y9" class="f06-cta-ring f06-cta-ring-a"></span>
+        <span data-hf-id="hf-d02a" class="f06-cta-ring f06-cta-ring-b"></span>
+        <span data-hf-id="hf-clne" class="f06-cta-ring f06-cta-ring-c" data-layout-allow-overflow=""></span>
+        <span data-hf-id="hf-fd7d" class="f06-cta-dot-grid"></span>
+      </div>
+    </div>
+
+    <section data-hf-id="hf-x1cb" class="f06-cta-scene f06-cta-scene-argument" aria-label="Un expediente, no una promesa">
+      <div data-hf-id="hf-s4br" class="f06-cta-argument">
+        <div data-hf-id="hf-ewuo" class="f06-cta-line">
+          <span data-hf-id="hf-ucb4" class="f06-cta-word">UN</span>
+          <span data-hf-id="hf-chme" class="f06-cta-word">EXPEDIENTE</span>
+        </div>
+        <div data-hf-id="hf-fyy0" class="f06-cta-line">
+          <span data-hf-id="hf-kdic" class="f06-cta-word">NO</span>
+          <span data-hf-id="hf-vuir" class="f06-cta-word">UNA</span>
+          <span data-hf-id="hf-45of" class="f06-cta-promise-wrap">
+            <span data-hf-id="hf-qko4" class="f06-cta-word">PROMESA</span>
+            <span data-hf-id="hf-75x9" class="f06-cta-strike"></span>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section data-hf-id="hf-mvjr" class="f06-cta-scene f06-cta-scene-pilot" aria-label="Piloto de diez casos">
+      <div data-hf-id="hf-g3ol" class="f06-cta-pilot-wrap">
+        <div data-hf-id="hf-g64r" class="f06-cta-signal-mask">
+          <div data-hf-id="hf-v169" class="f06-cta-signal-pill">PILOTO · 10 CASOS · SIN MOVER DINERO</div>
+        </div>
+        <svg data-hf-id="hf-rt31" class="f06-cta-draw-mark" viewBox="0 0 44 44" aria-hidden="true">
+          <path data-hf-id="hf-08f6" d="M6 11.5h11.4c4.1 0 5.8 2.2 7.7 5.5l2.8 5c1.8 3.2 3.7 5.4 7.9 5.4H38" />
+          <path data-hf-id="hf-m4hq" d="M6 22h7.8c4.2 0 6.2 0 8.4 0H38" />
+          <path data-hf-id="hf-jy2z" d="M6 32.5h11.4c4.1 0 5.8-2.2 7.7-5.5l2.8-5c1.8-3.2 3.7-5.4 7.9-5.4H38" />
+          <circle data-hf-id="hf-783b" cx="38" cy="22" r="3.5" />
+        </svg>
+      </div>
+    </section>
+
+    <section data-hf-id="hf-0yyy" class="f06-cta-scene f06-cta-scene-final" aria-label="Olin">
+      <div data-hf-id="hf-huxk" class="f06-cta-lockup">
+        <div data-hf-id="hf-qxnp" class="f06-cta-brand">
+          <svg data-hf-id="hf-bleb" class="f06-cta-final-mark" viewBox="0 0 44 44" aria-hidden="true">
+            <path data-hf-id="hf-r2iu" d="M6 11.5h11.4c4.1 0 5.8 2.2 7.7 5.5l2.8 5c1.8 3.2 3.7 5.4 7.9 5.4H38" />
+            <path data-hf-id="hf-vk82" d="M6 22h7.8c4.2 0 6.2 0 8.4 0H38" />
+            <path data-hf-id="hf-h8rv" d="M6 32.5h11.4c4.1 0 5.8-2.2 7.7-5.5l2.8-5c1.8-3.2 3.7-5.4 7.9-5.4H38" />
+            <circle data-hf-id="hf-8szb" cx="38" cy="22" r="3.5" />
+          </svg>
+          <span data-hf-id="hf-beg0" class="f06-cta-wordmark">Olin</span>
+        </div>
+        <div data-hf-id="hf-3wgh" class="f06-cta-url">olin-credit.olin-mx.workers.dev</div>
+        <div data-hf-id="hf-9x1r" class="f06-cta-mineral-rule"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.querySelector('[data-composition-id="06-cta"]');
+      const tl = gsap.timeline({ paused: true });
+      const argumentWords = Array.from(root.querySelectorAll('.f06-cta-argument .f06-cta-word'));
+
+      // Content-aware sequencing: longer words earn a slightly wider reveal window.
+      let wordCursor = 0.04;
+      const wordStarts = argumentWords.map((word) => {
+        const start = wordCursor;
+        wordCursor += 0.12 + word.textContent.length * 0.012;
+        return start;
+      });
+
+      argumentWords.forEach((word, index) => {
+        tl.fromTo(
+          word,
+          { y: 54, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.46, ease: 'power4.out' },
+          wordStarts[index]
+        );
+      });
+
+      tl.fromTo(
+        root.querySelector('.f06-cta-strike'),
+        { scaleX: 0, rotation: -2 },
+        { scaleX: 1, rotation: -2, duration: 0.52, ease: 'power2.out' },
+        1.12
+      );
+
+      tl.to(
+        root.querySelector('.f06-cta-scene-argument'),
+        { y: -150, opacity: 0, duration: 0.30, ease: 'power4.in' },
+        1.70
+      );
+
+      tl.fromTo(
+        root.querySelector('.f06-cta-scene-pilot'),
+        { y: 150, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.34, ease: 'power4.out' },
+        1.98
+      );
+      tl.fromTo(
+        root.querySelector('.f06-cta-signal-pill'),
+        { xPercent: -101 },
+        { xPercent: 0, duration: 0.72, ease: 'power3.out' },
+        2.02
+      );
+
+      const drawParts = Array.from(root.querySelectorAll('.f06-cta-draw-mark path, .f06-cta-draw-mark circle'));
+      drawParts.forEach((part, index) => {
+        const length = part.getTotalLength();
+        part.style.strokeDasharray = `${length}`;
+        part.style.strokeDashoffset = `${length}`;
+        tl.to(
+          part,
+          { strokeDashoffset: 0, duration: index === drawParts.length - 1 ? 0.34 : 0.48, ease: 'power2.out' },
+          2.18 + index * 0.34
+        );
+      });
+
+      tl.to(
+        root.querySelector('.f06-cta-scene-pilot'),
+        { y: -150, opacity: 0, duration: 0.28, ease: 'power4.in' },
+        3.30
+      );
+
+      tl.fromTo(
+        root.querySelector('.f06-cta-scene-final'),
+        { y: 150, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.34, ease: 'power4.out' },
+        3.56
+      );
+      tl.fromTo(
+        root.querySelector('.f06-cta-final-mark'),
+        { scale: 0.86, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.48, ease: 'power3.out' },
+        3.62
+      );
+      tl.fromTo(
+        root.querySelector('.f06-cta-wordmark'),
+        { x: 30, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.52, ease: 'power3.out' },
+        3.70
+      );
+      tl.fromTo(
+        root.querySelector('.f06-cta-url'),
+        { y: 16, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.42, ease: 'power2.out' },
+        3.92
+      );
+      tl.fromTo(
+        root.querySelector('.f06-cta-mineral-rule'),
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.44, ease: 'power2.out' },
+        4.10
+      );
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines['06-cta'] = tl;
+    })();
+  </script>
+</template>

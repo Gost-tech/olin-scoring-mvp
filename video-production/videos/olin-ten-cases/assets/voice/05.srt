@@ -1,0 +1,4 @@
+1
+00:00:00,100 --> 00:00:06,650
+El piloto corre en paralelo para medir cobertura, tiempos, diferencias y utilidad antes de integrar.
+
