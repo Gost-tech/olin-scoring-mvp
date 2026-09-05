@@ -1,8 +1,8 @@
 {
   "$schema": "investigator-authority.schema.json",
-  "contract_version": "investigator-authority-1.0",
+  "contract_version": "investigator-authority-1.1",
   "default": "deny",
-  "deployment_profile": "investigator_v1_phase0",
+  "deployment_profile": "investigator_v1_phase1",
   "principals": ["investigator_runtime"],
   "capabilities": {
     "case.create": {
@@ -25,6 +25,27 @@
       "effect": "INVESTIGATION_RECORD",
       "reads": ["investigator.investigation_case", "investigator.investigation_event"],
       "writes": ["investigator.investigation_case", "investigator.investigation_event"]
+    },
+    "snapshot.create": {
+      "decision": "allow",
+      "principals": ["investigator_runtime"],
+      "effect": "SNAPSHOT_RECORD",
+      "reads": ["investigator.investigation_case", "investigator.investigation_event"],
+      "writes": ["investigator.case_snapshot", "investigator.case_snapshot_request"]
+    },
+    "snapshot.read": {
+      "decision": "allow",
+      "principals": ["investigator_runtime"],
+      "effect": "READ_SNAPSHOT_RECORD",
+      "reads": ["investigator.case_snapshot", "investigator.case_snapshot_invalidation", "investigator.is_snapshot_current"],
+      "writes": []
+    },
+    "snapshot.invalidate": {
+      "decision": "allow",
+      "principals": ["investigator_runtime"],
+      "effect": "SNAPSHOT_RECORD",
+      "reads": ["investigator.investigation_case", "investigator.investigation_event", "investigator.case_snapshot", "investigator.case_snapshot_invalidation"],
+      "writes": ["investigator.investigation_case", "investigator.investigation_event", "investigator.case_snapshot_invalidation"]
     },
     "credit.approve": {"decision": "deny", "principals": [], "effect": "CREDIT_APPROVE"},
     "credit.decline": {"decision": "deny", "principals": [], "effect": "CREDIT_DECLINE"},
@@ -144,7 +165,7 @@
     "caller_trust_labels": ["verified", "trusted", "authoritative", "issuer_validated"]
   },
   "allowed_routes": [],
-  "allowed_event_types": ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED"],
+  "allowed_event_types": ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED", "CASE_SNAPSHOT_INVALIDATED"],
   "allowed_environment_variables": [
     "HOME",
     "HOSTNAME",
@@ -164,8 +185,14 @@
   "allowed_database_objects": [
     "investigator.investigation_case",
     "investigator.investigation_event",
+    "investigator.case_snapshot",
+    "investigator.case_snapshot_invalidation",
+    "investigator.case_snapshot_request",
     "investigator.create_case",
     "investigator.append_event",
+    "investigator.create_snapshot",
+    "investigator.invalidate_snapshot",
+    "investigator.is_snapshot_current",
     "investigator.session_tenant_id",
     "investigator.context_tenant_id",
     "investigator.tenant_access_allowed"

@@ -1,4 +1,5 @@
 """Fail-closed, data-driven authority boundary for Investigator V1."""
+
 from __future__ import annotations
 
 import json
@@ -16,9 +17,20 @@ class AuthorityDenied(PermissionError):
 _CONTRACT_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "investigator-authority-v1.json"
 )
-_ALLOWED_EFFECTS = frozenset({"INVESTIGATION_RECORD", "READ_INVESTIGATION_RECORD"})
+_ALLOWED_EFFECTS = frozenset(
+    {
+        "INVESTIGATION_RECORD",
+        "READ_INVESTIGATION_RECORD",
+        "SNAPSHOT_RECORD",
+        "READ_SNAPSHOT_RECORD",
+    }
+)
 _PHASE0_PRINCIPALS = ["investigator_runtime"]
-_PHASE0_EVENT_TYPES = ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED"]
+_PHASE1_EVENT_TYPES = [
+    "CASE_CREATED",
+    "INVESTIGATION_EVENT_RECORDED",
+    "CASE_SNAPSHOT_INVALIDATED",
+]
 _PHASE0_OBJECTS = {
     "investigator.investigation_case",
     "investigator.investigation_event",
@@ -27,6 +39,14 @@ _PHASE0_OBJECTS = {
     "investigator.session_tenant_id",
     "investigator.context_tenant_id",
     "investigator.tenant_access_allowed",
+}
+_PHASE1_OBJECTS = _PHASE0_OBJECTS | {
+    "investigator.case_snapshot",
+    "investigator.case_snapshot_invalidation",
+    "investigator.case_snapshot_request",
+    "investigator.create_snapshot",
+    "investigator.invalidate_snapshot",
+    "investigator.is_snapshot_current",
 }
 _PHASE0_ENVIRONMENT = {
     "HOME",
@@ -50,21 +70,76 @@ _PHASE0_ALLOWS = {
         "principals": ["investigator_runtime"],
         "effect": "INVESTIGATION_RECORD",
         "reads": [],
-        "writes": ["investigator.investigation_case", "investigator.investigation_event"],
+        "writes": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+        ],
     },
     "case.read": {
         "decision": "allow",
         "principals": ["investigator_runtime"],
         "effect": "READ_INVESTIGATION_RECORD",
-        "reads": ["investigator.investigation_case", "investigator.investigation_event"],
+        "reads": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+        ],
         "writes": [],
     },
     "event.append": {
         "decision": "allow",
         "principals": ["investigator_runtime"],
         "effect": "INVESTIGATION_RECORD",
-        "reads": ["investigator.investigation_case", "investigator.investigation_event"],
-        "writes": ["investigator.investigation_case", "investigator.investigation_event"],
+        "reads": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+        ],
+        "writes": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+        ],
+    },
+}
+_PHASE1_ALLOWS = {
+    **_PHASE0_ALLOWS,
+    "snapshot.create": {
+        "decision": "allow",
+        "principals": ["investigator_runtime"],
+        "effect": "SNAPSHOT_RECORD",
+        "reads": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+        ],
+        "writes": [
+            "investigator.case_snapshot",
+            "investigator.case_snapshot_request",
+        ],
+    },
+    "snapshot.read": {
+        "decision": "allow",
+        "principals": ["investigator_runtime"],
+        "effect": "READ_SNAPSHOT_RECORD",
+        "reads": [
+            "investigator.case_snapshot",
+            "investigator.case_snapshot_invalidation",
+            "investigator.is_snapshot_current",
+        ],
+        "writes": [],
+    },
+    "snapshot.invalidate": {
+        "decision": "allow",
+        "principals": ["investigator_runtime"],
+        "effect": "SNAPSHOT_RECORD",
+        "reads": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+            "investigator.case_snapshot",
+            "investigator.case_snapshot_invalidation",
+        ],
+        "writes": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+            "investigator.case_snapshot_invalidation",
+        ],
     },
 }
 _REQUIRED_DENIES = {
@@ -87,15 +162,17 @@ _REQUIRED_DENIES = {
 
 
 def _validate_contract(contract: dict) -> None:
-    if contract.get("contract_version") != "investigator-authority-1.0":
+    if contract.get("contract_version") != "investigator-authority-1.1":
         raise RuntimeError("Unsupported Investigator authority contract")
-    if contract.get("deployment_profile") != "investigator_v1_phase0":
-        raise RuntimeError("Investigator deployment profile must be Phase 0")
+    if contract.get("deployment_profile") != "investigator_v1_phase1":
+        raise RuntimeError("Investigator deployment profile must be Phase 1")
     if contract.get("default") != "deny":
         raise RuntimeError("Investigator authority contract must default to deny")
     principals = contract.get("principals")
     capabilities = contract.get("capabilities")
-    if not isinstance(principals, list) or not all(isinstance(item, str) for item in principals):
+    if not isinstance(principals, list) or not all(
+        isinstance(item, str) for item in principals
+    ):
         raise TypeError("Investigator authority principals are invalid")
     if len(principals) != len(set(principals)):
         raise RuntimeError("Investigator authority principals must be unique")
@@ -110,12 +187,12 @@ def _validate_contract(contract: dict) -> None:
     forbidden_tables = set(surfaces.get("database_tables", []))
     if forbidden_tables.intersection(allowed_objects):
         raise RuntimeError("A forbidden database object is allowlisted")
-    if set(allowed_objects) != _PHASE0_OBJECTS:
-        raise RuntimeError("Investigator Phase 0 database objects must be exact")
+    if set(allowed_objects) != _PHASE1_OBJECTS:
+        raise RuntimeError("Investigator Phase 1 database objects must be exact")
     if contract.get("allowed_routes") != []:
         raise RuntimeError("Investigator Phase 0 exposes no routes")
-    if contract.get("allowed_event_types") != _PHASE0_EVENT_TYPES:
-        raise RuntimeError("Investigator Phase 0 event types must be exact")
+    if contract.get("allowed_event_types") != _PHASE1_EVENT_TYPES:
+        raise RuntimeError("Investigator Phase 1 event types must be exact")
     allowed_environment = contract.get("allowed_environment_variables")
     if not isinstance(allowed_environment, list) or len(allowed_environment) != len(
         set(allowed_environment)
@@ -134,7 +211,10 @@ def _validate_contract(contract: dict) -> None:
         if not isinstance(rule, dict) or rule.get("decision") not in {"allow", "deny"}:
             raise RuntimeError(f"Invalid capability rule: {name}")
         rule_principals = rule.get("principals")
-        if not isinstance(rule_principals, list) or not set(rule_principals) <= principal_set:
+        if (
+            not isinstance(rule_principals, list)
+            or not set(rule_principals) <= principal_set
+        ):
             raise RuntimeError(f"Capability has unknown principals: {name}")
         if rule["decision"] == "deny" and rule_principals:
             raise RuntimeError(f"Denied capability grants principals: {name}")
@@ -143,16 +223,22 @@ def _validate_contract(contract: dict) -> None:
                 raise RuntimeError(f"Capability grants a forbidden effect: {name}")
             for field in ("reads", "writes"):
                 objects = rule.get(field)
-                if not isinstance(objects, list) or not set(objects) <= set(allowed_objects):
-                    raise RuntimeError(f"Capability references unauthorized objects: {name}.{field}")
+                if not isinstance(objects, list) or not set(objects) <= set(
+                    allowed_objects
+                ):
+                    raise RuntimeError(
+                        f"Capability references unauthorized objects: {name}.{field}"
+                    )
     for name, effect in _REQUIRED_DENIES.items():
         rule = capabilities.get(name)
         if rule != {"decision": "deny", "principals": [], "effect": effect}:
-            raise RuntimeError(f"Required authority denial is absent or changed: {name}")
-    expected_capabilities = set(_PHASE0_ALLOWS) | set(_REQUIRED_DENIES)
+            raise RuntimeError(
+                f"Required authority denial is absent or changed: {name}"
+            )
+    expected_capabilities = set(_PHASE1_ALLOWS) | set(_REQUIRED_DENIES)
     if set(capabilities) != expected_capabilities:
         raise RuntimeError("Investigator Phase 0 capability set must be exact")
-    for name, expected in _PHASE0_ALLOWS.items():
+    for name, expected in _PHASE1_ALLOWS.items():
         if capabilities[name] != expected:
             raise RuntimeError(f"Allowed capability is not exact: {name}")
 
@@ -204,5 +290,6 @@ def assert_runtime_environment(environment: Mapping[str, str]) -> None:
     names = forbidden_environment_names(environment)
     if names:
         raise AuthorityDenied(
-            "Investigator runtime contains forbidden environment names: " + ", ".join(names)
+            "Investigator runtime contains forbidden environment names: "
+            + ", ".join(names)
         )

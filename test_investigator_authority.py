@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parent
 POLICY_PATH = ROOT / "config" / "investigator-authority-v1.json"
 SCHEMA_PATH = ROOT / "config" / "investigator-authority.schema.json"
 MIGRATION_PATH = ROOT / "db" / "migrations" / "0001_investigator_phase0.sql"
+PHASE1_MIGRATION_PATH = (
+    ROOT / "db" / "migrations" / "0002_investigator_case_event_snapshot.sql"
+)
 
 PROHIBITED_CAPABILITIES = {
     "credit.approve",
@@ -48,22 +51,32 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
     def test_contract_and_schema_are_valid_json(self):
         contract = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["contract_version"], "investigator-authority-1.0")
+        self.assertEqual(contract["contract_version"], "investigator-authority-1.1")
         self.assertEqual(contract["default"], "deny")
         self.assertEqual(schema["properties"]["default"]["const"], "deny")
         self.assertEqual(len(contract["principals"]), len(set(contract["principals"])))
         self.assertEqual(contract["allowed_routes"], [])
         self.assertEqual(
             contract["allowed_event_types"],
-            ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED"],
+            [
+                "CASE_CREATED",
+                "INVESTIGATION_EVENT_RECORDED",
+                "CASE_SNAPSHOT_INVALIDATED",
+            ],
         )
         self.assertEqual(
             set(contract["allowed_database_objects"]),
             {
                 "investigator.investigation_case",
                 "investigator.investigation_event",
+                "investigator.case_snapshot",
+                "investigator.case_snapshot_invalidation",
+                "investigator.case_snapshot_request",
                 "investigator.create_case",
                 "investigator.append_event",
+                "investigator.create_snapshot",
+                "investigator.invalidate_snapshot",
+                "investigator.is_snapshot_current",
                 "investigator.session_tenant_id",
                 "investigator.context_tenant_id",
                 "investigator.tenant_access_allowed",
@@ -78,7 +91,9 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
             self.assertEqual(rule["decision"], "deny", capability)
             self.assertEqual(rule["principals"], (), capability)
             for principal in contract["principals"]:
-                self.assertFalse(is_allowed(principal, capability), (principal, capability))
+                self.assertFalse(
+                    is_allowed(principal, capability), (principal, capability)
+                )
 
     def test_unknown_principal_and_capability_fail_closed(self):
         self.assertFalse(is_allowed("admin", "case.read"))
@@ -92,12 +107,25 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
         self.assertTrue(is_allowed("investigator_runtime", "case.create"))
         self.assertTrue(is_allowed("investigator_runtime", "case.read"))
         self.assertTrue(is_allowed("investigator_runtime", "event.append"))
+        self.assertTrue(is_allowed("investigator_runtime", "snapshot.create"))
+        self.assertTrue(is_allowed("investigator_runtime", "snapshot.read"))
+        self.assertTrue(is_allowed("investigator_runtime", "snapshot.invalidate"))
         allowed = {
             name
             for name, rule in authority_contract()["capabilities"].items()
             if rule["decision"] == "allow"
         }
-        self.assertEqual(allowed, {"case.create", "case.read", "event.append"})
+        self.assertEqual(
+            allowed,
+            {
+                "case.create",
+                "case.read",
+                "event.append",
+                "snapshot.create",
+                "snapshot.read",
+                "snapshot.invalidate",
+            },
+        )
 
     def test_caller_verified_label_never_grants_trust_or_evidence_mutation(self):
         contract = authority_contract()
@@ -193,8 +221,13 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                     elif node.level == 2:
                         names = [f"olin.{alias.name}" for alias in node.names]
                 for name in names:
-                    if any(name == item or name.startswith(item + ".") for item in forbidden):
-                        violations.append(f"{path.relative_to(ROOT)}:{node.lineno}:{name}")
+                    if any(
+                        name == item or name.startswith(item + ".")
+                        for item in forbidden
+                    ):
+                        violations.append(
+                            f"{path.relative_to(ROOT)}:{node.lineno}:{name}"
+                        )
         self.assertEqual(violations, [])
 
     def test_importing_investigator_does_not_load_forbidden_modules(self):
@@ -241,6 +274,35 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
         self.assertNotIn("grant insert on investigator.investigation_event", sql)
         self.assertNotIn("grant update on investigator.investigation_event", sql)
         self.assertNotIn("grant delete on investigator.investigation_event", sql)
+
+    def test_phase1_migration_is_additive_immutable_and_tenant_bound(self):
+        sql = PHASE1_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        required = (
+            "create table investigator.case_snapshot",
+            "create table investigator.case_snapshot_invalidation",
+            "alter table investigator.case_snapshot enable row level security",
+            "alter table investigator.case_snapshot force row level security",
+            "alter table investigator.case_snapshot_invalidation enable row level security",
+            "alter table investigator.case_snapshot_invalidation force row level security",
+            "create trigger case_snapshot_immutable",
+            "create trigger investigation_event_immutable",
+            "phase 1 requires an empty phase 0 case/event store",
+            "create trigger case_snapshot_invalidation_immutable",
+            "create function investigator.create_snapshot",
+            "create function investigator.invalidate_snapshot",
+            "create function investigator.is_snapshot_current",
+            "grant select on investigator.case_snapshot to olin_investigator_runtime",
+            "grant select on investigator.case_snapshot_invalidation to olin_investigator_runtime",
+            "grant select on investigator.investigation_case to olin_investigator_runtime",
+            "grant select on investigator.investigation_event to olin_investigator_runtime",
+        )
+        for fragment in required:
+            self.assertIn(fragment, sql)
+        self.assertNotIn("grant insert on investigator.case_snapshot", sql)
+        self.assertNotIn("grant update on investigator.case_snapshot", sql)
+        self.assertNotIn("grant delete on investigator.case_snapshot", sql)
+        self.assertNotIn("public.scoring_log", sql)
+        self.assertNotIn("payment_ledger", sql)
 
 
 if __name__ == "__main__":

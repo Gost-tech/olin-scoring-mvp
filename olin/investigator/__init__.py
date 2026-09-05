@@ -1,9 +1,39 @@
-"""Investigator V1 bounded context.
+"""Investigator V1 bounded context with no credit or money authority."""
 
-Phase 0 intentionally exposes only the executable authority contract.  It has
-no HTTP entry point, scoring dependency, lending command, or money capability.
-"""
-
+from .actor import (
+    ActorContext,
+    ActorContextError,
+    ActorType,
+    controlled_test_system_actor,
+)
 from .authority import AuthorityDenied, is_allowed, require_capability
+from .events import EventType, EventValidationError, InvestigationEvent
+from .spine import (
+    CaseSnapshot,
+    InMemoryCaseSpine,
+    InvestigationCase,
+    SpineConflict,
+    SpineNotFound,
+    rebuild_case,
+    rebuild_snapshot_input,
+)
 
-__all__ = ["AuthorityDenied", "is_allowed", "require_capability"]
+__all__ = [
+    "ActorContext",
+    "ActorContextError",
+    "ActorType",
+    "AuthorityDenied",
+    "CaseSnapshot",
+    "EventType",
+    "EventValidationError",
+    "InMemoryCaseSpine",
+    "InvestigationCase",
+    "InvestigationEvent",
+    "SpineConflict",
+    "SpineNotFound",
+    "controlled_test_system_actor",
+    "is_allowed",
+    "rebuild_case",
+    "rebuild_snapshot_input",
+    "require_capability",
+]
