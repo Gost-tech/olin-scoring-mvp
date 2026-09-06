@@ -291,6 +291,8 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
             "create function investigator.create_snapshot",
             "create function investigator.invalidate_snapshot",
             "create function investigator.is_snapshot_current",
+            "set session authorization olin_investigator_owner",
+            "reset session authorization",
             "grant select on investigator.case_snapshot to olin_investigator_runtime",
             "grant select on investigator.case_snapshot_invalidation to olin_investigator_runtime",
             "grant select on investigator.investigation_case to olin_investigator_runtime",
@@ -301,6 +303,9 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
         self.assertNotIn("grant insert on investigator.case_snapshot", sql)
         self.assertNotIn("grant update on investigator.case_snapshot", sql)
         self.assertNotIn("grant delete on investigator.case_snapshot", sql)
+        self.assertNotIn("grant olin_investigator_owner to %i", sql)
+        self.assertNotIn("revoke olin_investigator_owner from %i", sql)
+        self.assertNotIn("comment on role olin_investigator_runtime", sql)
         self.assertNotIn("public.scoring_log", sql)
         self.assertNotIn("payment_ledger", sql)
 

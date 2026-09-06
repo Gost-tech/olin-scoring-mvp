@@ -102,9 +102,52 @@ class InvestigatorMigrationFailureTests(unittest.TestCase):
                 "('olin_investigator_owner','olin_investigator_runtime')"
             ).fetchone()[0]
             self.assertEqual(remaining_roles, 0)
+
+            # Prove a failure after the Phase 1 authorization switch is atomic
+            # and cannot strand the admin connection as the schema owner.
+            admin.execute("DROP FUNCTION public.legacy_money_routine()")
+            admin.execute(migration)
+            phase1_migration = (
+                root / "db" / "migrations" / "0002_investigator_case_event_snapshot.sql"
+            ).read_text(encoding="utf-8")
+            forced_failure_migration = phase1_migration.replace(
+                "SET SESSION AUTHORIZATION olin_investigator_owner;",
+                "SET SESSION AUTHORIZATION olin_investigator_owner;\nSELECT 1 / 0;",
+                1,
+            )
+            authenticated_identity = admin.execute(
+                "SELECT session_user, current_user"
+            ).fetchone()
+            with self.assertRaises(psycopg.errors.DivisionByZero):
+                admin.execute(forced_failure_migration)
+            admin.execute("ROLLBACK")
+            self.assertEqual(
+                admin.execute("SELECT session_user, current_user").fetchone(),
+                authenticated_identity,
+            )
+            self.assertIsNone(
+                admin.execute(
+                    "SELECT to_regclass('investigator.case_snapshot')"
+                ).fetchone()[0]
+            )
+            self.assertEqual(
+                admin.execute(
+                    "SELECT count(*) FROM pg_auth_members membership "
+                    "JOIN pg_roles granted ON granted.oid=membership.roleid "
+                    "WHERE granted.rolname='olin_investigator_owner'"
+                ).fetchone()[0],
+                0,
+            )
+            admin.execute("DROP SCHEMA investigator CASCADE")
+            admin.execute("DROP ROLE olin_investigator_runtime")
+            admin.execute("DROP ROLE olin_investigator_owner")
         finally:
             admin.execute("DROP FUNCTION IF EXISTS public.legacy_money_routine()")
             admin.execute("DROP TABLE IF EXISTS public.scoring_log")
+            admin.execute("DROP SCHEMA IF EXISTS investigator CASCADE")
+            admin.execute("DROP ROLE IF EXISTS unexpected_investigator_grantee")
+            admin.execute("DROP ROLE IF EXISTS olin_investigator_runtime")
+            admin.execute("DROP ROLE IF EXISTS olin_investigator_owner")
             admin.close()
 
 
@@ -152,10 +195,21 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
                 "fresh CI database must have zero Phase 0 cases and events before 0002; "
                 f"found {phase0_counts!r}"
             )
+        migration_identity = cls.admin.execute(
+            "SELECT session_user, current_user"
+        ).fetchone()
         phase1_migration = (
             cls.root / "db" / "migrations" / "0002_investigator_case_event_snapshot.sql"
         ).read_text(encoding="utf-8")
         cls.admin.execute(phase1_migration)
+        restored_identity = cls.admin.execute(
+            "SELECT session_user, current_user"
+        ).fetchone()
+        if restored_identity != migration_identity:
+            raise AssertionError(
+                "Phase 1 migration did not reset session authorization: "
+                f"before={migration_identity!r}, after={restored_identity!r}"
+            )
         for role, password in (
             (cls.role_a, cls.password_a),
             (cls.role_b, cls.password_b),

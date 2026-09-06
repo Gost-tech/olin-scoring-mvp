@@ -7,19 +7,18 @@ DO $precondition$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_roles
-    WHERE rolname = current_user AND (rolsuper OR rolbypassrls)
+    WHERE rolname = current_user AND rolsuper
   ) THEN
     RAISE EXCEPTION
-      'Phase 1 migration requires a controlled superuser or BYPASSRLS migration principal for the global empty-store cutover check';
+      'Phase 1 migration requires a controlled superuser migration principal for the global empty-store cutover check and owner-scoped DDL';
   END IF;
   IF to_regclass('investigator.investigation_case') IS NULL
      OR to_regclass('investigator.investigation_event') IS NULL THEN
     RAISE EXCEPTION 'Investigator Phase 0 migration must be applied first';
   END IF;
-  -- Phase 0 deliberately revokes this membership when it finishes. Reacquire
-  -- the migration-owner role for DDL. The explicit BYPASSRLS requirement above
-  -- ensures the global cutover check cannot have legacy rows hidden by FORCE RLS.
-  EXECUTE format('GRANT olin_investigator_owner TO %I', current_user);
+  -- The explicit superuser requirement ensures the global cutover check cannot
+  -- have legacy rows hidden by FORCE RLS. Do not grant role membership here:
+  -- changing role membership would require CREATEROLE and is not an invariant.
   IF EXISTS (SELECT 1 FROM investigator.investigation_event)
      OR EXISTS (SELECT 1 FROM investigator.investigation_case) THEN
     RAISE EXCEPTION
@@ -28,7 +27,9 @@ BEGIN
 END
 $precondition$;
 
-SET ROLE olin_investigator_owner;
+-- The migration connection is distinct from runtime. Temporarily execute DDL
+-- as the durable NOLOGIN owner without granting membership to any principal.
+SET SESSION AUTHORIZATION olin_investigator_owner;
 
 -- These columns close the Phase 0 limitation where actor_id/workload_id were
 -- contextual audit strings rather than a complete authentication provenance.
@@ -1044,14 +1045,7 @@ COMMENT ON TABLE investigator.case_snapshot IS
   'Immutable canonical CaseSnapshot; the only permitted future Investigator reasoning input';
 COMMENT ON TABLE investigator.case_snapshot_invalidation IS
   'Append-only integrity invalidation history; never rewrites historical snapshot content';
-COMMENT ON ROLE olin_investigator_runtime IS
-  'NOLOGIN Phase 1 capability role: tenant-bound case/event/snapshot reads plus constrained functions only';
 
-RESET ROLE;
-DO $remove_owner_membership$
-BEGIN
-  EXECUTE format('REVOKE olin_investigator_owner FROM %I', current_user);
-END
-$remove_owner_membership$;
+RESET SESSION AUTHORIZATION;
 
 COMMIT;
