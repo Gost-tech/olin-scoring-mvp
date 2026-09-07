@@ -228,11 +228,26 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
 
         cls.conn_a = psycopg.connect(cls._tenant_dsn(cls.role_a, cls.password_a))
         cls.conn_b = psycopg.connect(cls._tenant_dsn(cls.role_b, cls.password_b))
-        cls._create_case(
-            cls.conn_a, cls.role_a, cls.tenant_a, cls.case_a, "case-a-create"
+
+    def setUp(self):
+        # Append-only history is intentionally retained across tests. Each test gets
+        # fresh case identities and scopes assertions to those identities so order
+        # and legitimate history from earlier tests cannot affect the result.
+        self.case_a = uuid4()
+        self.case_b = uuid4()
+        self._create_case(
+            self.conn_a,
+            self.role_a,
+            self.tenant_a,
+            self.case_a,
+            f"case-a-{self._testMethodName}",
         )
-        cls._create_case(
-            cls.conn_b, cls.role_b, cls.tenant_b, cls.case_b, "case-b-create"
+        self._create_case(
+            self.conn_b,
+            self.role_b,
+            self.tenant_b,
+            self.case_b,
+            f"case-b-{self._testMethodName}",
         )
 
     @classmethod
@@ -600,7 +615,9 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
         with self.conn_a.transaction():
             self._context(self.conn_a, self.role_a, self.tenant_a)
             own = self.conn_a.execute(
-                "SELECT case_id FROM investigator.investigation_case ORDER BY case_id"
+                "SELECT case_id FROM investigator.investigation_case "
+                "WHERE case_id IN (%s,%s) ORDER BY case_id",
+                (self.case_a, self.case_b),
             ).fetchall()
             self.assertEqual(own, [(self.case_a,)])
         with self.conn_a.transaction():
@@ -639,6 +656,12 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
                     (self.case_a,),
                 ).fetchone()[0],
                 0,
+            )
+            self.assertTrue(
+                self.conn_a.execute(
+                    "SELECT investigator.tenant_access_allowed(%s) IS FALSE",
+                    (self.tenant_a,),
+                ).fetchone()[0]
             )
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                 self.conn_a.execute(
@@ -705,7 +728,9 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
             self._context(self.conn_a, self.role_a, self.tenant_a)
             self.assertEqual(
                 self.conn_a.execute(
-                    "SELECT count(*) FROM investigator.investigation_case"
+                    "SELECT count(*) FROM investigator.investigation_case "
+                    "WHERE case_id=%s",
+                    (self.case_a,),
                 ).fetchone()[0],
                 1,
             )
@@ -717,9 +742,21 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
             )
             self.assertEqual(
                 self.conn_a.execute(
-                    "SELECT count(*) FROM investigator.investigation_case"
+                    "SELECT count(*) FROM investigator.investigation_case "
+                    "WHERE case_id=%s",
+                    (self.case_a,),
                 ).fetchone()[0],
                 0,
+            )
+        with self.conn_a.transaction():
+            self._context(self.conn_a, self.role_a, self.tenant_a)
+            self.assertEqual(
+                self.conn_a.execute(
+                    "SELECT count(*) FROM investigator.investigation_case "
+                    "WHERE case_id=%s",
+                    (self.case_a,),
+                ).fetchone()[0],
+                1,
             )
         with self.assertRaises(RuntimeError), self.conn_a.transaction():
             self._context(self.conn_a, self.role_a, self.tenant_a)
@@ -732,7 +769,9 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
             )
             self.assertEqual(
                 self.conn_a.execute(
-                    "SELECT count(*) FROM investigator.investigation_case"
+                    "SELECT count(*) FROM investigator.investigation_case "
+                    "WHERE case_id=%s",
+                    (self.case_a,),
                 ).fetchone()[0],
                 0,
             )
@@ -802,15 +841,10 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
                 "SELECT * FROM investigator.create_snapshot(%s,%s,%s,%s)",
                 (self.tenant_a, case_id, 1, "snapshot-create-primary"),
             ).fetchone()
-            replay = self.conn_a.execute(
-                "SELECT * FROM investigator.create_snapshot(%s,%s,%s,%s)",
-                (self.tenant_a, case_id, 1, "snapshot-create-primary"),
-            ).fetchone()
             converged = self.conn_a.execute(
                 "SELECT * FROM investigator.create_snapshot(%s,%s,%s,%s)",
                 (self.tenant_a, case_id, 1, "snapshot-create-secondary"),
             ).fetchone()
-            self.assertEqual(first, replay)
             self.assertEqual(first, converged)
             stored = self.conn_a.execute(
                 "SELECT canonical_snapshot_bytes, canonical_digest, "
@@ -828,6 +862,14 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
                     (self.tenant_a, first[0]),
                 ).fetchone()[0]
             )
+
+        with self.conn_a.transaction():
+            self._context(self.conn_a, self.role_a, self.tenant_a)
+            replay = self.conn_a.execute(
+                "SELECT * FROM investigator.create_snapshot(%s,%s,%s,%s)",
+                (self.tenant_a, case_id, 1, "snapshot-create-primary"),
+            ).fetchone()
+            self.assertEqual(first, replay)
 
         with self.conn_a.transaction():
             self._context(self.conn_a, self.role_a, self.tenant_a)
@@ -1012,6 +1054,8 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
                     f"postgres-login:{self.role_b}",
                 ),
             )
+        with self.conn_b.transaction():
+            self._context(self.conn_b, self.role_b, self.tenant_b)
             replay = self.conn_b.execute(
                 "SELECT investigator.invalidate_snapshot(%s,%s,%s,%s,%s,%s,%s,%s)",
                 (
@@ -1047,6 +1091,14 @@ class InvestigatorPostgresRLSTests(unittest.TestCase):
             self.admin.execute(
                 "SELECT count(*) FROM investigator.case_snapshot_invalidation "
                 "WHERE case_id=%s",
+                (case_id,),
+            ).fetchone()[0],
+            1,
+        )
+        self.assertEqual(
+            self.admin.execute(
+                "SELECT count(*) FROM investigator.investigation_event "
+                "WHERE case_id=%s AND event_type='CASE_SNAPSHOT_INVALIDATED'",
                 (case_id,),
             ).fetchone()[0],
             1,

@@ -344,6 +344,20 @@ FOR EACH STATEMENT EXECUTE FUNCTION investigator.reject_history_mutation();
 -- human-authentication resolver exists, the only database ActorContext is SYSTEM
 -- and its identity/authentication provenance is derived from the tenant login.
 -- Caller-writable GUCs cannot override these authoritative fields.
+CREATE OR REPLACE FUNCTION investigator.tenant_access_allowed(row_tenant_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, investigator
+AS $function$
+  SELECT coalesce(
+    row_tenant_id IS NOT NULL
+    AND row_tenant_id = investigator.session_tenant_id()
+    AND row_tenant_id = investigator.context_tenant_id(),
+    false
+  )
+$function$;
+
 CREATE OR REPLACE FUNCTION investigator.create_case(
   requested_case_id uuid,
   requested_tenant_id uuid,
@@ -392,11 +406,15 @@ BEGIN
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(requested_tenant_id::text || ':' || requested_idempotency_key, 0));
-  SELECT * INTO existing_event FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND idempotency_key = requested_idempotency_key;
+  SELECT stored_event.* INTO existing_event
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.idempotency_key = requested_idempotency_key;
   IF FOUND THEN
-    SELECT * INTO existing_case FROM investigator.investigation_case
-      WHERE tenant_id = requested_tenant_id AND case_id = existing_event.case_id;
+    SELECT stored_case.* INTO existing_case
+      FROM investigator.investigation_case AS stored_case
+      WHERE stored_case.tenant_id = requested_tenant_id
+        AND stored_case.case_id = existing_event.case_id;
     IF existing_event.case_id = requested_case_id
        AND existing_event.event_type = 'CASE_CREATED'
        AND existing_event.event_id = requested_event_id
@@ -512,8 +530,10 @@ BEGIN
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(requested_tenant_id::text || ':' || requested_idempotency_key, 0));
-  SELECT * INTO existing_event FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND idempotency_key = requested_idempotency_key;
+  SELECT stored_event.* INTO existing_event
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.idempotency_key = requested_idempotency_key;
   IF FOUND THEN
     IF existing_event.case_id = requested_case_id
        AND existing_event.event_type = requested_event_type
@@ -537,24 +557,30 @@ BEGIN
     RAISE EXCEPTION 'idempotency key conflicts with an existing event' USING ERRCODE = '23505';
   END IF;
 
-  SELECT case_version INTO current_version FROM investigator.investigation_case
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id FOR UPDATE;
+  SELECT stored_case.case_version INTO current_version
+    FROM investigator.investigation_case AS stored_case
+    WHERE stored_case.tenant_id = requested_tenant_id
+      AND stored_case.case_id = requested_case_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'investigation case not found' USING ERRCODE = 'P0002';
   END IF;
   IF current_version <> expected_case_version THEN
     RAISE EXCEPTION 'stale case version: expected %, current %', expected_case_version, current_version USING ERRCODE = '40001';
   END IF;
-  SELECT event_id INTO current_head FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-      AND event_sequence = current_version;
+  SELECT stored_event.event_id INTO current_head
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.case_id = requested_case_id
+      AND stored_event.event_sequence = current_version;
   IF requested_parent_event_id IS DISTINCT FROM current_head THEN
     RAISE EXCEPTION 'parent event is not the current event head' USING ERRCODE = '22023';
   END IF;
   IF requested_causation_event_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-      AND event_id = requested_causation_event_id AND event_sequence <= current_version
+    SELECT 1 FROM investigator.investigation_event AS causal_event
+    WHERE causal_event.tenant_id = requested_tenant_id
+      AND causal_event.case_id = requested_case_id
+      AND causal_event.event_id = requested_causation_event_id
+      AND causal_event.event_sequence <= current_version
   ) THEN
     RAISE EXCEPTION 'causation event is not in the prior case stream' USING ERRCODE = '22023';
   END IF;
@@ -592,9 +618,10 @@ BEGIN
     requested_causation_event_id, calculated_payload_digest,
     requested_integrity_metadata, calculated_event_digest
   );
-  UPDATE investigator.investigation_case
+  UPDATE investigator.investigation_case AS stored_case
     SET case_version = next_sequence, updated_at = recorded_time
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id;
+    WHERE stored_case.tenant_id = requested_tenant_id
+      AND stored_case.case_id = requested_case_id;
   RETURN next_sequence;
 END
 $function$;
@@ -639,8 +666,10 @@ BEGIN
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(requested_tenant_id::text || ':snapshot:' || requested_idempotency_key, 0));
-  SELECT * INTO existing_request FROM investigator.case_snapshot_request
-    WHERE tenant_id = requested_tenant_id AND idempotency_key = requested_idempotency_key;
+  SELECT stored_request.* INTO existing_request
+    FROM investigator.case_snapshot_request AS stored_request
+    WHERE stored_request.tenant_id = requested_tenant_id
+      AND stored_request.idempotency_key = requested_idempotency_key;
   IF FOUND THEN
     IF existing_request.case_id = requested_case_id
        AND existing_request.expected_case_version = expected_case_version
@@ -650,42 +679,56 @@ BEGIN
        AND existing_request.authorization_source = context_authorization
        AND existing_request.correlation_id = context_correlation
        THEN
-      SELECT * INTO STRICT existing_snapshot FROM investigator.case_snapshot
-        WHERE tenant_id = existing_request.tenant_id
-          AND case_id = existing_request.case_id
-          AND snapshot_id = existing_request.snapshot_id;
+      SELECT stored_snapshot.* INTO STRICT existing_snapshot
+        FROM investigator.case_snapshot AS stored_snapshot
+        WHERE stored_snapshot.tenant_id = existing_request.tenant_id
+          AND stored_snapshot.case_id = existing_request.case_id
+          AND stored_snapshot.snapshot_id = existing_request.snapshot_id;
       RETURN QUERY SELECT existing_snapshot.snapshot_id, existing_snapshot.canonical_digest;
       RETURN;
     END IF;
     RAISE EXCEPTION 'snapshot idempotency key conflicts with an existing request' USING ERRCODE = '23505';
   END IF;
 
-  SELECT * INTO case_row FROM investigator.investigation_case
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id FOR UPDATE;
+  SELECT stored_case.* INTO case_row
+    FROM investigator.investigation_case AS stored_case
+    WHERE stored_case.tenant_id = requested_tenant_id
+      AND stored_case.case_id = requested_case_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'investigation case not found' USING ERRCODE = 'P0002';
   END IF;
   IF case_row.case_version <> expected_case_version THEN
     RAISE EXCEPTION 'stale case version: expected %, current %', expected_case_version, case_row.case_version USING ERRCODE = '40001';
   END IF;
-  SELECT count(*), min(event_sequence), max(event_sequence)
+  SELECT count(*), min(stored_event.event_sequence), max(stored_event.event_sequence)
     INTO event_count, minimum_sequence, maximum_sequence
-    FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id;
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.case_id = requested_case_id;
   IF event_count <> expected_case_version
      OR minimum_sequence <> 1 OR maximum_sequence <> expected_case_version THEN
     RAISE EXCEPTION 'event stream head/count does not match case version' USING ERRCODE = '22000';
   END IF;
-  SELECT * INTO first_event FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id AND event_sequence = 1;
-  SELECT * INTO head_event FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id AND event_sequence = expected_case_version;
+  SELECT stored_event.* INTO first_event
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.case_id = requested_case_id
+      AND stored_event.event_sequence = 1;
+  SELECT stored_event.* INTO head_event
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.case_id = requested_case_id
+      AND stored_event.event_sequence = expected_case_version;
   IF first_event.event_type <> 'CASE_CREATED' OR first_event.event_digest IS NULL
      OR head_event.event_digest IS NULL OR EXISTS (
-       SELECT 1 FROM investigator.investigation_event
-       WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-         AND (authentication_reference IS NULL OR authorization_source IS NULL
-              OR correlation_id IS NULL OR actor_context_created_at IS NULL OR event_digest IS NULL)
+       SELECT 1 FROM investigator.investigation_event AS stored_event
+       WHERE stored_event.tenant_id = requested_tenant_id
+         AND stored_event.case_id = requested_case_id
+         AND (stored_event.authentication_reference IS NULL
+              OR stored_event.authorization_source IS NULL
+              OR stored_event.correlation_id IS NULL
+              OR stored_event.actor_context_created_at IS NULL
+              OR stored_event.event_digest IS NULL)
      ) THEN
     RAISE EXCEPTION 'event stream lacks complete Phase 1 provenance/integrity' USING ERRCODE = '22000';
   END IF;
@@ -735,11 +778,12 @@ BEGIN
     RAISE EXCEPTION 'event stream violates sequence, causation, or registry invariants' USING ERRCODE = '22000';
   END IF;
   SELECT encode(sha256(convert_to(investigator.canonical_json(jsonb_agg(
-      event_digest ORDER BY event_sequence
+      stored_event.event_digest ORDER BY stored_event.event_sequence
     )), 'UTF8')), 'hex')
     INTO stream_digest
-    FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id;
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.case_id = requested_case_id;
 
   snapshot_payload := jsonb_build_object(
     'applicable_versions', jsonb_build_object(
@@ -785,9 +829,12 @@ BEGIN
   snapshot_bytes := convert_to(investigator.canonical_json(snapshot_payload), 'UTF8');
   snapshot_digest := encode(sha256(snapshot_bytes), 'hex');
 
-  SELECT * INTO existing_snapshot FROM investigator.case_snapshot
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-      AND event_head_sequence = expected_case_version AND snapshot_schema_version = 1;
+  SELECT stored_snapshot.* INTO existing_snapshot
+    FROM investigator.case_snapshot AS stored_snapshot
+    WHERE stored_snapshot.tenant_id = requested_tenant_id
+      AND stored_snapshot.case_id = requested_case_id
+      AND stored_snapshot.event_head_sequence = expected_case_version
+      AND stored_snapshot.snapshot_schema_version = 1;
   IF FOUND THEN
     IF existing_snapshot.canonical_snapshot_bytes <> snapshot_bytes
        OR existing_snapshot.canonical_digest <> snapshot_digest THEN
@@ -861,11 +908,11 @@ DECLARE
   existing_invalidation investigator.case_snapshot_invalidation%ROWTYPE;
   existing_event investigator.investigation_event%ROWTYPE;
   current_head uuid;
-  event_id uuid := gen_random_uuid();
+  v_event_id uuid := gen_random_uuid();
   next_sequence bigint;
   event_payload jsonb;
-  payload_digest text;
-  event_digest text;
+  v_payload_digest text;
+  v_event_digest text;
   recorded_time timestamptz := statement_timestamp();
 BEGIN
   IF NOT investigator.tenant_access_allowed(requested_tenant_id) THEN
@@ -879,13 +926,16 @@ BEGIN
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(requested_tenant_id::text || ':' || requested_idempotency_key, 0));
-  SELECT * INTO existing_invalidation FROM investigator.case_snapshot_invalidation
-    WHERE tenant_id = requested_tenant_id AND idempotency_key = requested_idempotency_key;
+  SELECT stored_invalidation.* INTO existing_invalidation
+    FROM investigator.case_snapshot_invalidation AS stored_invalidation
+    WHERE stored_invalidation.tenant_id = requested_tenant_id
+      AND stored_invalidation.idempotency_key = requested_idempotency_key;
   IF FOUND THEN
-    SELECT * INTO STRICT existing_event FROM investigator.investigation_event
-      WHERE tenant_id = existing_invalidation.tenant_id
-        AND case_id = existing_invalidation.case_id
-        AND event_id = existing_invalidation.invalidation_event_id;
+    SELECT stored_event.* INTO STRICT existing_event
+      FROM investigator.investigation_event AS stored_event
+      WHERE stored_event.tenant_id = existing_invalidation.tenant_id
+        AND stored_event.case_id = existing_invalidation.case_id
+        AND stored_event.event_id = existing_invalidation.invalidation_event_id;
     IF existing_invalidation.case_id = requested_case_id
        AND existing_invalidation.snapshot_id = requested_snapshot_id
        AND existing_invalidation.reason_code = requested_reason_code
@@ -903,35 +953,41 @@ BEGIN
     RAISE EXCEPTION 'idempotency key conflicts with an existing invalidation' USING ERRCODE = '23505';
   END IF;
 
-  SELECT * INTO case_row FROM investigator.investigation_case
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id FOR UPDATE;
+  SELECT stored_case.* INTO case_row
+    FROM investigator.investigation_case AS stored_case
+    WHERE stored_case.tenant_id = requested_tenant_id
+      AND stored_case.case_id = requested_case_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'investigation case not found' USING ERRCODE = 'P0002'; END IF;
   IF case_row.case_version <> expected_case_version THEN
     RAISE EXCEPTION 'stale case version: expected %, current %', expected_case_version, case_row.case_version USING ERRCODE = '40001';
   END IF;
-  SELECT * INTO snapshot_row FROM investigator.case_snapshot
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-      AND snapshot_id = requested_snapshot_id;
+  SELECT stored_snapshot.* INTO snapshot_row
+    FROM investigator.case_snapshot AS stored_snapshot
+    WHERE stored_snapshot.tenant_id = requested_tenant_id
+      AND stored_snapshot.case_id = requested_case_id
+      AND stored_snapshot.snapshot_id = requested_snapshot_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'snapshot not found' USING ERRCODE = 'P0002'; END IF;
   IF EXISTS (
-    SELECT 1 FROM investigator.case_snapshot_invalidation
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-      AND snapshot_id = requested_snapshot_id
+    SELECT 1 FROM investigator.case_snapshot_invalidation AS stored_invalidation
+    WHERE stored_invalidation.tenant_id = requested_tenant_id
+      AND stored_invalidation.case_id = requested_case_id
+      AND stored_invalidation.snapshot_id = requested_snapshot_id
   ) THEN
     RAISE EXCEPTION 'snapshot is already invalidated' USING ERRCODE = '23505';
   END IF;
-  SELECT investigation_event.event_id INTO current_head
-    FROM investigator.investigation_event
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id
-      AND event_sequence = expected_case_version;
+  SELECT stored_event.event_id INTO current_head
+    FROM investigator.investigation_event AS stored_event
+    WHERE stored_event.tenant_id = requested_tenant_id
+      AND stored_event.case_id = requested_case_id
+      AND stored_event.event_sequence = expected_case_version;
   next_sequence := expected_case_version + 1;
   event_payload := jsonb_build_object(
     'snapshot_id', requested_snapshot_id::text,
     'reason_code', requested_reason_code,
     'reason_reference', btrim(requested_reason_reference)
   );
-  payload_digest := encode(sha256(convert_to(investigator.canonical_json(event_payload), 'UTF8')), 'hex');
-  event_digest := encode(sha256(convert_to(investigator.canonical_json(jsonb_build_object(
+  v_payload_digest := encode(sha256(convert_to(investigator.canonical_json(event_payload), 'UTF8')), 'hex');
+  v_event_digest := encode(sha256(convert_to(investigator.canonical_json(jsonb_build_object(
     'actor', jsonb_build_object(
       'actor_type', context_actor_type, 'actor_reference', context_actor,
       'tenant_id', requested_tenant_id::text, 'case_id', context_actor_case::text,
@@ -940,7 +996,7 @@ BEGIN
       'created_at', to_char(context_created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
     ),
     'case_id', requested_case_id::text, 'causation_event_id', NULL,
-    'event_id', event_id::text, 'event_type', 'CASE_SNAPSHOT_INVALIDATED',
+    'event_id', v_event_id::text, 'event_type', 'CASE_SNAPSHOT_INVALIDATED',
     'idempotency_key', requested_idempotency_key,
     'occurred_at', to_char(requested_occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
     'parent_event_id', current_head::text, 'payload', event_payload,
@@ -954,22 +1010,23 @@ BEGIN
     correlation_id, actor_context_created_at, payload, payload_schema_version,
     idempotency_key, parent_event_id, payload_digest, event_digest
   ) VALUES (
-    event_id, requested_tenant_id, requested_case_id, next_sequence,
+    v_event_id, requested_tenant_id, requested_case_id, next_sequence,
     'CASE_SNAPSHOT_INVALIDATED', requested_occurred_at, recorded_time,
     context_actor_type, context_actor, context_actor_case, context_authentication,
     context_authorization, context_correlation, context_created_at, event_payload, 1,
-    requested_idempotency_key, current_head, payload_digest, event_digest
+    requested_idempotency_key, current_head, v_payload_digest, v_event_digest
   );
-  UPDATE investigator.investigation_case
+  UPDATE investigator.investigation_case AS stored_case
     SET case_version = next_sequence, updated_at = recorded_time
-    WHERE tenant_id = requested_tenant_id AND case_id = requested_case_id;
+    WHERE stored_case.tenant_id = requested_tenant_id
+      AND stored_case.case_id = requested_case_id;
   INSERT INTO investigator.case_snapshot_invalidation (
     tenant_id, case_id, snapshot_id, invalidation_event_id, reason_code,
     reason_reference, invalidated_at, invalidated_by_actor_type,
     invalidated_by_actor_reference, authentication_reference, authorization_source,
     correlation_id, actor_context_created_at, idempotency_key
   ) VALUES (
-    requested_tenant_id, requested_case_id, requested_snapshot_id, event_id,
+    requested_tenant_id, requested_case_id, requested_snapshot_id, v_event_id,
     requested_reason_code, btrim(requested_reason_reference), recorded_time,
     context_actor_type, context_actor, context_authentication, context_authorization,
     context_correlation, context_created_at, requested_idempotency_key
