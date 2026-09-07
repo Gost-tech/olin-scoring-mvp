@@ -33,10 +33,10 @@ class BankWideControlTests(unittest.TestCase):
         }
         with patch.dict(os.environ, env, clear=True):
             status = production_storage_readiness()
-            with self.assertRaisesRegex(RuntimeError, "postgres_runtime_adapter"):
+            with self.assertRaisesRegex(RuntimeError, "Real-data storage is not ready"):
                 assert_real_data_storage_ready()
         self.assertFalse(status["ready"])
-        self.assertFalse(status["checks"]["postgres_runtime_adapter"])
+        self.assertFalse(status["checks"]["postgres_connectivity"])
 
     def test_no_v2_contract_means_no_proposed_amount(self):
         payload = build_synthetic_case_payload(BusinessType.RETAIL, 1)
