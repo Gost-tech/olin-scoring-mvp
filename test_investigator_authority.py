@@ -24,6 +24,9 @@ MIGRATION_PATH = ROOT / "db" / "migrations" / "0001_investigator_phase0.sql"
 PHASE1_MIGRATION_PATH = (
     ROOT / "db" / "migrations" / "0002_investigator_case_event_snapshot.sql"
 )
+PHASE2_MIGRATION_PATH = (
+    ROOT / "db" / "migrations" / "0003_investigator_evidence_consent_passport.sql"
+)
 
 PROHIBITED_CAPABILITIES = {
     "credit.approve",
@@ -37,6 +40,11 @@ PROHIBITED_CAPABILITIES = {
     "repayment.trigger",
     "bank_policy.override",
     "verified_evidence.mutate",
+    "canonical_evidence.delete",
+    "source_trust.grant",
+    "consent.create",
+    "consent.approve",
+    "consent.receipt.mutate",
     "permission.grant",
     "money_credentials.read",
     "provider.call",
@@ -51,7 +59,7 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
     def test_contract_and_schema_are_valid_json(self):
         contract = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["contract_version"], "investigator-authority-1.1")
+        self.assertEqual(contract["contract_version"], "investigator-authority-1.2")
         self.assertEqual(contract["default"], "deny")
         self.assertEqual(schema["properties"]["default"]["const"], "deny")
         self.assertEqual(len(contract["principals"]), len(set(contract["principals"])))
@@ -62,6 +70,9 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "CASE_CREATED",
                 "INVESTIGATION_EVENT_RECORDED",
                 "CASE_SNAPSHOT_INVALIDATED",
+                "EVIDENCE_ACCEPTED",
+                "EVIDENCE_BECAME_UNUSABLE",
+                "CONSENT_STATE_CHANGED",
             ],
         )
         self.assertEqual(
@@ -72,11 +83,13 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "investigator.case_snapshot",
                 "investigator.case_snapshot_invalidation",
                 "investigator.case_snapshot_request",
+                "investigator.investigation_evidence_reference",
                 "investigator.create_case",
                 "investigator.append_event",
                 "investigator.create_snapshot",
                 "investigator.invalidate_snapshot",
                 "investigator.is_snapshot_current",
+                "investigator.create_snapshot_v2",
                 "investigator.session_tenant_id",
                 "investigator.context_tenant_id",
                 "investigator.tenant_access_allowed",
@@ -110,6 +123,8 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
         self.assertTrue(is_allowed("investigator_runtime", "snapshot.create"))
         self.assertTrue(is_allowed("investigator_runtime", "snapshot.read"))
         self.assertTrue(is_allowed("investigator_runtime", "snapshot.invalidate"))
+        self.assertTrue(is_allowed("investigator_runtime", "evidence.reference.read"))
+        self.assertTrue(is_allowed("investigator_runtime", "snapshot.v2.create"))
         allowed = {
             name
             for name, rule in authority_contract()["capabilities"].items()
@@ -124,12 +139,25 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "snapshot.create",
                 "snapshot.read",
                 "snapshot.invalidate",
+                "evidence.reference.read",
+                "snapshot.v2.create",
             },
         )
 
     def test_caller_verified_label_never_grants_trust_or_evidence_mutation(self):
         contract = authority_contract()
-        self.assertIn("verified", contract["forbidden_surfaces"]["caller_trust_labels"])
+        self.assertEqual(
+            set(contract["forbidden_surfaces"]["caller_trust_labels"]),
+            {
+                "verified",
+                "trusted",
+                "authoritative",
+                "issuer_validated",
+                "source_verified",
+                "official",
+                "validated",
+            },
+        )
         self.assertFalse(is_allowed("investigator_runtime", "verified_evidence.mutate"))
 
     def test_forbidden_environment_names_fail_without_exposing_values(self):
@@ -308,6 +336,44 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
         self.assertNotIn("comment on role olin_investigator_runtime", sql)
         self.assertNotIn("public.scoring_log", sql)
         self.assertNotIn("payment_ledger", sql)
+
+    def test_phase2_migration_is_reference_only_and_least_privilege(self):
+        sql = PHASE2_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        required = (
+            "create table investigator.investigation_evidence_reference",
+            "alter table investigator.investigation_evidence_reference enable row level security",
+            "alter table investigator.investigation_evidence_reference force row level security",
+            "create trigger investigation_evidence_reference_immutable",
+            "create trigger investigation_evidence_reference_no_truncate",
+            "create function investigator.accept_evidence_reference",
+            "create function investigator.create_snapshot_v2",
+            "create function investigator.is_snapshot_structurally_current_v2",
+            "security definer",
+            "set search_path = pg_catalog, investigator",
+            "caller trust labels are forbidden",
+            "revoke all on table investigator.investigation_evidence_reference",
+            "grant select on investigator.investigation_evidence_reference",
+            "reset session authorization",
+            "commit;",
+        )
+        for fragment in required:
+            self.assertIn(fragment, sql)
+        self.assertNotIn(
+            "grant insert on investigator.investigation_evidence_reference to olin_investigator_runtime",
+            sql,
+        )
+        self.assertNotIn(
+            "grant update on investigator.investigation_evidence_reference to olin_investigator_runtime",
+            sql,
+        )
+        self.assertNotIn(
+            "grant delete on investigator.investigation_evidence_reference to olin_investigator_runtime",
+            sql,
+        )
+        self.assertNotIn("alter table public.", sql)
+        self.assertNotIn(
+            "create table investigator.investigation_consent_reference", sql
+        )
 
 
 if __name__ == "__main__":

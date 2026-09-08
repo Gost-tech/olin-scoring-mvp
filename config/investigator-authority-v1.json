@@ -1,8 +1,8 @@
 {
   "$schema": "investigator-authority.schema.json",
-  "contract_version": "investigator-authority-1.1",
+  "contract_version": "investigator-authority-1.2",
   "default": "deny",
-  "deployment_profile": "investigator_v1_phase1",
+  "deployment_profile": "investigator_v1_phase2",
   "principals": ["investigator_runtime"],
   "capabilities": {
     "case.create": {
@@ -47,6 +47,20 @@
       "reads": ["investigator.investigation_case", "investigator.investigation_event", "investigator.case_snapshot", "investigator.case_snapshot_invalidation"],
       "writes": ["investigator.investigation_case", "investigator.investigation_event", "investigator.case_snapshot_invalidation"]
     },
+    "evidence.reference.read": {
+      "decision": "allow",
+      "principals": ["investigator_runtime"],
+      "effect": "READ_EVIDENCE_REFERENCE",
+      "reads": ["investigator.investigation_evidence_reference"],
+      "writes": []
+    },
+    "snapshot.v2.create": {
+      "decision": "allow",
+      "principals": ["investigator_runtime"],
+      "effect": "SNAPSHOT_RECORD",
+      "reads": ["investigator.investigation_case", "investigator.investigation_event", "investigator.investigation_evidence_reference"],
+      "writes": ["investigator.case_snapshot", "investigator.case_snapshot_request"]
+    },
     "credit.approve": {"decision": "deny", "principals": [], "effect": "CREDIT_APPROVE"},
     "credit.decline": {"decision": "deny", "principals": [], "effect": "CREDIT_DECLINE"},
     "credit.price": {"decision": "deny", "principals": [], "effect": "PRICE_SET"},
@@ -58,6 +72,11 @@
     "repayment.trigger": {"decision": "deny", "principals": [], "effect": "REPAYMENT_TRIGGER"},
     "bank_policy.override": {"decision": "deny", "principals": [], "effect": "POLICY_OVERRIDE"},
     "verified_evidence.mutate": {"decision": "deny", "principals": [], "effect": "VERIFIED_EVIDENCE_MUTATE"},
+    "canonical_evidence.delete": {"decision": "deny", "principals": [], "effect": "CANONICAL_EVIDENCE_DELETE"},
+    "source_trust.grant": {"decision": "deny", "principals": [], "effect": "SOURCE_TRUST_GRANT"},
+    "consent.create": {"decision": "deny", "principals": [], "effect": "CONSENT_CREATE"},
+    "consent.approve": {"decision": "deny", "principals": [], "effect": "CONSENT_APPROVE"},
+    "consent.receipt.mutate": {"decision": "deny", "principals": [], "effect": "CONSENT_RECEIPT_MUTATE"},
     "permission.grant": {"decision": "deny", "principals": [], "effect": "PERMISSION_GRANT"},
     "money_credentials.read": {"decision": "deny", "principals": [], "effect": "MONEY_CREDENTIAL_READ"},
     "provider.call": {"decision": "deny", "principals": [], "effect": "EXTERNAL_ACQUISITION"},
@@ -79,6 +98,7 @@
       "olin.belvo",
       "olin.denue",
       "olin.geointelligence",
+      "olin.investigator_evidence_adapter",
       "olin.places",
       "olin.syncfy",
       "olin.weather"
@@ -162,10 +182,10 @@
       "LLM and agent tool endpoints",
       "general Internet egress"
     ],
-    "caller_trust_labels": ["verified", "trusted", "authoritative", "issuer_validated"]
+    "caller_trust_labels": ["verified", "trusted", "authoritative", "issuer_validated", "source_verified", "official", "validated"]
   },
   "allowed_routes": [],
-  "allowed_event_types": ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED", "CASE_SNAPSHOT_INVALIDATED"],
+  "allowed_event_types": ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED", "CASE_SNAPSHOT_INVALIDATED", "EVIDENCE_ACCEPTED", "EVIDENCE_BECAME_UNUSABLE", "CONSENT_STATE_CHANGED"],
   "allowed_environment_variables": [
     "HOME",
     "HOSTNAME",
@@ -188,11 +208,13 @@
     "investigator.case_snapshot",
     "investigator.case_snapshot_invalidation",
     "investigator.case_snapshot_request",
+    "investigator.investigation_evidence_reference",
     "investigator.create_case",
     "investigator.append_event",
     "investigator.create_snapshot",
     "investigator.invalidate_snapshot",
     "investigator.is_snapshot_current",
+    "investigator.create_snapshot_v2",
     "investigator.session_tenant_id",
     "investigator.context_tenant_id",
     "investigator.tenant_access_allowed"

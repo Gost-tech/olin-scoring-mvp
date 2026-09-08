@@ -170,7 +170,13 @@ class InvestigatorSpineTests(unittest.TestCase):
     def test_reserved_event_types_require_dedicated_commands(self):
         head = self.spine.get_events(tenant_id=self.tenant, case_id=self.case_id)[-1]
         for index, event_type in enumerate(
-            (EventType.CASE_CREATED.value, EventType.CASE_SNAPSHOT_INVALIDATED.value)
+            (
+                EventType.CASE_CREATED.value,
+                EventType.CASE_SNAPSHOT_INVALIDATED.value,
+                EventType.EVIDENCE_ACCEPTED.value,
+                EventType.EVIDENCE_BECAME_UNUSABLE.value,
+                EventType.CONSENT_STATE_CHANGED.value,
+            )
         ):
             with (
                 self.subTest(event_type=event_type),

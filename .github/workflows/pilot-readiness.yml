@@ -48,6 +48,8 @@ jobs:
         run: python -m compileall -q olin scripts test_live_readiness.py
       - name: Run required Investigator PostgreSQL boundary suite
         run: python -m unittest -v test_investigator_postgres_rls
+      - name: Run required Investigator Phase 2 evidence boundary suite
+        run: python -m unittest -v test_investigator_postgres_evidence
       - name: Run pilot safety suite
         run: python -m unittest discover -v
       - name: Run legacy compatibility checks

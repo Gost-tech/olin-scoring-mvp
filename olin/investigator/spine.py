@@ -13,12 +13,14 @@ from .actor import ActorContext, ActorContextError, ActorType
 from .canonical import CANONICALIZATION_VERSION, canonical_digest, canonical_json_bytes
 from .events import (
     EVENT_REGISTRY_VERSION,
+    EVENT_REGISTRY_VERSION_V2,
     EventType,
     EventValidationError,
     InvestigationEvent,
 )
 
 SNAPSHOT_SCHEMA_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION_V2 = 2
 
 
 class SpineConflict(RuntimeError):
@@ -195,6 +197,43 @@ def rebuild_snapshot_input(
     }
 
 
+def rebuild_snapshot_input_v2(
+    case_record: InvestigationCase,
+    ordered_events: Iterable[InvestigationEvent],
+    *,
+    evidence: dict[str, object],
+) -> dict[str, object]:
+    """Extend the exact v1 value with a closed reference-only evidence section."""
+    payload = rebuild_snapshot_input(case_record, ordered_events)
+    expected = {
+        "accepted_evidence_refs",
+        "unusable_evidence_refs",
+        "consent_refs",
+        "source_attestation_refs",
+        "evidence_state_version",
+        "evidence_state_digest",
+    }
+    if set(evidence) != expected:
+        raise SpineConflict(
+            "snapshot_v2 evidence fields do not match the closed schema"
+        )
+    if (
+        not isinstance(evidence["evidence_state_version"], int)
+        or evidence["evidence_state_version"] < 0
+    ):
+        raise SpineConflict("snapshot_v2 evidence_state_version must be non-negative")
+    payload["snapshot_schema_version"] = SNAPSHOT_SCHEMA_VERSION_V2
+    payload["applicable_versions"]["event_registry"] = EVENT_REGISTRY_VERSION_V2
+    payload["applicable_versions"]["evidence_reference"] = (
+        "investigator-evidence-reference-1"
+    )
+    payload["applicable_versions"]["evidence_resolver"] = (
+        "investigator-evidence-resolver-1.0"
+    )
+    payload["evidence"] = evidence
+    return payload
+
+
 class InMemoryCaseSpine:
     """Thread-safe executable specification for repository and concurrency semantics."""
 
@@ -214,7 +253,7 @@ class InMemoryCaseSpine:
         ] = {}
         self._snapshots: dict[tuple[UUID, UUID], list[CaseSnapshot]] = {}
         self._snapshot_requests: dict[
-            tuple[UUID, str], tuple[UUID, int, ActorContext, CaseSnapshot]
+            tuple[UUID, str], tuple[UUID, int, int, ActorContext, CaseSnapshot]
         ] = {}
         self._invalidations: dict[tuple[UUID, UUID], list[SnapshotInvalidation]] = {}
 
@@ -467,10 +506,17 @@ class InMemoryCaseSpine:
         with self._lock:
             replay = self._snapshot_requests.get((tenant_id, idempotency_key))
             if replay is not None:
-                replay_case_id, replay_version, replay_actor, snapshot = replay
+                (
+                    replay_case_id,
+                    replay_version,
+                    replay_schema,
+                    replay_actor,
+                    snapshot,
+                ) = replay
                 if (
                     replay_case_id != case_id
                     or replay_version != expected_case_version
+                    or replay_schema != SNAPSHOT_SCHEMA_VERSION
                     or replay_actor != actor
                 ):
                     raise SpineConflict(
@@ -525,10 +571,138 @@ class InMemoryCaseSpine:
             self._snapshot_requests[(tenant_id, idempotency_key)] = (
                 case_id,
                 expected_case_version,
+                SNAPSHOT_SCHEMA_VERSION,
                 actor,
                 snapshot,
             )
             return snapshot
+
+    def _create_snapshot_v2(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        expected_case_version: int,
+        actor: ActorContext,
+        idempotency_key: str,
+        evidence: dict[str, object],
+    ) -> CaseSnapshot:
+        """Trusted Phase 2 command used only by the evidence boundary."""
+        actor = _require_actor(actor)
+        actor.require_scope(tenant_id, case_id)
+        if actor.actor_type not in {ActorType.HUMAN, ActorType.SYSTEM}:
+            raise ActorContextError(
+                "snapshot creation requires a human or system actor"
+            )
+        if (
+            not isinstance(idempotency_key, str)
+            or not 8 <= len(idempotency_key.strip().encode()) <= 240
+        ):
+            raise SpineConflict(
+                "snapshot idempotency key must contain 8..240 UTF-8 bytes"
+            )
+        with self._lock:
+            replay = self._snapshot_requests.get((tenant_id, idempotency_key))
+            if replay is not None:
+                (
+                    replay_case_id,
+                    replay_version,
+                    replay_schema,
+                    replay_actor,
+                    snapshot,
+                ) = replay
+                if (
+                    replay_case_id != case_id
+                    or replay_version != expected_case_version
+                    or replay_schema != SNAPSHOT_SCHEMA_VERSION_V2
+                    or replay_actor != actor
+                ):
+                    raise SpineConflict(
+                        "snapshot idempotency key conflicts with an existing request"
+                    )
+                return snapshot
+            case = self.get_case(tenant_id=tenant_id, case_id=case_id)
+            events = self.get_events(tenant_id=tenant_id, case_id=case_id)
+            if (
+                case.case_version != expected_case_version
+                or events[-1].sequence != expected_case_version
+            ):
+                raise SpineConflict(
+                    "snapshot event head does not match expected case version"
+                )
+            payload = rebuild_snapshot_input_v2(case, events, evidence=evidence)
+            content = canonical_json_bytes(payload)
+            digest = canonical_digest(payload)
+            snapshots = self._snapshots.setdefault((tenant_id, case_id), [])
+            existing = next(
+                (
+                    item
+                    for item in snapshots
+                    if item.event_head_sequence == expected_case_version
+                    and item.snapshot_schema_version == SNAPSHOT_SCHEMA_VERSION_V2
+                ),
+                None,
+            )
+            if existing is not None:
+                if (
+                    existing.canonical_snapshot_bytes != content
+                    or existing.canonical_digest != digest
+                ):
+                    raise SpineConflict(
+                        "snapshot content conflicts at the same event head"
+                    )
+                snapshot = existing
+            else:
+                snapshot = CaseSnapshot(
+                    snapshot_id=self._uuid_factory(),
+                    tenant_id=tenant_id,
+                    case_id=case_id,
+                    case_version=case.case_version,
+                    event_head_sequence=events[-1].sequence,
+                    snapshot_schema_version=SNAPSHOT_SCHEMA_VERSION_V2,
+                    canonical_snapshot_payload=_freeze(payload),
+                    canonical_snapshot_bytes=content,
+                    canonical_digest=digest,
+                    created_at=self._clock(),
+                    created_by=actor,
+                )
+                snapshots.append(snapshot)
+            self._snapshot_requests[(tenant_id, idempotency_key)] = (
+                case_id,
+                expected_case_version,
+                SNAPSHOT_SCHEMA_VERSION_V2,
+                actor,
+                snapshot,
+            )
+            return snapshot
+
+    def _record_phase2_event(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        expected_case_version: int,
+        event_type: EventType,
+        payload: dict[str, object],
+        actor: ActorContext,
+        idempotency_key: str,
+        occurred_at: datetime,
+    ) -> InvestigationEvent:
+        """Append a closed Phase 2 event through a dedicated trusted boundary."""
+        parent = self.get_events(tenant_id=tenant_id, case_id=case_id)[-1].event_id
+        return self._append_event(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            expected_case_version=expected_case_version,
+            event_type=event_type.value,
+            schema_version=1,
+            payload=payload,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            occurred_at=occurred_at,
+            parent_event_id=parent,
+            allow_reserved_type=True,
+        )
 
     def is_snapshot_current(self, *, tenant_id: UUID, snapshot_id: UUID) -> bool:
         with self._lock:

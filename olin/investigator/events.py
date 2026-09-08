@@ -11,8 +11,10 @@ from uuid import UUID
 
 from .actor import ActorContext
 from .canonical import canonical_digest, normalize_timestamp
+from .evidence import UnusableReason
 
 EVENT_REGISTRY_VERSION = "investigator-events-1.0"
+EVENT_REGISTRY_VERSION_V2 = "investigator-events-2.0"
 AUTHORITATIVE_PAYLOAD_FIELDS = frozenset(
     {"actor", "user", "admin", "reviewer", "workload", "principal"}
 )
@@ -26,6 +28,9 @@ class EventType(str, Enum):
     CASE_CREATED = "CASE_CREATED"
     INVESTIGATION_EVENT_RECORDED = "INVESTIGATION_EVENT_RECORDED"
     CASE_SNAPSHOT_INVALIDATED = "CASE_SNAPSHOT_INVALIDATED"
+    EVIDENCE_ACCEPTED = "EVIDENCE_ACCEPTED"
+    EVIDENCE_BECAME_UNUSABLE = "EVIDENCE_BECAME_UNUSABLE"
+    CONSENT_STATE_CHANGED = "CONSENT_STATE_CHANGED"
 
 
 class SnapshotInvalidationReason(str, Enum):
@@ -71,6 +76,69 @@ class EventDefinition:
                 raise EventValidationError(
                     "reason_reference must contain 1..240 UTF-8 bytes"
                 )
+        elif self.event_type is EventType.EVIDENCE_ACCEPTED:
+            try:
+                UUID(str(payload["reference_id"]))
+                state_version = int(payload["evidence_state_version"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise EventValidationError(
+                    "evidence acceptance payload is invalid"
+                ) from exc
+            if state_version < 1:
+                raise EventValidationError("evidence_state_version must be positive")
+        elif self.event_type is EventType.EVIDENCE_BECAME_UNUSABLE:
+            try:
+                UUID(str(payload["reference_id"]))
+                state_version = int(payload["evidence_state_version"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise EventValidationError(
+                    "evidence usability payload is invalid"
+                ) from exc
+            if state_version < 1:
+                raise EventValidationError("evidence_state_version must be positive")
+            for field in ("reason_code", "reason_reference"):
+                value = payload[field]
+                if (
+                    not isinstance(value, str)
+                    or not 1 <= len(value.strip().encode()) <= 240
+                ):
+                    raise EventValidationError(
+                        f"{field} must contain 1..240 UTF-8 bytes"
+                    )
+            try:
+                UnusableReason(payload["reason_code"])
+            except ValueError as exc:
+                raise EventValidationError(
+                    "evidence unusable reason is unknown"
+                ) from exc
+        elif self.event_type is EventType.CONSENT_STATE_CHANGED:
+            try:
+                state_version = int(payload["evidence_state_version"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise EventValidationError("consent state payload is invalid") from exc
+            if state_version < 1:
+                raise EventValidationError("evidence_state_version must be positive")
+            for field in (
+                "consent_namespace",
+                "consent_id",
+                "status",
+                "reason_reference",
+            ):
+                value = payload[field]
+                if (
+                    not isinstance(value, str)
+                    or not 1 <= len(value.strip().encode()) <= 240
+                ):
+                    raise EventValidationError(
+                        f"{field} must contain 1..240 UTF-8 bytes"
+                    )
+            if payload["status"] not in {
+                "ACTIVE",
+                "WITHDRAWN",
+                "EXPIRED",
+                "SUPERSEDED",
+            }:
+                raise EventValidationError("consent status is unknown")
 
 
 _REGISTRY = MappingProxyType(
@@ -85,6 +153,36 @@ _REGISTRY = MappingProxyType(
             EventType.CASE_SNAPSHOT_INVALIDATED,
             1,
             frozenset({"snapshot_id", "reason_code", "reason_reference"}),
+        ),
+        (EventType.EVIDENCE_ACCEPTED.value, 1): EventDefinition(
+            EventType.EVIDENCE_ACCEPTED,
+            1,
+            frozenset({"reference_id", "evidence_state_version"}),
+        ),
+        (EventType.EVIDENCE_BECAME_UNUSABLE.value, 1): EventDefinition(
+            EventType.EVIDENCE_BECAME_UNUSABLE,
+            1,
+            frozenset(
+                {
+                    "reference_id",
+                    "evidence_state_version",
+                    "reason_code",
+                    "reason_reference",
+                }
+            ),
+        ),
+        (EventType.CONSENT_STATE_CHANGED.value, 1): EventDefinition(
+            EventType.CONSENT_STATE_CHANGED,
+            1,
+            frozenset(
+                {
+                    "consent_namespace",
+                    "consent_id",
+                    "evidence_state_version",
+                    "status",
+                    "reason_reference",
+                }
+            ),
         ),
     }
 )
