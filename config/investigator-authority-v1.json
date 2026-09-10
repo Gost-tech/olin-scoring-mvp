@@ -1,8 +1,8 @@
 {
   "$schema": "investigator-authority.schema.json",
-  "contract_version": "investigator-authority-1.2",
+  "contract_version": "investigator-authority-1.3",
   "default": "deny",
-  "deployment_profile": "investigator_v1_phase2",
+  "deployment_profile": "investigator_v1_phase2_5",
   "principals": ["investigator_runtime"],
   "capabilities": {
     "case.create": {
@@ -51,7 +51,7 @@
       "decision": "allow",
       "principals": ["investigator_runtime"],
       "effect": "READ_EVIDENCE_REFERENCE",
-      "reads": ["investigator.investigation_evidence_reference"],
+      "reads": ["investigator.investigation_evidence_reference", "investigator.investigation_evidence_semantics"],
       "writes": []
     },
     "snapshot.v2.create": {
@@ -60,6 +60,13 @@
       "effect": "SNAPSHOT_RECORD",
       "reads": ["investigator.investigation_case", "investigator.investigation_event", "investigator.investigation_evidence_reference"],
       "writes": ["investigator.case_snapshot", "investigator.case_snapshot_request"]
+    },
+    "snapshot.reasoning.require": {
+      "decision": "allow",
+      "principals": ["investigator_runtime"],
+      "effect": "REASONING_CURRENTNESS_GATE",
+      "reads": ["investigator.investigation_case", "investigator.investigation_event", "investigator.case_snapshot", "investigator.case_snapshot_invalidation", "investigator.investigation_evidence_reference", "investigator.investigation_evidence_semantics", "investigator.current_canonical_authority_revision"],
+      "writes": []
     },
     "credit.approve": {"decision": "deny", "principals": [], "effect": "CREDIT_APPROVE"},
     "credit.decline": {"decision": "deny", "principals": [], "effect": "CREDIT_DECLINE"},
@@ -164,7 +171,9 @@
       "OLIN_LIVE_LENDING_SECOND_APPROVER",
       "OLIN_STP_WEBHOOK_SECRET",
       "OLIN_USERS",
-      "OLIN_VALIDATED_AUTO_APPROVE_TYPES"
+      "OLIN_VALIDATED_AUTO_APPROVE_TYPES",
+      "OLIN_TRUSTED_SOURCE_REGISTRY",
+      "OLIN_TRUSTED_SOURCE_REGISTRY_FILE"
     ],
     "jobs": [
       "jobs.daily collection/overdue/default processing",
@@ -182,7 +191,7 @@
       "LLM and agent tool endpoints",
       "general Internet egress"
     ],
-    "caller_trust_labels": ["verified", "trusted", "authoritative", "issuer_validated", "source_verified", "official", "validated"]
+    "caller_trust_labels": ["verified", "trusted", "authoritative", "issuer_validated", "source_verified", "official", "validated", "independent", "independence_status", "semantic_lineage_id", "economic_event_id", "derived_from_evidence_id", "independence_attestation_id"]
   },
   "allowed_routes": [],
   "allowed_event_types": ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED", "CASE_SNAPSHOT_INVALIDATED", "EVIDENCE_ACCEPTED", "EVIDENCE_BECAME_UNUSABLE", "CONSENT_STATE_CHANGED"],
@@ -202,6 +211,12 @@
     "TMPDIR",
     "TZ"
   ],
+  "prohibited_environment_variables": [
+    "OLIN_INVESTIGATOR_EVIDENCE_AUTHORITY_DATABASE_URL",
+    "OLIN_CANONICAL_EVIDENCE_DATABASE_URL",
+    "OLIN_EVIDENCE_AUTHORITY_DATABASE_PASSWORD",
+    "OLIN_CANONICAL_EVIDENCE_DATABASE_PASSWORD"
+  ],
   "allowed_database_objects": [
     "investigator.investigation_case",
     "investigator.investigation_event",
@@ -209,12 +224,14 @@
     "investigator.case_snapshot_invalidation",
     "investigator.case_snapshot_request",
     "investigator.investigation_evidence_reference",
+    "investigator.investigation_evidence_semantics",
     "investigator.create_case",
     "investigator.append_event",
     "investigator.create_snapshot",
     "investigator.invalidate_snapshot",
     "investigator.is_snapshot_current",
     "investigator.create_snapshot_v2",
+    "investigator.current_canonical_authority_revision",
     "investigator.session_tenant_id",
     "investigator.context_tenant_id",
     "investigator.tenant_access_allowed"

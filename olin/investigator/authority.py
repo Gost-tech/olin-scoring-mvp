@@ -14,6 +14,33 @@ class AuthorityDenied(PermissionError):
     """Raised when a principal requests authority not explicitly granted."""
 
 
+class RuntimeDatabaseCustody:
+    """Opaque guard that rechecks the bound runtime connection on every use."""
+
+    __slots__ = ("_connection",)
+
+    def __new__(cls):
+        raise TypeError("use establish_runtime_database_custody")
+
+    @classmethod
+    def _establish(cls, connection: Any) -> RuntimeDatabaseCustody:
+        assert_runtime_database_custody(connection)
+        instance = object.__new__(cls)
+        instance._connection = connection
+        return instance
+
+    def require_current(self) -> None:
+        assert_runtime_database_custody(self._connection)
+
+    def require_connection(self, connection: Any) -> None:
+        """Recheck custody and bind it to the exact connection being used."""
+        if connection is not self._connection:
+            raise AuthorityDenied(
+                "runtime database custody does not cover the requested connection"
+            )
+        self.require_current()
+
+
 _CONTRACT_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "investigator-authority-v1.json"
 )
@@ -24,6 +51,7 @@ _ALLOWED_EFFECTS = frozenset(
         "SNAPSHOT_RECORD",
         "READ_SNAPSHOT_RECORD",
         "READ_EVIDENCE_REFERENCE",
+        "REASONING_CURRENTNESS_GATE",
     }
 )
 _PHASE0_PRINCIPALS = ["investigator_runtime"]
@@ -56,7 +84,9 @@ _PHASE1_OBJECTS = _PHASE0_OBJECTS | {
 }
 _PHASE2_OBJECTS = _PHASE1_OBJECTS | {
     "investigator.investigation_evidence_reference",
+    "investigator.investigation_evidence_semantics",
     "investigator.create_snapshot_v2",
+    "investigator.current_canonical_authority_revision",
 }
 _PHASE0_ENVIRONMENT = {
     "HOME",
@@ -158,7 +188,10 @@ _PHASE2_ALLOWS = {
         "decision": "allow",
         "principals": ["investigator_runtime"],
         "effect": "READ_EVIDENCE_REFERENCE",
-        "reads": ["investigator.investigation_evidence_reference"],
+        "reads": [
+            "investigator.investigation_evidence_reference",
+            "investigator.investigation_evidence_semantics",
+        ],
         "writes": [],
     },
     "snapshot.v2.create": {
@@ -174,6 +207,21 @@ _PHASE2_ALLOWS = {
             "investigator.case_snapshot",
             "investigator.case_snapshot_request",
         ],
+    },
+    "snapshot.reasoning.require": {
+        "decision": "allow",
+        "principals": ["investigator_runtime"],
+        "effect": "REASONING_CURRENTNESS_GATE",
+        "reads": [
+            "investigator.investigation_case",
+            "investigator.investigation_event",
+            "investigator.case_snapshot",
+            "investigator.case_snapshot_invalidation",
+            "investigator.investigation_evidence_reference",
+            "investigator.investigation_evidence_semantics",
+            "investigator.current_canonical_authority_revision",
+        ],
+        "writes": [],
     },
 }
 _REQUIRED_DENIES = {
@@ -201,10 +249,10 @@ _REQUIRED_DENIES = {
 
 
 def _validate_contract(contract: dict) -> None:
-    if contract.get("contract_version") != "investigator-authority-1.2":
+    if contract.get("contract_version") != "investigator-authority-1.3":
         raise RuntimeError("Unsupported Investigator authority contract")
-    if contract.get("deployment_profile") != "investigator_v1_phase2":
-        raise RuntimeError("Investigator deployment profile must be Phase 2")
+    if contract.get("deployment_profile") != "investigator_v1_phase2_5":
+        raise RuntimeError("Investigator deployment profile must be Phase 2.5")
     if contract.get("default") != "deny":
         raise RuntimeError("Investigator authority contract must default to deny")
     principals = contract.get("principals")
@@ -233,6 +281,11 @@ def _validate_contract(contract: dict) -> None:
     if contract.get("allowed_event_types") != _PHASE2_EVENT_TYPES:
         raise RuntimeError("Investigator Phase 2 event types must be exact")
     allowed_environment = contract.get("allowed_environment_variables")
+    prohibited_environment = contract.get("prohibited_environment_variables")
+    if not isinstance(prohibited_environment, list) or len(
+        prohibited_environment
+    ) != len(set(prohibited_environment)):
+        raise TypeError("Investigator prohibited environment names are invalid")
     if not isinstance(allowed_environment, list) or len(allowed_environment) != len(
         set(allowed_environment)
     ):
@@ -244,6 +297,8 @@ def _validate_contract(contract: dict) -> None:
     for name in allowed_environment:
         if name in forbidden_names or name.startswith(forbidden_prefixes):
             raise RuntimeError(f"Forbidden environment name is allowlisted: {name}")
+    if set(allowed_environment).intersection(prohibited_environment):
+        raise RuntimeError("Prohibited environment name is allowlisted")
 
     principal_set = set(principals)
     for name, rule in capabilities.items():
@@ -326,9 +381,100 @@ def forbidden_environment_names(environment: Mapping[str, str]) -> list[str]:
 
 def assert_runtime_environment(environment: Mapping[str, str]) -> None:
     """Fail startup if an Investigator process receives forbidden authority."""
+    prohibited = set(authority_contract().get("prohibited_environment_variables", ()))
+    present = sorted(name for name in environment if name in prohibited)
+    if present:
+        raise AuthorityDenied(
+            "Investigator runtime contains prohibited authority credentials: "
+            + ", ".join(present)
+        )
     names = forbidden_environment_names(environment)
     if names:
         raise AuthorityDenied(
             "Investigator runtime contains forbidden environment names: "
             + ", ".join(names)
         )
+
+
+def assert_runtime_database_custody(connection: Any) -> None:
+    """Fail startup unless this session is the isolated Investigator runtime."""
+    cursor = connection.execute(
+        "SELECT current_user = 'olin_investigator_runtime', "
+        "pg_has_role(session_user, 'olin_investigator_runtime', 'member'), "
+        "pg_has_role(session_user, 'olin_investigator_evidence_authority', 'member'), "
+        "pg_has_role(session_user, 'olin_investigator_owner', 'member'), "
+        "COALESCE((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb "
+        "OR rolreplication OR rolbypassrls) FROM pg_roles "
+        "WHERE rolname=session_user),false), "
+        "COALESCE((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb "
+        "OR rolreplication OR rolbypassrls) FROM pg_roles "
+        "WHERE rolname=current_user),false), "
+        "NOT EXISTS (SELECT 1 FROM ("
+        "SELECT (aclexplode(relacl)).grantee FROM pg_class UNION ALL "
+        "SELECT (aclexplode(proacl)).grantee FROM pg_proc UNION ALL "
+        "SELECT (aclexplode(nspacl)).grantee FROM pg_namespace) direct_acl "
+        "JOIN pg_roles grantee ON grantee.oid=direct_acl.grantee "
+        "WHERE grantee.rolname=session_user), "
+        "NOT EXISTS (WITH RECURSIVE memberships(roleid) AS ("
+        "SELECT membership.roleid FROM pg_auth_members membership "
+        "JOIN pg_roles login ON login.oid=membership.member "
+        "WHERE login.rolname=session_user UNION "
+        "SELECT membership.roleid FROM pg_auth_members membership "
+        "JOIN memberships prior ON membership.member=prior.roleid) "
+        "SELECT 1 FROM memberships "
+        "JOIN pg_roles granted ON granted.oid=memberships.roleid "
+        "WHERE granted.rolname <> 'olin_investigator_runtime')"
+    )
+    row = cursor.fetchone()
+    if row is None or tuple(row) != (
+        True,
+        True,
+        False,
+        False,
+        True,
+        True,
+        True,
+        True,
+    ):
+        raise AuthorityDenied(
+            "Investigator runtime database identity or credential custody is ambiguous"
+        )
+
+
+def assert_evidence_authority_database_custody(connection: Any) -> None:
+    """Reject a privileged or mixed-membership evidence-authority login."""
+    row = connection.execute(
+        "SELECT current_user = 'olin_investigator_evidence_authority', "
+        "pg_has_role(session_user, "
+        "'olin_investigator_evidence_authority', 'member'), "
+        "COALESCE((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb "
+        "OR rolreplication OR rolbypassrls) FROM pg_roles "
+        "WHERE rolname=session_user),false), "
+        "COALESCE((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb "
+        "OR rolreplication OR rolbypassrls) FROM pg_roles "
+        "WHERE rolname=current_user),false), "
+        "NOT EXISTS (SELECT 1 FROM ("
+        "SELECT (aclexplode(relacl)).grantee FROM pg_class UNION ALL "
+        "SELECT (aclexplode(proacl)).grantee FROM pg_proc UNION ALL "
+        "SELECT (aclexplode(nspacl)).grantee FROM pg_namespace) direct_acl "
+        "JOIN pg_roles grantee ON grantee.oid=direct_acl.grantee "
+        "WHERE grantee.rolname=session_user), "
+        "NOT EXISTS (WITH RECURSIVE memberships(roleid) AS ("
+        "SELECT membership.roleid FROM pg_auth_members membership "
+        "JOIN pg_roles login ON login.oid=membership.member "
+        "WHERE login.rolname=session_user UNION "
+        "SELECT membership.roleid FROM pg_auth_members membership "
+        "JOIN memberships prior ON membership.member=prior.roleid) "
+        "SELECT 1 FROM memberships "
+        "JOIN pg_roles granted ON granted.oid=memberships.roleid "
+        "WHERE granted.rolname <> 'olin_investigator_evidence_authority')"
+    ).fetchone()
+    if row is None or tuple(row) != (True, True, True, True, True, True):
+        raise AuthorityDenied(
+            "Evidence-authority database identity or credential custody is ambiguous"
+        )
+
+
+def establish_runtime_database_custody(connection: Any) -> RuntimeDatabaseCustody:
+    """Establish the only custody guard accepted by the reasoning boundary."""
+    return RuntimeDatabaseCustody._establish(connection)

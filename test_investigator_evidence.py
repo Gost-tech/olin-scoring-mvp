@@ -6,6 +6,7 @@ from itertools import count
 from uuid import UUID
 
 from olin.investigator.actor import controlled_test_system_actor
+from olin.investigator.authority import establish_runtime_database_custody
 from olin.investigator.evidence import (
     EVIDENCE_RESOLVER_CONTRACT_VERSION,
     EvidenceAuthorityResolution,
@@ -13,6 +14,8 @@ from olin.investigator.evidence import (
     EvidenceClass,
     EvidenceLifecycle,
     EvidenceUsability,
+    IndependenceStatus,
+    LineageRelation,
     UnusableReason,
     VerificationStatus,
 )
@@ -54,6 +57,21 @@ class CanonicalAuthority:
     def revalidate(self, reference, *, as_of):
         del as_of
         return self.values[(reference.evidence_namespace, reference.evidence_id)]
+
+
+class RuntimeDatabase:
+    class Cursor:
+        @staticmethod
+        def fetchone():
+            return True, True, False, False, True, True, True, True
+
+    @staticmethod
+    def execute(_query):
+        return RuntimeDatabase.Cursor()
+
+
+def runtime_custody():
+    return establish_runtime_database_custody(RuntimeDatabase())
 
 
 def resolution(tenant, bound_case_id, **changes):
@@ -103,6 +121,17 @@ def resolution(tenant, bound_case_id, **changes):
         "unusable_reason": None,
         "resolver_version": EVIDENCE_RESOLVER_CONTRACT_VERSION,
         "resolved_at": NOW,
+        "semantic_independence_schema_version": 1,
+        "semantic_lineage_id": "lineage-bank-event-1",
+        "lineage_relation": LineageRelation.ORIGINAL,
+        "derived_from_evidence_namespace": None,
+        "derived_from_evidence_id": None,
+        "derived_from_evidence_version": None,
+        "economic_event_id": None,
+        "upstream_issuer_id": "bank-issuer-1",
+        "independence_status": IndependenceStatus.INDEPENDENCE_UNKNOWN,
+        "independence_attestation_id": None,
+        "independence_attestation_version": None,
     }
     values.update(changes)
     return EvidenceAuthorityResolution._from_authoritative_adapter(**values)
@@ -147,6 +176,7 @@ class InvestigatorEvidenceTests(unittest.TestCase):
             spine=self.spine,
             evidence_authority=self.authority,
             subject_authority=self.subjects,
+            runtime_custody=runtime_custody(),
             uuid_factory=UUIDs(500),
         )
 
@@ -640,6 +670,10 @@ class InvestigatorEvidenceTests(unittest.TestCase):
             self.case_id,
             evidence_version="2",
             artifact_digest="4" * 64,
+            lineage_relation=LineageRelation.CORRECTION,
+            derived_from_evidence_namespace="evidence_passport",
+            derived_from_evidence_id="bank-event-1",
+            derived_from_evidence_version="1",
         )
         second = self.accept(
             current_snapshot_id=current.snapshot_id,
@@ -675,6 +709,13 @@ class InvestigatorEvidenceTests(unittest.TestCase):
         self.assertEqual(
             len(self.boundary.references(tenant_id=self.tenant, case_id=self.case_id)),
             2,
+        )
+        self.assertTrue(
+            self.boundary.is_snapshot_current_for_reasoning(
+                tenant_id=self.tenant,
+                snapshot_id=replacement.snapshot_id,
+                as_of=NOW,
+            )
         )
 
     def test_raw_v1_or_stale_snapshot_cannot_reason(self):
@@ -769,6 +810,10 @@ class InvestigatorEvidenceTests(unittest.TestCase):
             evidence_version="2",
             source_attestation_id="attestation-2",
             source_attestation_version="2",
+            lineage_relation=LineageRelation.CORRECTION,
+            derived_from_evidence_namespace="evidence_passport",
+            derived_from_evidence_id="bank-event-1",
+            derived_from_evidence_version="1",
         )
         self.authority.values[("evidence_passport", "bank-event-1")] = (
             EvidenceAuthorityResolution._from_authoritative_adapter(**values)

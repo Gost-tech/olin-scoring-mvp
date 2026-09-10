@@ -27,6 +27,9 @@ PHASE1_MIGRATION_PATH = (
 PHASE2_MIGRATION_PATH = (
     ROOT / "db" / "migrations" / "0003_investigator_evidence_consent_passport.sql"
 )
+PHASE25_MIGRATION_PATH = (
+    ROOT / "db" / "migrations" / "0004_investigator_evidence_reasoning_readiness.sql"
+)
 
 PROHIBITED_CAPABILITIES = {
     "credit.approve",
@@ -59,7 +62,7 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
     def test_contract_and_schema_are_valid_json(self):
         contract = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["contract_version"], "investigator-authority-1.2")
+        self.assertEqual(contract["contract_version"], "investigator-authority-1.3")
         self.assertEqual(contract["default"], "deny")
         self.assertEqual(schema["properties"]["default"]["const"], "deny")
         self.assertEqual(len(contract["principals"]), len(set(contract["principals"])))
@@ -84,12 +87,14 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "investigator.case_snapshot_invalidation",
                 "investigator.case_snapshot_request",
                 "investigator.investigation_evidence_reference",
+                "investigator.investigation_evidence_semantics",
                 "investigator.create_case",
                 "investigator.append_event",
                 "investigator.create_snapshot",
                 "investigator.invalidate_snapshot",
                 "investigator.is_snapshot_current",
                 "investigator.create_snapshot_v2",
+                "investigator.current_canonical_authority_revision",
                 "investigator.session_tenant_id",
                 "investigator.context_tenant_id",
                 "investigator.tenant_access_allowed",
@@ -125,6 +130,9 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
         self.assertTrue(is_allowed("investigator_runtime", "snapshot.invalidate"))
         self.assertTrue(is_allowed("investigator_runtime", "evidence.reference.read"))
         self.assertTrue(is_allowed("investigator_runtime", "snapshot.v2.create"))
+        self.assertTrue(
+            is_allowed("investigator_runtime", "snapshot.reasoning.require")
+        )
         allowed = {
             name
             for name, rule in authority_contract()["capabilities"].items()
@@ -141,6 +149,7 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "snapshot.invalidate",
                 "evidence.reference.read",
                 "snapshot.v2.create",
+                "snapshot.reasoning.require",
             },
         )
 
@@ -156,6 +165,12 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "source_verified",
                 "official",
                 "validated",
+                "independent",
+                "independence_status",
+                "semantic_lineage_id",
+                "economic_event_id",
+                "derived_from_evidence_id",
+                "independence_attestation_id",
             },
         )
         self.assertFalse(is_allowed("investigator_runtime", "verified_evidence.mutate"))
@@ -165,6 +180,10 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
         with self.assertRaises(AuthorityDenied) as caught:
             assert_runtime_environment({"STP_PRIVATE_KEY_PATH": secret})
         self.assertNotIn(secret, str(caught.exception))
+        with self.assertRaises(AuthorityDenied):
+            assert_runtime_environment(
+                {"OLIN_CANONICAL_EVIDENCE_DATABASE_URL": "redacted"}
+            )
         assert_runtime_environment(
             {
                 "OLIN_INVESTIGATOR_DATABASE_URL": "redacted",
@@ -374,6 +393,33 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
         self.assertNotIn(
             "create table investigator.investigation_consent_reference", sql
         )
+
+    def test_phase25_migration_is_lineage_only_and_forward_migrated(self):
+        sql = PHASE25_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        for fragment in (
+            "create table investigator.investigation_evidence_semantics",
+            "enable row level security",
+            "force row level security",
+            "create function investigator.accept_evidence_reference_v2",
+            "create function investigator.enrich_snapshot_v2_semantics",
+            "rename to create_snapshot_v2_phase2_legacy",
+            "caller independence fields are forbidden",
+            "canonical_reference' is distinct from",
+            "revoke all on function investigator.accept_evidence_reference(",
+            "grant execute on function investigator.accept_evidence_reference_v2(",
+            "reset session authorization",
+            "commit;",
+        ):
+            self.assertIn(fragment, sql)
+        for forbidden in (
+            "create table investigator.claim",
+            "artifact_body",
+            "credit_score",
+            "approved_amount",
+            "payment_ledger",
+            "provider.call",
+        ):
+            self.assertNotIn(forbidden, sql)
 
 
 if __name__ == "__main__":

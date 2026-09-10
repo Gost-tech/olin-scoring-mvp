@@ -230,6 +230,9 @@ def rebuild_snapshot_input_v2(
     payload["applicable_versions"]["evidence_resolver"] = (
         "investigator-evidence-resolver-1.0"
     )
+    payload["applicable_versions"]["semantic_independence"] = (
+        "investigator-evidence-semantics-1"
+    )
     payload["evidence"] = evidence
     return payload
 

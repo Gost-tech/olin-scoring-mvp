@@ -20,6 +20,7 @@ from .canonical import canonical_digest, canonical_json_bytes, normalize_timesta
 
 EVIDENCE_REFERENCE_SCHEMA_VERSION = 1
 EVIDENCE_RESOLVER_CONTRACT_VERSION = "investigator-evidence-resolver-1.0"
+SEMANTIC_INDEPENDENCE_SCHEMA_VERSION = 1
 MAX_AUTHORITY_RECORD_BYTES = 16_384
 INVESTIGATOR_ANALYTICAL_USE_SCOPE = "case_evidence_analysis"
 MAX_EVIDENCE_CLOCK_SKEW = timedelta(minutes=5)
@@ -32,6 +33,16 @@ CALLER_TRUST_LABELS = frozenset(
         "source_verified",
         "official",
         "validated",
+    }
+)
+CALLER_INDEPENDENCE_LABELS = frozenset(
+    {
+        "independent",
+        "independence_status",
+        "semantic_lineage_id",
+        "economic_event_id",
+        "derived_from_evidence_id",
+        "independence_attestation_id",
     }
 )
 
@@ -65,6 +76,18 @@ class EvidenceLifecycle(str, Enum):
     SUPERSEDED = "SUPERSEDED"
     REVOKED = "REVOKED"
     EXPIRED = "EXPIRED"
+
+
+class LineageRelation(str, Enum):
+    ORIGINAL = "ORIGINAL"
+    DERIVED_COPY = "DERIVED_COPY"
+    CORRECTION = "CORRECTION"
+    UNKNOWN = "UNKNOWN"
+
+
+class IndependenceStatus(str, Enum):
+    INDEPENDENCE_UNKNOWN = "INDEPENDENCE_UNKNOWN"
+    INDEPENDENT_VERIFIED = "INDEPENDENT_VERIFIED"
 
 
 class UnusableReason(str, Enum):
@@ -157,6 +180,17 @@ class EvidenceAuthorityResolution:
     unusable_reason: UnusableReason | None
     resolver_version: str
     resolved_at: datetime
+    semantic_independence_schema_version: int | None
+    semantic_lineage_id: str
+    lineage_relation: LineageRelation
+    derived_from_evidence_namespace: str | None
+    derived_from_evidence_id: str | None
+    derived_from_evidence_version: str | None
+    economic_event_id: str | None
+    upstream_issuer_id: str
+    independence_status: IndependenceStatus
+    independence_attestation_id: str | None
+    independence_attestation_version: str | None
 
     @classmethod
     def _from_authoritative_adapter(
@@ -170,6 +204,8 @@ class EvidenceAuthorityResolution:
             "verification_status": VerificationStatus,
             "usability": EvidenceUsability,
             "unusable_reason": UnusableReason,
+            "lineage_relation": LineageRelation,
+            "independence_status": IndependenceStatus,
         }
         for field_name in cls.__dataclass_fields__:
             if field_name not in values:
@@ -209,6 +245,8 @@ class EvidenceAuthorityResolution:
             "consent_status",
             "resolver_version",
             "integrity_reference",
+            "semantic_lineage_id",
+            "upstream_issuer_id",
         ):
             _bounded(field_name, getattr(self, field_name))
         for field_name in (
@@ -227,6 +265,8 @@ class EvidenceAuthorityResolution:
         EvidenceLifecycle(self.lifecycle)
         VerificationStatus(self.verification_status)
         EvidenceUsability(self.usability)
+        LineageRelation(self.lineage_relation)
+        IndependenceStatus(self.independence_status)
         if self.unusable_reason is not None:
             UnusableReason(self.unusable_reason)
         for field_name in (
@@ -243,6 +283,11 @@ class EvidenceAuthorityResolution:
                 normalize_timestamp(value)
         if self.resolver_version != EVIDENCE_RESOLVER_CONTRACT_VERSION:
             raise EvidenceBoundaryError("unsupported evidence resolver version")
+        if self.semantic_independence_schema_version not in {
+            None,
+            SEMANTIC_INDEPENDENCE_SCHEMA_VERSION,
+        }:
+            raise EvidenceBoundaryError("semantic independence schema is unsupported")
         if self.consent_status not in {
             "ACTIVE",
             "WITHDRAWN",
@@ -250,6 +295,64 @@ class EvidenceAuthorityResolution:
             "SUPERSEDED",
         }:
             raise EvidenceBoundaryError("canonical consent status is unknown")
+        derived_fields = (
+            self.derived_from_evidence_namespace,
+            self.derived_from_evidence_id,
+            self.derived_from_evidence_version,
+        )
+        if any(value is not None for value in derived_fields):
+            if not all(value is not None for value in derived_fields):
+                raise EvidenceBoundaryError("derived evidence identity is incomplete")
+            for value in derived_fields:
+                _bounded("derived evidence identity", value)
+        if self.economic_event_id is not None:
+            _bounded("economic_event_id", self.economic_event_id)
+        for field_name in (
+            "semantic_lineage_id",
+            "upstream_issuer_id",
+            "economic_event_id",
+            "independence_attestation_id",
+            "independence_attestation_version",
+            "derived_from_evidence_namespace",
+            "derived_from_evidence_id",
+            "derived_from_evidence_version",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and value != value.strip():
+                raise EvidenceBoundaryError(
+                    f"{field_name} must be a canonical identifier"
+                )
+        if self.lineage_relation in {
+            LineageRelation.DERIVED_COPY,
+            LineageRelation.CORRECTION,
+        } and not all(value is not None for value in derived_fields):
+            raise EvidenceBoundaryError("derived/corrected evidence requires a parent")
+        if self.lineage_relation is LineageRelation.ORIGINAL and any(
+            value is not None for value in derived_fields
+        ):
+            raise EvidenceBoundaryError("original evidence cannot have a parent")
+        if self.lineage_relation is LineageRelation.UNKNOWN and any(
+            value is not None for value in derived_fields
+        ):
+            raise EvidenceBoundaryError(
+                "unknown lineage relation cannot claim a parent"
+            )
+        if self.independence_status is IndependenceStatus.INDEPENDENT_VERIFIED:
+            if self.lineage_relation is not LineageRelation.ORIGINAL:
+                raise EvidenceBoundaryError(
+                    "only proven original evidence can be independently verified"
+                )
+            if (
+                not self.independence_attestation_id
+                or not self.independence_attestation_version
+            ):
+                raise EvidenceBoundaryError(
+                    "verified independence requires a versioned attestation"
+                )
+        elif self.independence_attestation_id or self.independence_attestation_version:
+            raise EvidenceBoundaryError(
+                "unknown independence cannot carry an authority attestation"
+            )
         authority_identity = (
             f"{self.source_id} {self.issuer_id} {self.source_class} "
             f"{self.source_attestation_id}"
@@ -336,7 +439,7 @@ class EvidenceAuthorityResolution:
 
     def authority_record(self) -> dict[str, object]:
         """Return every field whose semantic change must stale a reference."""
-        return {
+        record = {
             "artifact": {
                 "artifact_digest": self.artifact_digest,
                 "evidence_class": self.evidence_class.value,
@@ -400,6 +503,28 @@ class EvidenceAuthorityResolution:
                 "tenant_id": str(self.tenant_id),
             },
         }
+        if (
+            self.semantic_independence_schema_version
+            == SEMANTIC_INDEPENDENCE_SCHEMA_VERSION
+        ):
+            record["semantic_independence"] = {
+                "schema_version": self.semantic_independence_schema_version,
+                "derived_from": {
+                    "evidence_id": self.derived_from_evidence_id,
+                    "evidence_namespace": self.derived_from_evidence_namespace,
+                    "evidence_version": self.derived_from_evidence_version,
+                }
+                if self.derived_from_evidence_id is not None
+                else None,
+                "economic_event_id": self.economic_event_id,
+                "independence_attestation_id": self.independence_attestation_id,
+                "independence_attestation_version": self.independence_attestation_version,
+                "independence_status": self.independence_status.value,
+                "lineage_relation": self.lineage_relation.value,
+                "semantic_lineage_id": self.semantic_lineage_id,
+                "upstream_issuer_id": self.upstream_issuer_id,
+            }
+        return record
 
     def authority_digest(self) -> str:
         return canonical_digest(self.authority_record())
@@ -493,6 +618,17 @@ class EvidenceReference:
     authority_digest: str
     supersedes_reference_id: UUID | None
     accepted_at: datetime
+    semantic_independence_schema_version: int | None
+    semantic_lineage_id: str
+    lineage_relation: LineageRelation
+    derived_from_evidence_namespace: str | None
+    derived_from_evidence_id: str | None
+    derived_from_evidence_version: str | None
+    economic_event_id: str | None
+    upstream_issuer_id: str
+    independence_status: IndependenceStatus
+    independence_attestation_id: str | None
+    independence_attestation_version: str | None
 
     @classmethod
     def from_resolution(
@@ -557,10 +693,21 @@ class EvidenceReference:
             authority_digest=resolution.authority_digest(),
             supersedes_reference_id=supersedes_reference_id,
             accepted_at=accepted_at,
+            semantic_independence_schema_version=resolution.semantic_independence_schema_version,
+            semantic_lineage_id=resolution.semantic_lineage_id,
+            lineage_relation=resolution.lineage_relation,
+            derived_from_evidence_namespace=resolution.derived_from_evidence_namespace,
+            derived_from_evidence_id=resolution.derived_from_evidence_id,
+            derived_from_evidence_version=resolution.derived_from_evidence_version,
+            economic_event_id=resolution.economic_event_id,
+            upstream_issuer_id=resolution.upstream_issuer_id,
+            independence_status=resolution.independence_status,
+            independence_attestation_id=resolution.independence_attestation_id,
+            independence_attestation_version=resolution.independence_attestation_version,
         )
 
     def canonical_record(self) -> dict[str, object]:
-        return {
+        record = {
             "acceptance": {
                 "accepted_at": normalize_timestamp(self.accepted_at),
                 "authority_digest": self.authority_digest,
@@ -624,6 +771,23 @@ class EvidenceReference:
                 "subject_id": self.subject_id,
             },
         }
+        if self.semantic_independence_schema_version is not None:
+            record["semantic_independence"] = {
+                "schema_version": self.semantic_independence_schema_version,
+                "semantic_lineage_id": self.semantic_lineage_id,
+                "lineage_relation": self.lineage_relation.value,
+                "derived_from_evidence_namespace": self.derived_from_evidence_namespace,
+                "derived_from_evidence_id": self.derived_from_evidence_id,
+                "derived_from_evidence_version": self.derived_from_evidence_version,
+                "economic_event_id": self.economic_event_id,
+                "upstream_issuer_id": self.upstream_issuer_id,
+                "independence_status": self.independence_status.value,
+                "independence_attestation_id": self.independence_attestation_id,
+                "independence_attestation_version": (
+                    self.independence_attestation_version
+                ),
+            }
+        return record
 
 
 class EvidenceAuthority(Protocol):

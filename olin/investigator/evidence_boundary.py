@@ -3,22 +3,29 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from threading import RLock
 from uuid import UUID, uuid4
 
 from .actor import ActorContext
+from .authority import RuntimeDatabaseCustody
 from .canonical import canonical_digest, normalize_timestamp
 from .events import EventType
 from .evidence import (
+    CALLER_INDEPENDENCE_LABELS,
     CALLER_TRUST_LABELS,
+    EVIDENCE_REFERENCE_SCHEMA_VERSION,
+    EVIDENCE_RESOLVER_CONTRACT_VERSION,
     MAX_EVIDENCE_CLOCK_SKEW,
+    SEMANTIC_INDEPENDENCE_SCHEMA_VERSION,
     EvidenceAuthority,
     EvidenceAuthorityResolution,
     EvidenceBoundaryError,
     EvidenceReference,
     EvidenceUsability,
+    IndependenceStatus,
+    LineageRelation,
     UnusableReason,
 )
 from .spine import CaseSnapshot, InMemoryCaseSpine, SpineConflict
@@ -38,6 +45,429 @@ class EvidenceAcceptance:
     evidence_state_version: int
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class ReasoningReadySnapshot:
+    """Opaque, immutable result issued only after live semantic revalidation."""
+
+    tenant_id: UUID
+    case_id: UUID
+    snapshot_id: UUID
+    snapshot_digest: str
+    authority_state_digest: str
+    evidence_state_digest: str
+    authority_revision: int
+    canonical_projection_version: str
+    checked_at: datetime
+    evidence_references: tuple[EvidenceReference, ...]
+    _consumed: bool = field(repr=False, compare=False)
+    _connection: object | None = field(repr=False, compare=False)
+    _transaction_id: str | None = field(repr=False, compare=False)
+    _backend_pid: int | None = field(repr=False, compare=False)
+
+    def __new__(cls):
+        raise TypeError(
+            "ReasoningReadySnapshot can only be issued by the currentness gate"
+        )
+
+    @classmethod
+    def _issue(
+        cls,
+        *,
+        snapshot: CaseSnapshot,
+        authority_state_digest: str,
+        checked_at: datetime,
+        evidence_references: tuple[EvidenceReference, ...],
+        issuer: object,
+    ) -> ReasoningReadySnapshot:
+        return cls._issue_values(
+            tenant_id=snapshot.tenant_id,
+            case_id=snapshot.case_id,
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_digest=snapshot.canonical_digest,
+            authority_state_digest=authority_state_digest,
+            evidence_state_digest=authority_state_digest,
+            authority_revision=0,
+            canonical_projection_version="in-memory-authority-1",
+            checked_at=checked_at,
+            evidence_references=evidence_references,
+            connection=None,
+            transaction_id=None,
+            backend_pid=None,
+            issuer=issuer,
+        )
+
+    @classmethod
+    def _issue_values(
+        cls,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        snapshot_digest: str,
+        authority_state_digest: str,
+        evidence_state_digest: str,
+        authority_revision: int,
+        canonical_projection_version: str,
+        checked_at: datetime,
+        evidence_references: tuple[EvidenceReference, ...],
+        connection: object | None,
+        transaction_id: str | None,
+        backend_pid: int | None,
+        issuer: object,
+    ) -> ReasoningReadySnapshot:
+        if issuer is not _REASONING_GATE_ISSUER:
+            raise TypeError("reasoning-ready snapshots require the authoritative gate")
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "tenant_id", tenant_id)
+        object.__setattr__(instance, "case_id", case_id)
+        object.__setattr__(instance, "snapshot_id", snapshot_id)
+        object.__setattr__(instance, "snapshot_digest", snapshot_digest)
+        object.__setattr__(instance, "authority_state_digest", authority_state_digest)
+        object.__setattr__(instance, "evidence_state_digest", evidence_state_digest)
+        object.__setattr__(instance, "authority_revision", authority_revision)
+        object.__setattr__(
+            instance, "canonical_projection_version", canonical_projection_version
+        )
+        object.__setattr__(instance, "checked_at", checked_at)
+        object.__setattr__(instance, "evidence_references", evidence_references)
+        object.__setattr__(instance, "_consumed", False)
+        object.__setattr__(instance, "_connection", connection)
+        object.__setattr__(instance, "_transaction_id", transaction_id)
+        object.__setattr__(instance, "_backend_pid", backend_pid)
+        return instance
+
+    def consume(self, consumer):
+        """Pass this capability to a future reasoning consumer exactly once."""
+        if not callable(consumer):
+            raise TypeError("reasoning consumer must be callable")
+        if self._consumed:
+            raise EvidenceBoundaryError(
+                "reasoning-ready capability was already consumed"
+            )
+        if self._connection is not None:
+            status = getattr(
+                getattr(self._connection, "info", None), "transaction_status", None
+            )
+            if status is not None and getattr(status, "name", "") != "INTRANS":
+                raise EvidenceBoundaryError(
+                    "reasoning-ready capability escaped its issuing transaction"
+                )
+            try:
+                transaction = self._connection.execute(
+                    "SELECT pg_backend_pid(), pg_current_xact_id()::text"
+                ).fetchone()
+            except Exception as error:
+                object.__setattr__(self, "_consumed", True)
+                raise EvidenceBoundaryError(
+                    "reasoning-ready transaction is no longer usable"
+                ) from error
+            if transaction is None or tuple(transaction) != (
+                self._backend_pid,
+                self._transaction_id,
+            ):
+                object.__setattr__(self, "_consumed", True)
+                raise EvidenceBoundaryError(
+                    "reasoning-ready capability transaction does not match"
+                )
+        object.__setattr__(self, "_consumed", True)
+        result = consumer(self)
+        if self._connection is not None:
+            status = getattr(
+                getattr(self._connection, "info", None), "transaction_status", None
+            )
+            if status is not None and getattr(status, "name", "") != "INTRANS":
+                raise EvidenceBoundaryError(
+                    "reasoning consumer ended its authoritative transaction"
+                )
+        return result
+
+    def __reduce__(self):
+        raise TypeError("reasoning-ready capabilities cannot be serialized")
+
+
+_REASONING_GATE_ISSUER = object()
+
+
+class PostgresReasoningSnapshotGate:
+    """Durable implementation of the sole reasoning-currentness contract."""
+
+    def __init__(
+        self,
+        *,
+        runtime_connection: object,
+        evidence_authority: EvidenceAuthority,
+        runtime_custody: RuntimeDatabaseCustody,
+    ) -> None:
+        module = type(runtime_connection).__module__
+        if not (module == "psycopg" or module.startswith(("psycopg.", "psycopg2"))):
+            raise EvidenceBoundaryError(
+                "durable reasoning currentness requires PostgreSQL"
+            )
+        if not isinstance(runtime_custody, RuntimeDatabaseCustody):
+            raise TypeError("runtime_custody must be an established database guard")
+        self._connection = runtime_connection
+        self._evidence_authority = evidence_authority
+        self._runtime_custody = runtime_custody
+
+    @staticmethod
+    def _timestamp(value: object, field: str) -> datetime:
+        if isinstance(value, datetime):
+            parsed = value
+        else:
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            except ValueError as error:
+                raise EvidenceBoundaryError(
+                    f"snapshot {field} timestamp is invalid"
+                ) from error
+        normalize_timestamp(parsed)
+        return parsed
+
+    def require_snapshot_current_for_reasoning(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+    ) -> ReasoningReadySnapshot:
+        """Revalidate inside a current, read-only transaction-scoped case lock."""
+        transaction_status = getattr(
+            getattr(self._connection, "info", None), "transaction_status", None
+        )
+        if transaction_status is not None and (
+            getattr(transaction_status, "name", "") != "INTRANS"
+        ):
+            raise EvidenceBoundaryError(
+                "durable reasoning requires an explicitly open transaction"
+            )
+        # Bound lock retention and authority revalidation; transaction-scoped so
+        # pooled connections cannot carry these limits into unrelated work.
+        self._connection.execute(
+            "SET LOCAL statement_timeout = '5000ms'; "
+            "SET LOCAL lock_timeout = '1000ms'; "
+            "SET LOCAL idle_in_transaction_session_timeout = '5000ms'"
+        )
+        self._runtime_custody.require_connection(self._connection)
+        normalize_timestamp(as_of)
+        mode = self._connection.execute(
+            "SELECT current_setting('transaction_read_only') = 'on', "
+            "current_setting('transaction_isolation') = 'read committed'"
+        ).fetchone()
+        if mode is None or tuple(mode) != (True, True):
+            raise EvidenceBoundaryError(
+                "durable reasoning requires a read-only read-committed transaction"
+            )
+        self._connection.execute(
+            "SELECT pg_advisory_xact_lock_shared(hashtextextended("  # nosec B608
+            "%s::text || ':reasoning-currentness:' || %s::text,0))",
+            (tenant_id, case_id),
+        ).fetchone()
+        row = self._connection.execute(
+            "SELECT snapshot.canonical_snapshot_payload, "
+            "snapshot.canonical_digest, "
+            "investigator.is_snapshot_current(%s,%s), "
+            "current_setting('transaction_read_only') = 'on', "
+            "current_setting('transaction_isolation') = 'read committed', "
+            "abs(extract(epoch FROM (statement_timestamp() - %s))) <= 300, "
+            "statement_timestamp(), canonical.authority_revision, "
+            "canonical.authority_state_digest, pg_backend_pid(), "
+            "pg_current_xact_id()::text "
+            "FROM investigator.case_snapshot snapshot "
+            "CROSS JOIN LATERAL "
+            "investigator.current_canonical_authority_revision(%s,%s) canonical "
+            "WHERE snapshot.tenant_id=%s AND snapshot.case_id=%s "
+            "AND snapshot.snapshot_id=%s AND snapshot.snapshot_schema_version=2",
+            (
+                tenant_id,
+                snapshot_id,
+                as_of,
+                tenant_id,
+                case_id,
+                tenant_id,
+                case_id,
+                snapshot_id,
+            ),
+        ).fetchone()
+        if row is None:
+            raise EvidenceBoundaryError(
+                "durable snapshot tenant, case, identity, or schema is invalid"
+            )
+        (
+            payload,
+            stored_digest,
+            structurally_current,
+            read_only,
+            stable,
+            bounded,
+            server_time_value,
+            authority_revision,
+            current_authority_digest,
+            backend_pid,
+            transaction_id,
+        ) = row
+        if not structurally_current:
+            raise EvidenceBoundaryError("snapshot is not structurally current")
+        if not read_only or not stable:
+            raise EvidenceBoundaryError(
+                "durable reasoning requires a read-only read-committed transaction"
+            )
+        if not bounded:
+            raise EvidenceBoundaryError(
+                "command time is outside server clock tolerance"
+            )
+        current_time = self._timestamp(server_time_value, "server")
+        if not isinstance(payload, Mapping):
+            raise EvidenceBoundaryError("durable snapshot payload is malformed")
+        if canonical_digest(payload) != stored_digest:
+            raise EvidenceBoundaryError("durable snapshot digest is invalid")
+        if payload.get("snapshot_schema_version") != 2:
+            raise EvidenceBoundaryError("snapshot schema is unsupported for reasoning")
+        versions = payload.get("applicable_versions", {})
+        if not isinstance(versions, Mapping) or (
+            versions.get("evidence_reference")
+            != f"investigator-evidence-reference-{EVIDENCE_REFERENCE_SCHEMA_VERSION}"
+            or versions.get("evidence_resolver") != EVIDENCE_RESOLVER_CONTRACT_VERSION
+            or versions.get("semantic_independence")
+            != f"investigator-evidence-semantics-{SEMANTIC_INDEPENDENCE_SCHEMA_VERSION}"
+        ):
+            raise EvidenceBoundaryError(
+                "snapshot evidence contract is unsupported for reasoning"
+            )
+        case_record = payload.get("case", {})
+        if not isinstance(case_record, Mapping) or (
+            case_record.get("tenant_id") != str(tenant_id)
+            or case_record.get("case_id") != str(case_id)
+        ):
+            raise EvidenceBoundaryError("snapshot tenant or case payload is mismatched")
+        evidence = payload.get("evidence", {})
+        if not isinstance(evidence, Mapping):
+            raise EvidenceBoundaryError("snapshot evidence payload is malformed")
+        canonical_authority = payload.get("canonical_authority", {})
+        if not isinstance(canonical_authority, Mapping) or (
+            canonical_authority.get("projection_version")
+            != "canonical-evidence-projection-1"
+            or canonical_authority.get("authority_revision") != authority_revision
+            or canonical_authority.get("authority_state_digest")
+            != current_authority_digest
+        ):
+            raise EvidenceBoundaryError(
+                "snapshot canonical authority revision is stale"
+            )
+        accepted = evidence.get("accepted_evidence_refs")
+        unusable = evidence.get("unusable_evidence_refs")
+        if not isinstance(accepted, (list, tuple)) or not isinstance(
+            unusable, (list, tuple)
+        ):
+            raise EvidenceBoundaryError("snapshot evidence collections are malformed")
+        successors = {
+            item.get("acceptance", {}).get("supersedes_reference_id")
+            for item in accepted
+            if isinstance(item, Mapping) and isinstance(item.get("acceptance"), Mapping)
+        }
+        for item in unusable:
+            if not isinstance(item, Mapping) or (
+                item.get("unusable_reason") != "EVIDENCE_SUPERSEDED"
+                or item.get("reference_id") not in successors
+            ):
+                raise EvidenceBoundaryError(
+                    "snapshot contains unusable current evidence authority"
+                )
+        references: list[EvidenceReference] = []
+        for item in accepted:
+            if not isinstance(item, Mapping):
+                raise EvidenceBoundaryError("accepted evidence reference is malformed")
+            artifact = item.get("artifact", {})
+            consent = item.get("consent", {})
+            acceptance = item.get("acceptance", {})
+            if not all(
+                isinstance(value, Mapping) for value in (artifact, consent, acceptance)
+            ):
+                raise EvidenceBoundaryError("accepted evidence reference is malformed")
+            resolution = self._evidence_authority.resolve(
+                tenant_id=tenant_id,
+                case_id=case_id,
+                evidence_namespace=str(artifact.get("evidence_namespace", "")),
+                evidence_id=str(artifact.get("evidence_id", "")),
+                purpose=str(consent.get("consent_purpose", "")),
+                as_of=current_time,
+            )
+            if resolution.current_usability(as_of=current_time) != (
+                EvidenceUsability.USABLE,
+                None,
+            ):
+                raise EvidenceBoundaryError(
+                    "snapshot evidence authority is no longer usable"
+                )
+            reference = EvidenceReference.from_resolution(
+                reference_id=UUID(str(item.get("reference_id"))),
+                resolution=resolution,
+                supersedes_reference_id=(
+                    UUID(str(acceptance["supersedes_reference_id"]))
+                    if acceptance.get("supersedes_reference_id")
+                    else None
+                ),
+                accepted_at=self._timestamp(
+                    acceptance.get("accepted_at"), "accepted_at"
+                ),
+            )
+            if reference.canonical_record() != dict(item):
+                raise EvidenceBoundaryError("snapshot semantic authority is stale")
+            if (
+                reference.semantic_independence_schema_version
+                != SEMANTIC_INDEPENDENCE_SCHEMA_VERSION
+            ):
+                raise EvidenceBoundaryError(
+                    "snapshot lacks current semantic independence authority"
+                )
+            references.append(reference)
+        return ReasoningReadySnapshot._issue_values(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            snapshot_id=snapshot_id,
+            snapshot_digest=str(stored_digest),
+            authority_state_digest=str(current_authority_digest),
+            evidence_state_digest=str(evidence.get("evidence_state_digest", "")),
+            authority_revision=int(authority_revision),
+            canonical_projection_version="canonical-evidence-projection-1",
+            checked_at=current_time,
+            evidence_references=tuple(references),
+            connection=self._connection,
+            transaction_id=str(transaction_id),
+            backend_pid=int(backend_pid),
+            issuer=_REASONING_GATE_ISSUER,
+        )
+
+    def consume_snapshot_current_for_reasoning(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+        consumer,
+    ):
+        """Validate and consume readiness inside one server-controlled transaction."""
+        status = getattr(
+            getattr(self._connection, "info", None), "transaction_status", None
+        )
+        if status is not None and getattr(status, "name", "") != "IDLE":
+            raise EvidenceBoundaryError(
+                "reasoning transaction must start from an idle connection"
+            )
+        with self._connection.transaction():
+            self._connection.execute(
+                "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+            )
+            ready = self.require_snapshot_current_for_reasoning(
+                tenant_id=tenant_id,
+                case_id=case_id,
+                snapshot_id=snapshot_id,
+                as_of=as_of,
+            )
+            return ready.consume(consumer)
+
+
 class InvestigatorEvidenceBoundary:
     """Reference-only Phase 2 executable specification.
 
@@ -52,11 +482,15 @@ class InvestigatorEvidenceBoundary:
         spine: InMemoryCaseSpine,
         evidence_authority: EvidenceAuthority,
         subject_authority: CaseSubjectAuthority,
+        runtime_custody: RuntimeDatabaseCustody,
         uuid_factory=uuid4,
     ) -> None:
         self._spine = spine
         self._evidence_authority = evidence_authority
         self._subject_authority = subject_authority
+        if not isinstance(runtime_custody, RuntimeDatabaseCustody):
+            raise TypeError("runtime_custody must be an established database guard")
+        self._runtime_custody = runtime_custody
         self._uuid_factory = uuid_factory
         self._lock = RLock()
         self._references: dict[tuple[UUID, UUID], list[EvidenceReference]] = {}
@@ -115,7 +549,9 @@ class InvestigatorEvidenceBoundary:
         )
         # These labels are intentionally neither persisted nor sent to authorities.
         # Deliberately inspect only names, never values, and confer no authority.
-        _ = frozenset(submitted_claims or {}) & CALLER_TRUST_LABELS
+        _ = frozenset(submitted_claims or {}) & (
+            CALLER_TRUST_LABELS | CALLER_INDEPENDENCE_LABELS
+        )
         with self._lock:
             replay = self._acceptance_requests.get((tenant_id, idempotency_key))
             if replay is not None:
@@ -195,6 +631,86 @@ class InvestigatorEvidenceBoundary:
                 ):
                     raise EvidenceBoundaryError(
                         "correction must be a new version of the same canonical evidence"
+                    )
+                if (
+                    resolution.semantic_lineage_id != prior.semantic_lineage_id
+                    or resolution.lineage_relation is not LineageRelation.CORRECTION
+                    or resolution.derived_from_evidence_namespace
+                    != prior.evidence_namespace
+                    or resolution.derived_from_evidence_id != prior.evidence_id
+                    or resolution.derived_from_evidence_version
+                    != prior.evidence_version
+                ):
+                    raise EvidenceBoundaryError(
+                        "correction must preserve canonical semantic lineage and parent"
+                    )
+            elif resolution.lineage_relation is LineageRelation.CORRECTION:
+                raise EvidenceBoundaryError(
+                    "correction requires an existing superseded evidence reference"
+                )
+            if resolution.lineage_relation is LineageRelation.DERIVED_COPY:
+                parent = next(
+                    (
+                        item
+                        for item in references
+                        if item.evidence_namespace
+                        == resolution.derived_from_evidence_namespace
+                        and item.evidence_id == resolution.derived_from_evidence_id
+                        and item.evidence_version
+                        == resolution.derived_from_evidence_version
+                    ),
+                    None,
+                )
+                if (
+                    parent is None
+                    or parent.semantic_lineage_id != resolution.semantic_lineage_id
+                ):
+                    raise EvidenceBoundaryError(
+                        "derived copy requires an existing parent in the same lineage"
+                    )
+            same_lineage = next(
+                (
+                    item
+                    for item in references
+                    if item.semantic_lineage_id == resolution.semantic_lineage_id
+                ),
+                None,
+            )
+            if (
+                same_lineage is not None
+                and resolution.independence_status
+                is IndependenceStatus.INDEPENDENT_VERIFIED
+            ):
+                raise EvidenceBoundaryError(
+                    "the same semantic lineage cannot become independent support"
+                )
+            if (
+                resolution.independence_status
+                is IndependenceStatus.INDEPENDENT_VERIFIED
+            ):
+                reused_basis = next(
+                    (
+                        item
+                        for item in references
+                        if item.independence_status
+                        is IndependenceStatus.INDEPENDENT_VERIFIED
+                        and (
+                            item.independence_attestation_id
+                            == resolution.independence_attestation_id
+                            or (
+                                resolution.economic_event_id is not None
+                                and item.economic_event_id
+                                == resolution.economic_event_id
+                                and item.upstream_issuer_id
+                                == resolution.upstream_issuer_id
+                            )
+                        )
+                    ),
+                    None,
+                )
+                if reused_basis is not None:
+                    raise EvidenceBoundaryError(
+                        "verified independence basis cannot be reused as new support"
                     )
             reference = EvidenceReference.from_resolution(
                 reference_id=self._uuid_factory(),
@@ -394,8 +910,8 @@ class InvestigatorEvidenceBoundary:
         idempotency_key: str,
         as_of: datetime,
     ) -> CaseSnapshot:
-        self._require_server_bounded_command_time(as_of)
-        evidence = self._snapshot_evidence(tenant_id, case_id, as_of=as_of)
+        current_time = self._require_server_bounded_command_time(as_of)
+        evidence = self._snapshot_evidence(tenant_id, case_id, as_of=current_time)
         return self._spine._create_snapshot_v2(
             tenant_id=tenant_id,
             case_id=case_id,
@@ -409,22 +925,113 @@ class InvestigatorEvidenceBoundary:
         self, *, tenant_id: UUID, snapshot_id: UUID, as_of: datetime
     ) -> bool:
         try:
-            self._require_server_bounded_command_time(as_of)
-            if not self._spine.is_snapshot_current(
-                tenant_id=tenant_id, snapshot_id=snapshot_id
-            ):
-                return False
-            snapshot = self._spine._find_snapshot(tenant_id, snapshot_id)
-        except (EvidenceBoundaryError, LookupError, StopIteration):
+            self.require_snapshot_current_for_reasoning(
+                tenant_id=tenant_id,
+                case_id=self._spine._find_snapshot(tenant_id, snapshot_id).case_id,
+                snapshot_id=snapshot_id,
+                as_of=as_of,
+            )
+        except (EvidenceBoundaryError, KeyError, LookupError, StopIteration):
             return False
-        if snapshot.snapshot_schema_version != 2:
-            return False
+        return True
+
+    def require_snapshot_current_for_reasoning(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+    ) -> ReasoningReadySnapshot:
+        """Fail closed and issue the sole future reasoning input type."""
+        # Evidence commands already acquire these locks in this order. Holding
+        # both through issuance makes structural state, evidence state, and the
+        # returned capability one atomic in-memory observation.
+        with self._lock, self._spine._lock:
+            return self._require_snapshot_current_for_reasoning_locked(
+                tenant_id=tenant_id,
+                case_id=case_id,
+                snapshot_id=snapshot_id,
+                as_of=as_of,
+            )
+
+    def _require_snapshot_current_for_reasoning_locked(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+    ) -> ReasoningReadySnapshot:
+        self._runtime_custody.require_current()
+        current_time = self._require_server_bounded_command_time(as_of)
         try:
-            current = self._snapshot_evidence(tenant_id, snapshot.case_id, as_of=as_of)
-        except (EvidenceBoundaryError, KeyError, LookupError):
-            return False
+            structurally_current = self._spine.is_snapshot_current(
+                tenant_id=tenant_id, snapshot_id=snapshot_id
+            )
+            snapshot = self._spine._find_snapshot(tenant_id, snapshot_id)
+        except LookupError as error:
+            raise EvidenceBoundaryError(
+                "snapshot is not structurally current"
+            ) from error
+        if not structurally_current:
+            raise EvidenceBoundaryError("snapshot is not structurally current")
+        if snapshot.case_id != case_id:
+            raise EvidenceBoundaryError("snapshot does not belong to the case")
+        if snapshot.snapshot_schema_version != 2:
+            raise EvidenceBoundaryError("snapshot schema is unsupported for reasoning")
+        versions = snapshot.canonical_snapshot_payload.get("applicable_versions", {})
+        if (
+            versions.get("evidence_reference")
+            != f"investigator-evidence-reference-{EVIDENCE_REFERENCE_SCHEMA_VERSION}"
+            or versions.get("evidence_resolver") != EVIDENCE_RESOLVER_CONTRACT_VERSION
+            or versions.get("semantic_independence")
+            != f"investigator-evidence-semantics-{SEMANTIC_INDEPENDENCE_SCHEMA_VERSION}"
+        ):
+            raise EvidenceBoundaryError(
+                "snapshot evidence contract is unsupported for reasoning"
+            )
+        current = self._snapshot_evidence(tenant_id, case_id, as_of=current_time)
         stored = snapshot.canonical_snapshot_payload["evidence"]
-        return canonical_digest(current) == canonical_digest(stored)
+        if canonical_digest(current) != canonical_digest(stored):
+            raise EvidenceBoundaryError("snapshot semantic authority is stale")
+        accepted_ids = {
+            item["reference_id"] for item in current["accepted_evidence_refs"]
+        }
+        all_references = self.references(tenant_id=tenant_id, case_id=case_id)
+        references = tuple(
+            reference
+            for reference in all_references
+            if str(reference.reference_id) in accepted_ids
+        )
+        if len(references) != len(accepted_ids) or any(
+            reference.semantic_independence_schema_version
+            != SEMANTIC_INDEPENDENCE_SCHEMA_VERSION
+            for reference in references
+        ):
+            raise EvidenceBoundaryError(
+                "snapshot lacks current semantic independence authority"
+            )
+        accepted_successors = {
+            str(reference.supersedes_reference_id)
+            for reference in references
+            if reference.supersedes_reference_id is not None
+        }
+        for unusable in current["unusable_evidence_refs"]:
+            if (
+                unusable["unusable_reason"] != "EVIDENCE_SUPERSEDED"
+                or unusable["reference_id"] not in accepted_successors
+            ):
+                raise EvidenceBoundaryError(
+                    "snapshot contains unusable current evidence authority"
+                )
+        return ReasoningReadySnapshot._issue(
+            snapshot=snapshot,
+            authority_state_digest=str(current["evidence_state_digest"]),
+            checked_at=current_time,
+            evidence_references=references,
+            issuer=_REASONING_GATE_ISSUER,
+        )
 
     def references(
         self, *, tenant_id: UUID, case_id: UUID
@@ -445,7 +1052,7 @@ class InvestigatorEvidenceBoundary:
             raise EvidenceBoundaryError("snapshot does not belong to the case")
         return snapshot
 
-    def _require_server_bounded_command_time(self, occurred_at: datetime) -> None:
+    def _require_server_bounded_command_time(self, occurred_at: datetime) -> datetime:
         normalize_timestamp(occurred_at)
         server_time = self._spine._clock()
         normalize_timestamp(server_time)
@@ -453,6 +1060,7 @@ class InvestigatorEvidenceBoundary:
             raise EvidenceBoundaryError(
                 "command time is outside server clock tolerance"
             )
+        return server_time
 
     def _validate_resolution(
         self,

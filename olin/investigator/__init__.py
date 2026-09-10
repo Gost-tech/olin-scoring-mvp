@@ -6,7 +6,14 @@ from .actor import (
     ActorType,
     controlled_test_system_actor,
 )
-from .authority import AuthorityDenied, is_allowed, require_capability
+from .authority import (
+    AuthorityDenied,
+    assert_evidence_authority_database_custody,
+    assert_runtime_database_custody,
+    establish_runtime_database_custody,
+    is_allowed,
+    require_capability,
+)
 from .events import EventType, EventValidationError, InvestigationEvent
 from .evidence import (
     EvidenceBoundaryError,
@@ -14,10 +21,16 @@ from .evidence import (
     EvidenceLifecycle,
     EvidenceReference,
     EvidenceUsability,
+    IndependenceStatus,
+    LineageRelation,
     UnusableReason,
     VerificationStatus,
 )
-from .evidence_boundary import InvestigatorEvidenceBoundary
+from .evidence_boundary import (
+    InvestigatorEvidenceBoundary,
+    PostgresReasoningSnapshotGate,
+    ReasoningReadySnapshot,
+)
 from .spine import (
     CaseSnapshot,
     InMemoryCaseSpine,
@@ -42,14 +55,21 @@ __all__ = [
     "EvidenceReference",
     "EvidenceUsability",
     "InMemoryCaseSpine",
+    "IndependenceStatus",
     "InvestigationCase",
     "InvestigationEvent",
     "InvestigatorEvidenceBoundary",
+    "LineageRelation",
+    "PostgresReasoningSnapshotGate",
+    "ReasoningReadySnapshot",
     "SpineConflict",
     "SpineNotFound",
     "UnusableReason",
     "VerificationStatus",
+    "assert_evidence_authority_database_custody",
+    "assert_runtime_database_custody",
     "controlled_test_system_actor",
+    "establish_runtime_database_custody",
     "is_allowed",
     "rebuild_case",
     "rebuild_snapshot_input",

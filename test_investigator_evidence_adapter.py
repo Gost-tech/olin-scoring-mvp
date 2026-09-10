@@ -13,6 +13,8 @@ from olin.investigator.evidence import (
     EvidenceClass,
     EvidenceLifecycle,
     EvidenceUsability,
+    IndependenceStatus,
+    LineageRelation,
     UnusableReason,
     VerificationStatus,
 )
@@ -55,6 +57,17 @@ class Port:
             consent_id="consent-1",
             integrity_reference="passport-integrity:artifact-1",
             integrity_valid=True,
+            semantic_independence_schema_version=1,
+            semantic_lineage_id="lineage-artifact-1",
+            lineage_relation=LineageRelation.ORIGINAL,
+            derived_from_evidence_namespace=None,
+            derived_from_evidence_id=None,
+            derived_from_evidence_version=None,
+            economic_event_id=None,
+            upstream_issuer_id="bank-issuer",
+            independence_status=IndependenceStatus.INDEPENDENCE_UNKNOWN,
+            independence_attestation_id=None,
+            independence_attestation_version=None,
         )
         self.consent_record = CanonicalConsentAuthorization(
             namespace="intake_consent",

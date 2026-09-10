@@ -19,13 +19,22 @@ from hashlib import sha256
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from olin.investigator.authority import (
+    AuthorityDenied,
+    assert_evidence_authority_database_custody,
+    assert_runtime_database_custody,
+    establish_runtime_database_custody,
+)
 from olin.investigator.canonical import canonical_digest, normalize_timestamp
 from olin.investigator.evidence import (
     EVIDENCE_RESOLVER_CONTRACT_VERSION,
     EvidenceAuthorityResolution,
+    EvidenceBoundaryError,
     EvidenceReference,
     EvidenceUsability,
 )
+from olin.investigator.evidence_boundary import PostgresReasoningSnapshotGate
+from olin.investigator_evidence_adapter import PostgresCanonicalEvidenceReadPort
 
 ADMIN_DSN = os.getenv("OLIN_INVESTIGATOR_TEST_ADMIN_DSN", "").strip()
 DISPOSABLE_CONFIRMED = os.getenv("OLIN_INVESTIGATOR_TEST_DISPOSABLE", "") == "YES"
@@ -244,6 +253,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             )
         for role in cls.passwords:
             cls.admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
+        cls.admin.execute("DROP SCHEMA IF EXISTS evidence_authority CASCADE")
         cls.admin.execute("DROP SCHEMA investigator CASCADE")
         cls.admin.execute("DROP ROLE olin_investigator_evidence_authority")
         cls.admin.execute("DROP ROLE olin_investigator_runtime")
@@ -273,6 +283,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
 
     def _reference(self, **changes):
         current = datetime.now(timezone.utc)
+        semantic_independence = changes.pop("_semantic_independence", None)
         values = {
             "tenant_id": str(self.tenant),
             "case_id": str(self.case_id),
@@ -331,68 +342,67 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                     else None
                 )
 
-            values["authority_digest"] = canonical_digest(
-                {
-                    "artifact": {
-                        "artifact_digest": values["artifact_digest"],
-                        "evidence_class": values["evidence_class"],
-                        "evidence_id": values["evidence_id"],
-                        "evidence_namespace": values["evidence_namespace"],
-                        "evidence_version": values["evidence_version"],
-                        "expires_at": timestamp("evidence_expires_at"),
-                        "lifecycle": values["lifecycle"],
-                        "observed_at": timestamp("observed_at"),
-                        "period_end": timestamp("period_end"),
-                        "period_start": timestamp("period_start"),
-                    },
-                    "consent": {
-                        "consent_data_class": values["consent_data_class"],
-                        "consent_id": values["consent_id"],
-                        "consent_namespace": values["consent_namespace"],
-                        "consent_purpose": values["consent_purpose"],
-                        "consent_use_scope": values["consent_use_scope"],
-                        "consent_version": values["consent_version"],
-                        "expires_at": timestamp("consent_expires_at"),
-                        "retention_until": timestamp("retention_until"),
-                        "status": values["consent_status"],
-                    },
-                    "integrity": {
-                        "integrity_reference": values["integrity_reference"],
-                        "integrity_valid": values["integrity_valid"],
-                    },
-                    "proposition_verification": {
-                        "proposition_schema_version": values[
-                            "proposition_schema_version"
-                        ],
-                        "proposition_type": values["proposition_type"],
-                        "proposition_unit": values["proposition_unit"],
-                        "proposition_value": values["proposition_value"],
-                        "verification_method": values["verification_method"],
-                        "status": values["verification_status"],
-                    },
-                    "resolver_version": values["resolver_version"],
-                    "source_attestation": {
-                        "acquisition_method": values["acquisition_method"],
-                        "attestation_id": values["source_attestation_id"],
-                        "attestation_version": values["source_attestation_version"],
-                        "issuer_id": values["issuer_id"],
-                        "production_qualified": values["production_qualified_source"],
-                        "proposition_allowed": values["source_allows_proposition"],
-                        "registry_digest": values["source_registry_digest"],
-                        "source_class": values["source_class"],
-                        "source_id": values["source_id"],
-                        "valid_until": timestamp("source_valid_until"),
-                    },
-                    "subject": {
-                        "subject_digest": values["subject_digest"],
-                        "subject_id": values["subject_id"],
-                    },
-                    "tenant_case": {
-                        "case_id": values["case_id"],
-                        "tenant_id": values["tenant_id"],
-                    },
-                }
-            )
+            authority_record = {
+                "artifact": {
+                    "artifact_digest": values["artifact_digest"],
+                    "evidence_class": values["evidence_class"],
+                    "evidence_id": values["evidence_id"],
+                    "evidence_namespace": values["evidence_namespace"],
+                    "evidence_version": values["evidence_version"],
+                    "expires_at": timestamp("evidence_expires_at"),
+                    "lifecycle": values["lifecycle"],
+                    "observed_at": timestamp("observed_at"),
+                    "period_end": timestamp("period_end"),
+                    "period_start": timestamp("period_start"),
+                },
+                "consent": {
+                    "consent_data_class": values["consent_data_class"],
+                    "consent_id": values["consent_id"],
+                    "consent_namespace": values["consent_namespace"],
+                    "consent_purpose": values["consent_purpose"],
+                    "consent_use_scope": values["consent_use_scope"],
+                    "consent_version": values["consent_version"],
+                    "expires_at": timestamp("consent_expires_at"),
+                    "retention_until": timestamp("retention_until"),
+                    "status": values["consent_status"],
+                },
+                "integrity": {
+                    "integrity_reference": values["integrity_reference"],
+                    "integrity_valid": values["integrity_valid"],
+                },
+                "proposition_verification": {
+                    "proposition_schema_version": values["proposition_schema_version"],
+                    "proposition_type": values["proposition_type"],
+                    "proposition_unit": values["proposition_unit"],
+                    "proposition_value": values["proposition_value"],
+                    "verification_method": values["verification_method"],
+                    "status": values["verification_status"],
+                },
+                "resolver_version": values["resolver_version"],
+                "source_attestation": {
+                    "acquisition_method": values["acquisition_method"],
+                    "attestation_id": values["source_attestation_id"],
+                    "attestation_version": values["source_attestation_version"],
+                    "issuer_id": values["issuer_id"],
+                    "production_qualified": values["production_qualified_source"],
+                    "proposition_allowed": values["source_allows_proposition"],
+                    "registry_digest": values["source_registry_digest"],
+                    "source_class": values["source_class"],
+                    "source_id": values["source_id"],
+                    "valid_until": timestamp("source_valid_until"),
+                },
+                "subject": {
+                    "subject_digest": values["subject_digest"],
+                    "subject_id": values["subject_id"],
+                },
+                "tenant_case": {
+                    "case_id": values["case_id"],
+                    "tenant_id": values["tenant_id"],
+                },
+            }
+            if semantic_independence is not None:
+                authority_record["semantic_independence"] = semantic_independence
+            values["authority_digest"] = canonical_digest(authority_record)
         return values
 
     @staticmethod
@@ -450,6 +460,17 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             unusable_reason=None,
             resolver_version=EVIDENCE_RESOLVER_CONTRACT_VERSION,
             resolved_at=parsed("accepted_at"),
+            semantic_independence_schema_version=None,
+            semantic_lineage_id="legacy-phase2-lineage",
+            lineage_relation="UNKNOWN",
+            derived_from_evidence_namespace=None,
+            derived_from_evidence_id=None,
+            derived_from_evidence_version=None,
+            economic_event_id=None,
+            upstream_issuer_id=values["issuer_id"],
+            independence_status="INDEPENDENCE_UNKNOWN",
+            independence_attestation_id=None,
+            independence_attestation_version=None,
         )
         if resolution.authority_digest() != values["authority_digest"]:
             raise AssertionError("test authority digest does not match resolution")
@@ -564,6 +585,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
         key = "authority-acceptance-1"
         with self.authority.transaction():
             self._authority_context(self.authority)
+            assert_evidence_authority_database_custody(self.authority)
             accepted = self.authority.execute(
                 "SELECT investigator.accept_evidence_reference(%s::jsonb,%s,%s,%s,%s)",
                 (json.dumps(reference), self.initial_snapshot_id, 1, event_id, key),
@@ -992,6 +1014,853 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                         "oversized-reference-denied",
                     ),
                 )
+
+    def test_z_phase25_semantic_lineage_and_credential_custody(self):
+        identity = self.admin.execute("SELECT session_user,current_user").fetchone()
+        migration = (
+            self.root
+            / "db"
+            / "migrations"
+            / "0004_investigator_evidence_reasoning_readiness.sql"
+        ).read_text(encoding="utf-8")
+        self.admin.execute(migration)
+        self.assertEqual(
+            self.admin.execute("SELECT session_user,current_user").fetchone(), identity
+        )
+        self.assertFalse(
+            self.admin.execute(
+                "SELECT EXISTS ("
+                "SELECT 1 FROM investigator.investigation_evidence_reference ref "
+                "LEFT JOIN investigator.investigation_evidence_semantics sem "
+                "USING (tenant_id,case_id,reference_id) "
+                "WHERE sem.reference_id IS NULL)"
+            ).fetchone()[0]
+        )
+
+        semantics = {
+            "semantic_schema_version": 1,
+            "semantic_lineage_id": "lineage-bank-event-1",
+            "lineage_relation": "ORIGINAL",
+            "derived_from_evidence_namespace": None,
+            "derived_from_evidence_id": None,
+            "derived_from_evidence_version": None,
+            "economic_event_id": None,
+            "upstream_issuer_id": "bank-issuer",
+            "independence_status": "INDEPENDENCE_UNKNOWN",
+            "independence_attestation_id": None,
+            "independence_attestation_version": None,
+        }
+        authority_semantics = {
+            "schema_version": semantics["semantic_schema_version"],
+            "derived_from": None,
+            "economic_event_id": semantics["economic_event_id"],
+            "independence_attestation_id": semantics["independence_attestation_id"],
+            "independence_attestation_version": semantics[
+                "independence_attestation_version"
+            ],
+            "independence_status": semantics["independence_status"],
+            "lineage_relation": semantics["lineage_relation"],
+            "semantic_lineage_id": semantics["semantic_lineage_id"],
+            "upstream_issuer_id": semantics["upstream_issuer_id"],
+        }
+        reference = self._reference(_semantic_independence=authority_semantics)
+        canonical_record = {
+            **reference,
+            **semantics,
+            "projection_version": "canonical-evidence-projection-1",
+            "canonical_reference": {
+                key: value
+                for key, value in reference.items()
+                if key not in {"reference_id", "accepted_at", "supersedes_reference_id"}
+            },
+            "production_qualified_source": True,
+            "source_allows_proposition": True,
+            "consent_status": "ACTIVE",
+            "integrity_valid": True,
+            "semantic_independence_schema_version": 1,
+            "usability": "USABLE",
+            "unusable_reason": None,
+        }
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            revision = self.authority.execute(
+                "SELECT authority_revision,authority_state_digest FROM "
+                "evidence_authority.commit_investigator_evidence_projection("
+                "%s::jsonb,%s,%s)",
+                (json.dumps(canonical_record), 0, "EVIDENCE_PROJECTED"),
+            ).fetchone()
+        self.assertEqual(revision[0], 1)
+        tampered_reference = {**reference, "artifact_digest": "f" * 64}
+        with (
+            self.assertRaises(psycopg.errors.InvalidParameterValue),
+            self.authority.transaction(),
+        ):
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(tampered_reference),
+                    json.dumps(semantics),
+                    self.initial_snapshot_id,
+                    1,
+                    uuid4(),
+                    "phase25-canonical-substitution",
+                ),
+            )
+        event_id = uuid4()
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            accepted = self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(reference),
+                    json.dumps(semantics),
+                    self.initial_snapshot_id,
+                    1,
+                    event_id,
+                    "phase25-semantic-accept",
+                ),
+            ).fetchone()[0]
+            self.assertEqual(accepted, UUID(reference["reference_id"]))
+            replay = self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(reference),
+                    json.dumps(semantics),
+                    self.initial_snapshot_id,
+                    1,
+                    event_id,
+                    "phase25-semantic-accept",
+                ),
+            ).fetchone()[0]
+            self.assertEqual(replay, accepted)
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            current_snapshot, current_snapshot_digest = self.runtime.execute(
+                "SELECT snapshot_id,canonical_digest FROM "
+                "investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (self.tenant, self.case_id, 2, "phase25-parent-tests"),
+            ).fetchone()
+            converged = self.runtime.execute(
+                "SELECT snapshot_id,canonical_digest FROM "
+                "investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (self.tenant, self.case_id, 2, "phase25-parent-tests-second-key"),
+            ).fetchone()
+            self.assertEqual(converged, (current_snapshot, current_snapshot_digest))
+            snapshot_semantics = self.runtime.execute(
+                "SELECT canonical_snapshot_payload #>> "
+                "'{applicable_versions,semantic_independence}', "
+                "canonical_snapshot_payload #>> "
+                "'{evidence,accepted_evidence_refs,0,semantic_independence,semantic_lineage_id}' "
+                "FROM investigator.case_snapshot WHERE snapshot_id=%s",
+                (current_snapshot,),
+            ).fetchone()
+            self.assertEqual(
+                snapshot_semantics,
+                ("investigator-evidence-semantics-1", "lineage-bank-event-1"),
+            )
+
+        barrier = threading.Barrier(2)
+
+        def snapshot_once():
+            connection = psycopg.connect(
+                self._dsn(self.runtime_role, self.passwords[self.runtime_role])
+            )
+            try:
+                with connection.transaction():
+                    self._runtime_context(connection)
+                    barrier.wait(timeout=5)
+                    return connection.execute(
+                        "SELECT snapshot_id,canonical_digest FROM "
+                        "investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                        (
+                            self.tenant,
+                            self.case_id,
+                            2,
+                            "phase25-concurrent-snapshot-replay",
+                        ),
+                    ).fetchone()
+            finally:
+                connection.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            concurrent_snapshots = tuple(
+                executor.map(lambda _: snapshot_once(), range(2))
+            )
+        self.assertEqual(
+            concurrent_snapshots,
+            (
+                (current_snapshot, current_snapshot_digest),
+                (current_snapshot, current_snapshot_digest),
+            ),
+        )
+        orphan_reference = self._reference()
+        orphan_semantics = {
+            **semantics,
+            "semantic_lineage_id": "orphan-lineage",
+            "lineage_relation": "DERIVED_COPY",
+            "derived_from_evidence_namespace": "evidence_passport",
+            "derived_from_evidence_id": "fictional-parent",
+            "derived_from_evidence_version": "1",
+        }
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            with self.assertRaises(psycopg.errors.InvalidParameterValue):
+                self.authority.execute(
+                    "SELECT investigator.accept_evidence_reference_v2("
+                    "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                    (
+                        json.dumps(orphan_reference),
+                        json.dumps(orphan_semantics),
+                        current_snapshot,
+                        2,
+                        uuid4(),
+                        "phase25-orphan-copy",
+                    ),
+                )
+        correction_reference = self._reference(
+            evidence_namespace=reference["evidence_namespace"],
+            evidence_id=reference["evidence_id"],
+            evidence_version="2",
+        )
+        correction_semantics = {
+            **semantics,
+            "lineage_relation": "CORRECTION",
+            "derived_from_evidence_namespace": reference["evidence_namespace"],
+            "derived_from_evidence_id": reference["evidence_id"],
+            "derived_from_evidence_version": reference["evidence_version"],
+        }
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            with self.assertRaises(psycopg.errors.InvalidParameterValue):
+                self.authority.execute(
+                    "SELECT investigator.accept_evidence_reference_v2("
+                    "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                    (
+                        json.dumps(correction_reference),
+                        json.dumps(correction_semantics),
+                        current_snapshot,
+                        2,
+                        uuid4(),
+                        "phase25-correction-without-parent",
+                    ),
+                )
+        promoted_replay = {
+            **semantics,
+            "independence_status": "INDEPENDENT_VERIFIED",
+            "independence_attestation_id": "independence-attestation-1",
+            "independence_attestation_version": "1",
+        }
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            # The canonical digest covers semantic independence, so an exact
+            # replay cannot be promoted even before immutable replay checks.
+            with self.assertRaises(psycopg.errors.InvalidParameterValue):
+                self.authority.execute(
+                    "SELECT investigator.accept_evidence_reference_v2("
+                    "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                    (
+                        json.dumps(reference),
+                        json.dumps(promoted_replay),
+                        self.initial_snapshot_id,
+                        1,
+                        event_id,
+                        "phase25-semantic-accept",
+                    ),
+                )
+        unsafe_role = "phase25_unsafe_authority"
+        self.admin.execute(
+            sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(unsafe_role))
+        )
+        self.admin.execute(
+            sql.SQL("GRANT {} TO olin_investigator_evidence_authority").format(
+                sql.Identifier(unsafe_role)
+            )
+        )
+        try:
+            with self.authority.transaction():
+                self._authority_context(self.authority)
+                with self.assertRaises(AuthorityDenied):
+                    assert_evidence_authority_database_custody(self.authority)
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    self.authority.execute(
+                        "SELECT investigator.accept_evidence_reference_v2("
+                        "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                        (
+                            json.dumps(reference),
+                            json.dumps(semantics),
+                            self.initial_snapshot_id,
+                            1,
+                            event_id,
+                            "phase25-semantic-accept",
+                        ),
+                    )
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    self.authority.execute(
+                        "SELECT authority_revision FROM evidence_authority."
+                        "commit_investigator_evidence_projection("
+                        "%s::jsonb,%s,%s)",
+                        (json.dumps(canonical_record), 1, "EVIDENCE_PROJECTED"),
+                    )
+        finally:
+            self.admin.execute(
+                sql.SQL("REVOKE {} FROM olin_investigator_evidence_authority").format(
+                    sql.Identifier(unsafe_role)
+                )
+            )
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                self.authority.execute(
+                    "SELECT investigator.accept_evidence_reference("
+                    "%s::jsonb,%s,%s,%s,%s)",
+                    (
+                        json.dumps(reference),
+                        self.initial_snapshot_id,
+                        1,
+                        uuid4(),
+                        "old-authority-path-denied",
+                    ),
+                )
+
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            assert_runtime_database_custody(self.runtime)
+            row = self.runtime.execute(
+                "SELECT semantic_lineage_id,independence_status "
+                "FROM investigator.investigation_evidence_semantics "
+                "WHERE reference_id=%s",
+                (accepted,),
+            ).fetchone()
+            self.assertEqual(row, ("lineage-bank-event-1", "INDEPENDENCE_UNKNOWN"))
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                self.runtime.execute(
+                    "SET LOCAL ROLE olin_investigator_evidence_authority"
+                )
+        self.admin.execute(
+            sql.SQL("GRANT {} TO olin_investigator_runtime").format(
+                sql.Identifier(unsafe_role)
+            )
+        )
+        try:
+            with self.runtime.transaction():
+                self._runtime_context(self.runtime)
+                with self.assertRaises(AuthorityDenied):
+                    assert_runtime_database_custody(self.runtime)
+        finally:
+            self.admin.execute(
+                sql.SQL("REVOKE {} FROM olin_investigator_runtime").format(
+                    sql.Identifier(unsafe_role)
+                )
+            )
+        self.admin.execute(
+            sql.SQL(
+                "GRANT SELECT ON "
+                "evidence_authority.investigator_evidence_projection_change TO {}"
+            ).format(sql.Identifier(self.runtime_role))
+        )
+        try:
+            with self.runtime.transaction():
+                self._runtime_context(self.runtime)
+                with self.assertRaises(AuthorityDenied):
+                    assert_runtime_database_custody(self.runtime)
+        finally:
+            self.admin.execute(
+                sql.SQL(
+                    "REVOKE SELECT ON "
+                    "evidence_authority.investigator_evidence_projection_change FROM {}"
+                ).format(sql.Identifier(self.runtime_role))
+            )
+
+        controls = self.admin.execute(
+            "SELECT relrowsecurity,relforcerowsecurity,"
+            "has_table_privilege('olin_investigator_runtime',"
+            "'investigator.investigation_evidence_semantics','SELECT'),"
+            "has_table_privilege('olin_investigator_runtime',"
+            "'investigator.investigation_evidence_semantics',"
+            "'INSERT,UPDATE,DELETE,TRUNCATE'),"
+            "has_table_privilege('olin_investigator_evidence_authority',"
+            "'investigator.investigation_evidence_semantics',"
+            "'INSERT,UPDATE,DELETE,TRUNCATE'),"
+            "has_function_privilege('olin_investigator_runtime',"
+            "'investigator.accept_evidence_reference_v2("
+            "jsonb,jsonb,uuid,bigint,uuid,text)','EXECUTE'),"
+            "pg_has_role(%s,'olin_investigator_evidence_authority','member'),"
+            "pg_has_role(%s,'olin_investigator_runtime','member'),"
+            "pg_has_role(%s,'olin_investigator_owner','member') "
+            "FROM pg_class WHERE oid="
+            "'investigator.investigation_evidence_semantics'::regclass",
+            (self.runtime_role, self.authority_role, self.authority_role),
+        ).fetchone()
+        self.assertEqual(
+            controls,
+            (True, True, True, False, False, False, False, False, False),
+        )
+
+        self.assertNotIn(
+            "investigator.",
+            self.admin.execute(
+                "SELECT pg_get_viewdef("
+                "'evidence_authority.investigator_evidence_v1'::regclass,true)"
+            ).fetchone()[0],
+        )
+        reader_group = "olin_investigator_evidence_reader"
+        self.admin.execute(
+            sql.SQL(
+                "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS"
+            ).format(sql.Identifier(reader_group))
+        )
+        with self.assertRaisesRegex(EvidenceBoundaryError, "custody"):
+            PostgresCanonicalEvidenceReadPort(self.admin, tenant_id=self.tenant)
+        reader_role = "olin_canonical_t_" + self.tenant.hex
+        reader_password = secrets.token_urlsafe(24)
+        self.admin.execute(
+            sql.SQL(
+                "CREATE ROLE {} LOGIN PASSWORD {} INHERIT NOSUPERUSER "
+                "NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+            ).format(sql.Identifier(reader_role), sql.Literal(reader_password))
+        )
+        self.admin.execute(
+            sql.SQL("GRANT {} TO {}").format(
+                sql.Identifier(reader_group), sql.Identifier(reader_role)
+            )
+        )
+        self.admin.execute(
+            sql.SQL("ALTER ROLE {} SET default_transaction_read_only=on").format(
+                sql.Identifier(reader_role)
+            )
+        )
+        self.admin.execute(
+            sql.SQL("GRANT USAGE ON SCHEMA evidence_authority TO {}").format(
+                sql.Identifier(reader_group)
+            )
+        )
+        self.admin.execute(
+            sql.SQL(
+                "GRANT SELECT ON evidence_authority.investigator_evidence_v1 TO {}"
+            ).format(sql.Identifier(reader_group))
+        )
+        projection_privileges = self.admin.execute(
+            "SELECT "
+            "has_table_privilege('olin_investigator_runtime',"
+            "'evidence_authority.investigator_evidence_projection_change',"
+            "'INSERT,UPDATE,DELETE,TRUNCATE'),"
+            "has_table_privilege('olin_investigator_evidence_authority',"
+            "'evidence_authority.investigator_evidence_projection_change',"
+            "'INSERT,UPDATE,DELETE,TRUNCATE'),"
+            "EXISTS (SELECT 1 FROM information_schema.table_privileges "
+            "WHERE table_schema='evidence_authority' "
+            "AND table_name='investigator_evidence_projection_change' "
+            "AND grantee='PUBLIC' AND privilege_type IN "
+            "('INSERT','UPDATE','DELETE','TRUNCATE')),"
+            "has_function_privilege('olin_investigator_runtime',"
+            "'evidence_authority.commit_investigator_evidence_projection("
+            "jsonb,bigint,text)','EXECUTE'),"
+            "has_function_privilege('olin_investigator_evidence_authority',"
+            "'evidence_authority.commit_investigator_evidence_projection("
+            "jsonb,bigint,text)','EXECUTE')"
+        ).fetchone()
+        self.assertEqual(projection_privileges, (False, False, False, False, True))
+        reader = psycopg.connect(self._dsn(reader_role, reader_password))
+        try:
+            port = PostgresCanonicalEvidenceReadPort(reader, tenant_id=self.tenant)
+            resolved = port.resolve(
+                tenant_id=self.tenant,
+                case_id=self.case_id,
+                evidence_namespace=reference["evidence_namespace"],
+                evidence_id=reference["evidence_id"],
+                purpose=reference["consent_purpose"],
+                as_of=datetime.now(timezone.utc),
+            )
+            self.assertEqual(resolved.semantic_lineage_id, "lineage-bank-event-1")
+            self.assertEqual(resolved.evidence_id, reference["evidence_id"])
+            with self.runtime.transaction():
+                self._runtime_context(self.runtime)
+                runtime_custody = establish_runtime_database_custody(self.runtime)
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=runtime_custody,
+            )
+            with self.runtime.transaction():
+                self.runtime.execute(
+                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+                )
+                self._runtime_context(self.runtime)
+                escaped_after_commit = gate.require_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=current_snapshot,
+                    as_of=datetime.now(timezone.utc),
+                )
+            with self.assertRaisesRegex(EvidenceBoundaryError, "escaped"):
+                escaped_after_commit.consume(lambda ready: ready.snapshot_id)
+            with self.runtime.transaction():
+                self.runtime.execute(
+                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+                )
+                self._runtime_context(self.runtime)
+                with self.assertRaisesRegex(EvidenceBoundaryError, "does not match"):
+                    escaped_after_commit.consume(lambda ready: ready.snapshot_id)
+
+            timed_out = []
+
+            def exceed_statement_timeout(ready):
+                timed_out.append(ready)
+                self.runtime.execute("SELECT pg_sleep(6)")
+
+            with self.assertRaises(psycopg.errors.QueryCanceled):
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=current_snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=exceed_statement_timeout,
+                )
+            with self.assertRaisesRegex(EvidenceBoundaryError, "already consumed"):
+                timed_out[0].consume(lambda ready: ready.snapshot_id)
+
+            withdrawn_record = {**canonical_record, "consent_status": "WITHDRAWN"}
+            writer_started = threading.Event()
+            escaped = []
+
+            def withdraw_concurrently():
+                writer = psycopg.connect(
+                    self._dsn(self.authority_role, self.passwords[self.authority_role])
+                )
+                try:
+                    with writer.transaction():
+                        self._authority_context(writer)
+                        writer_started.set()
+                        return writer.execute(
+                            "SELECT authority_revision FROM "
+                            "evidence_authority."
+                            "commit_investigator_evidence_projection("
+                            "%s::jsonb,%s,%s)",
+                            (json.dumps(withdrawn_record), 1, "CONSENT_CHANGED"),
+                        ).fetchone()[0]
+                finally:
+                    writer.close()
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                writer_future = None
+
+                def consume(ready):
+                    nonlocal writer_future
+                    escaped.append(ready)
+                    writer_future = pool.submit(withdraw_concurrently)
+                    self.assertTrue(writer_started.wait(timeout=2))
+                    self.assertFalse(writer_future.done())
+                    return ready.authority_revision
+
+                observed_revision = gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=current_snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=consume,
+                )
+                self.assertEqual(observed_revision, 1)
+                self.assertEqual(writer_future.result(timeout=5), 2)
+            with self.assertRaisesRegex(EvidenceBoundaryError, "already consumed"):
+                escaped[0].consume(lambda ready: ready.snapshot_id)
+            with self.assertRaisesRegex(EvidenceBoundaryError, "revision is stale"):
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=current_snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=lambda ready: ready.snapshot_id,
+                )
+
+            def prepare_ready_case(label):
+                case_id = uuid4()
+                with self.runtime.transaction():
+                    self._runtime_context(self.runtime)
+                    self.runtime.execute(
+                        "SELECT investigator.create_case("
+                        "%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb)",
+                        (
+                            case_id,
+                            self.tenant,
+                            None,
+                            f"phase25-fence-{label}",
+                            uuid4(),
+                            datetime.now(timezone.utc),
+                            "{}",
+                            1,
+                            f"phase25-fence-case-{label}",
+                            sha256(b"{}").hexdigest(),
+                            "{}",
+                        ),
+                    )
+                    initial = self.runtime.execute(
+                        "SELECT snapshot_id FROM investigator.create_snapshot("
+                        "%s,%s,%s,%s)",
+                        (self.tenant, case_id, 1, f"phase25-fence-initial-{label}"),
+                    ).fetchone()[0]
+                case_semantics = {
+                    **semantics,
+                    "semantic_lineage_id": f"lineage-{label}",
+                    "upstream_issuer_id": f"issuer-{label}",
+                }
+                case_authority_semantics = {
+                    **authority_semantics,
+                    "semantic_lineage_id": f"lineage-{label}",
+                    "upstream_issuer_id": f"issuer-{label}",
+                }
+                case_reference = self._reference(
+                    case_id=str(case_id),
+                    evidence_id=f"artifact-{label}",
+                    source_attestation_id=f"attestation-{label}",
+                    issuer_id=f"issuer-{label}",
+                    _semantic_independence=case_authority_semantics,
+                )
+                case_record = {
+                    **case_reference,
+                    **case_semantics,
+                    "projection_version": "canonical-evidence-projection-1",
+                    "canonical_reference": {
+                        key: value
+                        for key, value in case_reference.items()
+                        if key
+                        not in {
+                            "reference_id",
+                            "accepted_at",
+                            "supersedes_reference_id",
+                        }
+                    },
+                    "production_qualified_source": True,
+                    "source_allows_proposition": True,
+                    "consent_status": "ACTIVE",
+                    "integrity_valid": True,
+                    "semantic_independence_schema_version": 1,
+                    "usability": "USABLE",
+                    "unusable_reason": None,
+                }
+                with self.authority.transaction():
+                    self._authority_context(self.authority)
+                    self.authority.execute(
+                        "SELECT authority_revision FROM evidence_authority."
+                        "commit_investigator_evidence_projection("
+                        "%s::jsonb,%s,%s)",
+                        (json.dumps(case_record), 0, "EVIDENCE_PROJECTED"),
+                    )
+                    self.authority.execute(
+                        "SELECT investigator.accept_evidence_reference_v2("
+                        "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                        (
+                            json.dumps(case_reference),
+                            json.dumps(case_semantics),
+                            initial,
+                            1,
+                            uuid4(),
+                            f"phase25-fence-accept-{label}",
+                        ),
+                    )
+                with self.runtime.transaction():
+                    self._runtime_context(self.runtime)
+                    snapshot = self.runtime.execute(
+                        "SELECT snapshot_id FROM investigator.create_snapshot_v2("
+                        "%s,%s,%s,%s)",
+                        (self.tenant, case_id, 2, f"phase25-fence-ready-{label}"),
+                    ).fetchone()[0]
+                return case_id, snapshot, case_record
+
+            def assert_fenced_change(label, change_kind, changes):
+                case_id, snapshot, base_record = prepare_ready_case(label)
+                changed_record = {**base_record, **changes}
+                writer_started = threading.Event()
+
+                def mutate():
+                    writer = psycopg.connect(
+                        self._dsn(
+                            self.authority_role, self.passwords[self.authority_role]
+                        )
+                    )
+                    try:
+                        with writer.transaction():
+                            self._authority_context(writer)
+                            writer_started.set()
+                            return writer.execute(
+                                "SELECT authority_revision FROM evidence_authority."
+                                "commit_investigator_evidence_projection("
+                                "%s::jsonb,%s,%s)",
+                                (json.dumps(changed_record), 1, change_kind),
+                            ).fetchone()[0]
+                    finally:
+                        writer.close()
+
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    writer_future = None
+
+                    def consume(ready):
+                        nonlocal writer_future
+                        writer_future = pool.submit(mutate)
+                        self.assertTrue(writer_started.wait(timeout=2))
+                        self.assertFalse(writer_future.done())
+                        return ready.authority_revision
+
+                    case_gate = PostgresReasoningSnapshotGate(
+                        runtime_connection=self.runtime,
+                        evidence_authority=port,
+                        runtime_custody=runtime_custody,
+                    )
+                    self.assertEqual(
+                        case_gate.consume_snapshot_current_for_reasoning(
+                            tenant_id=self.tenant,
+                            case_id=case_id,
+                            snapshot_id=snapshot,
+                            as_of=datetime.now(timezone.utc),
+                            consumer=consume,
+                        ),
+                        1,
+                    )
+                    self.assertEqual(writer_future.result(timeout=5), 2)
+
+            assert_fenced_change(
+                "evidence-revocation",
+                "EVIDENCE_REVOKED",
+                {
+                    "lifecycle": "REVOKED",
+                    "usability": "UNUSABLE",
+                    "unusable_reason": "EVIDENCE_REVOKED",
+                },
+            )
+            assert_fenced_change(
+                "source-change",
+                "SOURCE_ATTESTATION_CHANGED",
+                {"source_attestation_version": "2"},
+            )
+            dual_case, dual_snapshot, _ = prepare_ready_case("dual-readiness")
+
+            def issue_readiness():
+                runtime = psycopg.connect(
+                    self._dsn(self.runtime_role, self.passwords[self.runtime_role])
+                )
+                canonical = psycopg.connect(self._dsn(reader_role, reader_password))
+                try:
+                    with runtime.transaction():
+                        self._runtime_context(runtime)
+                        custody = establish_runtime_database_custody(runtime)
+                    dual_gate = PostgresReasoningSnapshotGate(
+                        runtime_connection=runtime,
+                        evidence_authority=PostgresCanonicalEvidenceReadPort(
+                            canonical, tenant_id=self.tenant
+                        ),
+                        runtime_custody=custody,
+                    )
+                    return dual_gate.consume_snapshot_current_for_reasoning(
+                        tenant_id=self.tenant,
+                        case_id=dual_case,
+                        snapshot_id=dual_snapshot,
+                        as_of=datetime.now(timezone.utc),
+                        consumer=lambda ready: (
+                            ready.authority_revision,
+                            ready.authority_state_digest,
+                        ),
+                    )
+                finally:
+                    canonical.close()
+                    runtime.close()
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                converged = list(pool.map(lambda _: issue_readiness(), range(2)))
+            self.assertEqual(converged[0], converged[1])
+            self.admin.execute(
+                sql.SQL("GRANT {} TO {}").format(
+                    sql.Identifier(unsafe_role), sql.Identifier(reader_group)
+                )
+            )
+            try:
+                with self.assertRaisesRegex(EvidenceBoundaryError, "custody"):
+                    port.revalidate(
+                        self._python_reference(reference),
+                        as_of=datetime.now(timezone.utc),
+                    )
+            finally:
+                self.admin.execute(
+                    sql.SQL("REVOKE {} FROM {}").format(
+                        sql.Identifier(unsafe_role), sql.Identifier(reader_group)
+                    )
+                )
+            withdrawn = port.revalidate(
+                self._python_reference(reference), as_of=datetime.now(timezone.utc)
+            )
+            self.assertEqual(
+                withdrawn.current_usability(as_of=datetime.now(timezone.utc))[1].value,
+                "CONSENT_WITHDRAWN",
+            )
+            rollback_record = {
+                **withdrawn_record,
+                "lifecycle": "REVOKED",
+                "usability": "UNUSABLE",
+                "unusable_reason": "EVIDENCE_REVOKED",
+            }
+            rollback_writer = psycopg.connect(
+                self._dsn(self.authority_role, self.passwords[self.authority_role])
+            )
+            try:
+                with (
+                    self.assertRaisesRegex(RuntimeError, "force rollback"),
+                    rollback_writer.transaction(),
+                ):
+                    self._authority_context(rollback_writer)
+                    rollback_writer.execute(
+                        "SELECT authority_revision FROM evidence_authority."
+                        "commit_investigator_evidence_projection("
+                        "%s::jsonb,%s,%s)",
+                        (json.dumps(rollback_record), 2, "EVIDENCE_REVOKED"),
+                    )
+                    raise RuntimeError("force rollback")
+            finally:
+                rollback_writer.close()
+            latest_revision = self.admin.execute(
+                "SELECT max(authority_revision) FROM evidence_authority."
+                "investigator_evidence_projection_change "
+                "WHERE tenant_id=%s AND case_id=%s",
+                (self.tenant, self.case_id),
+            ).fetchone()[0]
+            self.assertEqual(latest_revision, 2)
+            with self.authority.transaction():
+                self._authority_context(self.authority)
+                committed_revision = self.authority.execute(
+                    "SELECT authority_revision FROM evidence_authority."
+                    "commit_investigator_evidence_projection("
+                    "%s::jsonb,%s,%s)",
+                    (json.dumps(rollback_record), 2, "EVIDENCE_REVOKED"),
+                ).fetchone()[0]
+            self.assertEqual(committed_revision, 3)
+        finally:
+            reader.close()
+            self.admin.execute(
+                sql.SQL("REVOKE {} FROM {}").format(
+                    sql.Identifier(reader_group), sql.Identifier(reader_role)
+                )
+            )
+            self.admin.execute(
+                sql.SQL(
+                    "REVOKE SELECT ON "
+                    "evidence_authority.investigator_evidence_v1 FROM {}"
+                ).format(sql.Identifier(reader_group))
+            )
+            self.admin.execute(
+                sql.SQL("REVOKE USAGE ON SCHEMA evidence_authority FROM {}").format(
+                    sql.Identifier(reader_group)
+                )
+            )
+            self.admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(reader_role))
+            )
+            self.admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(reader_group))
+            )
+            self.admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(unsafe_role))
+            )
 
 
 if __name__ == "__main__":

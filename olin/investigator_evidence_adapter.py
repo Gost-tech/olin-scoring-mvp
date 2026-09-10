@@ -7,6 +7,7 @@ Investigator runtime receives only the resolved, immutable contract object.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from typing import Any, Protocol
@@ -22,6 +23,8 @@ from .investigator.evidence import (
     EvidenceLifecycle,
     EvidenceReference,
     EvidenceUsability,
+    IndependenceStatus,
+    LineageRelation,
     UnusableReason,
     VerificationStatus,
 )
@@ -51,6 +54,17 @@ class CanonicalArtifactRecord:
     consent_id: str
     integrity_reference: str
     integrity_valid: bool
+    semantic_independence_schema_version: int | None
+    semantic_lineage_id: str
+    lineage_relation: LineageRelation
+    derived_from_evidence_namespace: str | None
+    derived_from_evidence_id: str | None
+    derived_from_evidence_version: str | None
+    economic_event_id: str | None
+    upstream_issuer_id: str
+    independence_status: IndependenceStatus
+    independence_attestation_id: str | None
+    independence_attestation_version: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +229,17 @@ class ExistingEvidencePassportReadPort:
             consent_id=str(row["consent_id"]),
             integrity_reference=str(row["source_reference"]),
             integrity_valid=False,
+            semantic_independence_schema_version=None,
+            semantic_lineage_id=f"legacy:{row['evidence_id']}",
+            lineage_relation=LineageRelation.UNKNOWN,
+            derived_from_evidence_namespace=None,
+            derived_from_evidence_id=None,
+            derived_from_evidence_version=None,
+            economic_event_id=None,
+            upstream_issuer_id="legacy_issuer_unresolved",
+            independence_status=IndependenceStatus.INDEPENDENCE_UNKNOWN,
+            independence_attestation_id=None,
+            independence_attestation_version=None,
         )
 
     def consent(self, namespace: str, consent_id: str) -> CanonicalConsentAuthorization:
@@ -416,7 +441,282 @@ class EvidencePassportReadAdapter:
             unusable_reason=reason,
             resolver_version=EVIDENCE_RESOLVER_CONTRACT_VERSION,
             resolved_at=as_of,
+            semantic_independence_schema_version=artifact.semantic_independence_schema_version,
+            semantic_lineage_id=artifact.semantic_lineage_id,
+            lineage_relation=artifact.lineage_relation,
+            derived_from_evidence_namespace=artifact.derived_from_evidence_namespace,
+            derived_from_evidence_id=artifact.derived_from_evidence_id,
+            derived_from_evidence_version=artifact.derived_from_evidence_version,
+            economic_event_id=artifact.economic_event_id,
+            upstream_issuer_id=artifact.upstream_issuer_id,
+            independence_status=artifact.independence_status,
+            independence_attestation_id=artifact.independence_attestation_id,
+            independence_attestation_version=artifact.independence_attestation_version,
         )
+
+    def revalidate(
+        self, reference: EvidenceReference, *, as_of: datetime
+    ) -> EvidenceAuthorityResolution:
+        return self.resolve(
+            tenant_id=reference.tenant_id,
+            case_id=reference.case_id,
+            evidence_namespace=reference.evidence_namespace,
+            evidence_id=reference.evidence_id,
+            purpose=reference.consent_purpose,
+            as_of=as_of,
+        )
+
+
+class PostgresCanonicalEvidenceReadPort:
+    """PostgreSQL-only authority port over one owner-maintained projection.
+
+    The projection owns canonical joins across artifact, consent, subject,
+    proposition, source-attestation, and semantic-lineage state. This adapter
+    receives references only and never reads an artifact body or mutates authority.
+    """
+
+    PROJECTION_VERSION = "canonical-evidence-projection-1"
+    _FIELDS = (
+        "projection_version",
+        "authority_digest",
+        "tenant_id",
+        "case_id",
+        "subject_id",
+        "subject_digest",
+        "evidence_namespace",
+        "evidence_id",
+        "evidence_version",
+        "artifact_digest",
+        "evidence_class",
+        "lifecycle",
+        "verification_status",
+        "proposition_type",
+        "proposition_schema_version",
+        "proposition_value",
+        "proposition_unit",
+        "verification_method",
+        "period_start",
+        "period_end",
+        "observed_at",
+        "evidence_expires_at",
+        "source_id",
+        "issuer_id",
+        "acquisition_method",
+        "source_class",
+        "source_attestation_id",
+        "source_attestation_version",
+        "source_registry_digest",
+        "source_valid_until",
+        "production_qualified_source",
+        "source_allows_proposition",
+        "consent_namespace",
+        "consent_id",
+        "consent_version",
+        "consent_purpose",
+        "consent_data_class",
+        "consent_use_scope",
+        "consent_status",
+        "consent_expires_at",
+        "retention_until",
+        "integrity_reference",
+        "integrity_valid",
+        "semantic_independence_schema_version",
+        "semantic_lineage_id",
+        "lineage_relation",
+        "derived_from_evidence_namespace",
+        "derived_from_evidence_id",
+        "derived_from_evidence_version",
+        "economic_event_id",
+        "upstream_issuer_id",
+        "independence_status",
+        "independence_attestation_id",
+        "independence_attestation_version",
+        "usability",
+        "unusable_reason",
+    )
+
+    def __init__(self, connection: ReadOnlyQueryConnection, *, tenant_id: UUID) -> None:
+        module = type(connection).__module__
+        if not (module == "psycopg" or module.startswith(("psycopg.", "psycopg2"))):
+            raise EvidenceBoundaryError(
+                "canonical evidence authority requires PostgreSQL; SQLite fallback is forbidden"
+            )
+        self._connection = connection
+        self._tenant_id = tenant_id
+        self._assert_reader_custody()
+
+    def _assert_reader_custody(self) -> None:
+        try:
+            row = self._connection.execute(
+                "SELECT session_user = %s, current_user = session_user, "
+                "pg_has_role(session_user, "
+                "'olin_investigator_evidence_reader', 'member'), "
+                "pg_has_role(session_user, 'olin_investigator_runtime', 'member'), "
+                "pg_has_role(session_user, "
+                "'olin_investigator_evidence_authority', 'member'), "
+                "pg_has_role(session_user, 'olin_investigator_owner', 'member'), "
+                "COALESCE((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb "
+                "OR rolreplication OR rolbypassrls) FROM pg_roles "
+                "WHERE rolname=session_user),false), "
+                "COALESCE((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb "
+                "OR rolreplication OR rolbypassrls) FROM pg_roles "
+                "WHERE rolname='olin_investigator_evidence_reader'),false), "
+                "NOT EXISTS (SELECT 1 FROM ("
+                "SELECT (aclexplode(relacl)).grantee FROM pg_class UNION ALL "
+                "SELECT (aclexplode(proacl)).grantee FROM pg_proc UNION ALL "
+                "SELECT (aclexplode(nspacl)).grantee FROM pg_namespace) direct_acl "
+                "JOIN pg_roles grantee ON grantee.oid=direct_acl.grantee "
+                "WHERE grantee.rolname=session_user), "
+                "current_setting('transaction_read_only') = 'on', "
+                "current_setting('transaction_isolation') = 'read committed', "
+                "NOT EXISTS (WITH RECURSIVE memberships(roleid) AS ("
+                "SELECT membership.roleid FROM pg_auth_members membership "
+                "JOIN pg_roles login ON login.oid=membership.member "
+                "WHERE login.rolname=session_user UNION "
+                "SELECT membership.roleid FROM pg_auth_members membership "
+                "JOIN memberships prior ON membership.member=prior.roleid) "
+                "SELECT 1 FROM memberships JOIN pg_roles granted "
+                "ON granted.oid=memberships.roleid WHERE granted.rolname <> "
+                "'olin_investigator_evidence_reader')",
+                ("olin_canonical_t_" + self._tenant_id.hex,),
+            ).fetchone()
+        except Exception as error:
+            raise EvidenceBoundaryError(
+                "canonical evidence reader credential custody is unavailable"
+            ) from error
+        if row is None or tuple(row) != (
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+        ):
+            raise EvidenceBoundaryError(
+                "canonical evidence reader credential custody is ambiguous"
+            )
+
+    @staticmethod
+    def _utc(value: object, field: str, *, optional: bool = False) -> datetime | None:
+        if value is None and optional:
+            return None
+        if isinstance(value, datetime):
+            parsed = value
+        else:
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise EvidenceBoundaryError(
+                    f"canonical {field} timestamp is invalid"
+                ) from exc
+        if parsed.tzinfo is None:
+            raise EvidenceBoundaryError(
+                f"canonical {field} timestamp must include a timezone"
+            )
+        return parsed.astimezone(timezone.utc)
+
+    def _row(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        evidence_namespace: str,
+        evidence_id: str,
+        purpose: str,
+        as_of: datetime,
+    ) -> dict[str, object]:
+        if tenant_id != self._tenant_id:
+            raise EvidenceBoundaryError(
+                "canonical evidence reader is not bound to the requested tenant"
+            )
+        self._assert_reader_custody()
+        self._connection.execute(
+            "SELECT set_config('olin.tenant_id', %s, true)", (str(tenant_id),)
+        ).fetchone()
+        columns = ", ".join(self._FIELDS)
+        cursor = self._connection.execute(
+            f"SELECT {columns} FROM "
+            "evidence_authority.investigator_evidence_v1 "
+            "WHERE tenant_id=%s AND case_id=%s AND evidence_namespace=%s "
+            "AND evidence_id=%s AND consent_purpose=%s",
+            (
+                tenant_id,
+                case_id,
+                evidence_namespace,
+                evidence_id,
+                purpose,
+            ),
+        )
+        if hasattr(cursor, "fetchmany"):
+            rows = cursor.fetchmany(2)
+        else:  # narrow protocol fallback used only by deterministic unit fakes
+            first = cursor.fetchone()
+            rows = [] if first is None else [first]
+        if not rows:
+            raise LookupError("canonical PostgreSQL evidence was not found")
+        if len(rows) != 1:
+            raise EvidenceBoundaryError(
+                "canonical PostgreSQL evidence authority is ambiguous"
+            )
+        row = rows[0]
+        if isinstance(row, Mapping):
+            values = {field: row[field] for field in self._FIELDS if field in row}
+        else:
+            values = dict(zip(self._FIELDS, row, strict=True))
+        if set(values) != set(self._FIELDS):
+            raise EvidenceBoundaryError("canonical PostgreSQL projection is incomplete")
+        if values["projection_version"] != self.PROJECTION_VERSION:
+            raise EvidenceBoundaryError(
+                "canonical PostgreSQL projection version is unsupported"
+            )
+        return values
+
+    def resolve(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        evidence_namespace: str,
+        evidence_id: str,
+        purpose: str,
+        as_of: datetime,
+    ) -> EvidenceAuthorityResolution:
+        normalize_timestamp(as_of)
+        values = self._row(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            evidence_namespace=evidence_namespace,
+            evidence_id=evidence_id,
+            purpose=purpose,
+            as_of=as_of,
+        )
+        for field in (
+            "observed_at",
+            "source_valid_until",
+            "consent_expires_at",
+            "retention_until",
+        ):
+            values[field] = self._utc(values[field], field)
+        for field in ("period_start", "period_end", "evidence_expires_at"):
+            values[field] = self._utc(values[field], field, optional=True)
+        values.pop("projection_version")
+        expected_authority_digest = values.pop("authority_digest")
+        values.update(
+            resolver_version=EVIDENCE_RESOLVER_CONTRACT_VERSION,
+            resolved_at=as_of,
+        )
+        resolution = EvidenceAuthorityResolution._from_authoritative_adapter(**values)
+        if resolution.authority_digest() != expected_authority_digest:
+            raise EvidenceBoundaryError(
+                "canonical PostgreSQL authority digest does not match its projection"
+            )
+        return resolution
 
     def revalidate(
         self, reference: EvidenceReference, *, as_of: datetime
