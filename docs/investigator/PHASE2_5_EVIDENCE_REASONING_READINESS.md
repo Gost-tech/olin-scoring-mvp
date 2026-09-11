@@ -93,8 +93,12 @@ requires an unprivileged, transaction-read-only
 owner, or evidence-authority membership. Each port instance is bound to one
 tenant and rejects requests for any other tenant. PostgreSQL RLS independently
 binds reader logins named `olin_canonical_t_<tenant UUID without dashes>` to the
-same transaction-local tenant context. No backing-table or artifact-body
-privilege is granted to runtime, reader, or Evidence Authority logins.
+same transaction-local tenant context. Migration `0004` owns the hardened
+no-login reader group and grants only schema usage, projection-view `SELECT`,
+and execution of the exact read-only tenant identity accessors used by that RLS
+policy. A reader-controlled GUC alone cannot change the tenant derived from its
+login name. No backing-table or artifact-body privilege is granted to runtime,
+reader, or Evidence Authority logins.
 
 ## Credential custody
 

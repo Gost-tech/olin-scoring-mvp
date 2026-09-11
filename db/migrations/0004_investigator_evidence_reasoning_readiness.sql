@@ -18,6 +18,33 @@ BEGIN
 END
 $preflight$;
 
+DO $role$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_roles WHERE rolname = 'olin_investigator_evidence_reader'
+  ) THEN
+    CREATE ROLE olin_investigator_evidence_reader
+      NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+  END IF;
+END
+$role$;
+ALTER ROLE olin_investigator_evidence_reader
+  NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+DO $reader_membership$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members membership
+    JOIN pg_roles member ON member.oid = membership.member
+    JOIN pg_roles granted ON granted.oid = membership.roleid
+    WHERE member.rolname = 'olin_investigator_evidence_reader'
+       OR granted.rolname = 'olin_investigator_evidence_reader'
+  ) THEN
+    RAISE EXCEPTION 'Investigator evidence reader has unexpected role membership';
+  END IF;
+END
+$reader_membership$;
+REVOKE CREATE ON SCHEMA public FROM olin_investigator_evidence_reader;
+
 CREATE SCHEMA evidence_authority
   AUTHORIZATION olin_investigator_owner;
 REVOKE ALL ON SCHEMA evidence_authority FROM PUBLIC;
@@ -1138,6 +1165,14 @@ GRANT EXECUTE ON FUNCTION evidence_authority.commit_investigator_evidence_projec
 GRANT EXECUTE ON FUNCTION investigator.current_canonical_authority_revision(
   uuid, uuid
 ) TO olin_investigator_runtime;
+GRANT USAGE ON SCHEMA investigator, evidence_authority
+  TO olin_investigator_evidence_reader;
+GRANT EXECUTE ON FUNCTION investigator.session_tenant_id(),
+  investigator.context_tenant_id(),
+  evidence_authority.canonical_reader_tenant_id()
+  TO olin_investigator_evidence_reader;
+GRANT SELECT ON evidence_authority.investigator_evidence_v1
+  TO olin_investigator_evidence_reader;
 
 COMMENT ON TABLE investigator.investigation_evidence_semantics IS
   'Immutable server-derived semantic lineage references; no artifact bodies, claims, weights, or scores';

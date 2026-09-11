@@ -305,6 +305,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             cls.admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
         cls.admin.execute("DROP SCHEMA IF EXISTS evidence_authority CASCADE")
         cls.admin.execute("DROP SCHEMA investigator CASCADE")
+        cls.admin.execute("DROP ROLE IF EXISTS olin_investigator_evidence_reader")
         cls.admin.execute("DROP ROLE olin_investigator_evidence_authority")
         cls.admin.execute("DROP ROLE olin_investigator_runtime")
         cls.admin.execute("DROP ROLE olin_investigator_owner")
@@ -1657,11 +1658,6 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             ).fetchone()[0],
         )
         reader_group = "olin_investigator_evidence_reader"
-        self.admin.execute(
-            sql.SQL(
-                "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS"
-            ).format(sql.Identifier(reader_group))
-        )
         with self.assertRaisesRegex(EvidenceBoundaryError, "custody"):
             PostgresCanonicalEvidenceReadPort(self.admin, tenant_id=self.tenant)
         reader_role = "olin_canonical_t_" + self.tenant.hex
@@ -1682,15 +1678,41 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 sql.Identifier(reader_role)
             )
         )
-        self.admin.execute(
-            sql.SQL("GRANT USAGE ON SCHEMA evidence_authority TO {}").format(
-                sql.Identifier(reader_group)
-            )
-        )
-        self.admin.execute(
-            sql.SQL(
-                "GRANT SELECT ON evidence_authority.investigator_evidence_v1 TO {}"
-            ).format(sql.Identifier(reader_group))
+        reader_controls = self.admin.execute(
+            "SELECT NOT (rolcanlogin OR rolsuper OR rolcreaterole OR rolcreatedb "
+            "OR rolreplication OR rolbypassrls OR rolinherit),"
+            "NOT EXISTS (SELECT 1 FROM pg_auth_members membership "
+            "JOIN pg_roles member ON member.oid=membership.member "
+            "WHERE member.rolname='olin_investigator_evidence_reader'),"
+            "has_schema_privilege('olin_investigator_evidence_reader',"
+            "'investigator','USAGE'),"
+            "has_schema_privilege('olin_investigator_evidence_reader',"
+            "'evidence_authority','USAGE'),"
+            "has_function_privilege('olin_investigator_evidence_reader',"
+            "'investigator.session_tenant_id()','EXECUTE'),"
+            "has_function_privilege('olin_investigator_evidence_reader',"
+            "'investigator.context_tenant_id()','EXECUTE'),"
+            "has_function_privilege('olin_investigator_evidence_reader',"
+            "'evidence_authority.canonical_reader_tenant_id()','EXECUTE'),"
+            "has_table_privilege('olin_investigator_evidence_reader',"
+            "'evidence_authority.investigator_evidence_v1','SELECT'),"
+            "has_function_privilege('olin_investigator_evidence_reader',"
+            "'evidence_authority.commit_investigator_evidence_projection("
+            "jsonb,bigint,text)','EXECUTE'),"
+            "has_function_privilege('olin_investigator_runtime',"
+            "'evidence_authority.canonical_reader_tenant_id()','EXECUTE'),"
+            "NOT EXISTS (SELECT 1 FROM pg_proc routine "
+            "CROSS JOIN LATERAL aclexplode(coalesce(routine.proacl,"
+            "acldefault('f',routine.proowner))) privilege "
+            "WHERE routine.oid IN ("
+            "'investigator.context_tenant_id()'::regprocedure,"
+            "'evidence_authority.canonical_reader_tenant_id()'::regprocedure) "
+            "AND privilege.grantee=0 AND privilege.privilege_type='EXECUTE') "
+            "FROM pg_roles WHERE rolname='olin_investigator_evidence_reader'"
+        ).fetchone()
+        self.assertEqual(
+            reader_controls,
+            (True, True, True, True, True, True, True, True, False, False, True),
         )
         projection_privileges = self.admin.execute(
             "SELECT "
@@ -1710,11 +1732,61 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             "jsonb,bigint,text)','EXECUTE'),"
             "has_function_privilege('olin_investigator_evidence_authority',"
             "'evidence_authority.commit_investigator_evidence_projection("
+            "jsonb,bigint,text)','EXECUTE'),"
+            "has_table_privilege('olin_investigator_evidence_reader',"
+            "'evidence_authority.investigator_evidence_projection_change',"
+            "'INSERT,UPDATE,DELETE,TRUNCATE'),"
+            "has_function_privilege('olin_investigator_evidence_reader',"
+            "'evidence_authority.commit_investigator_evidence_projection("
             "jsonb,bigint,text)','EXECUTE')"
         ).fetchone()
-        self.assertEqual(projection_privileges, (False, False, False, False, True))
+        self.assertEqual(
+            projection_privileges,
+            (False, False, False, False, True, False, False),
+        )
         reader = psycopg.connect(self._dsn(reader_role, reader_password))
         try:
+            with reader.transaction():
+                self.assertEqual(
+                    reader.execute(
+                        "SELECT investigator.context_tenant_id(),count(*) "
+                        "FROM evidence_authority.investigator_evidence_v1"
+                    ).fetchone(),
+                    (None, 0),
+                )
+            with reader.transaction():
+                reader.execute(
+                    "SELECT set_config('olin.tenant_id',%s,true)",
+                    (str(self.other_tenant),),
+                )
+                self.assertEqual(
+                    reader.execute(
+                        "SELECT count(*) FROM "
+                        "evidence_authority.investigator_evidence_v1"
+                    ).fetchone()[0],
+                    0,
+                )
+            with reader.transaction():
+                reader.execute("SET TRANSACTION READ WRITE")
+                reader.execute(
+                    "SELECT set_config('olin.tenant_id',%s,true)",
+                    (str(self.tenant),),
+                )
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    reader.execute(
+                        "DELETE FROM evidence_authority."
+                        "investigator_evidence_projection_change"
+                    )
+            with (
+                reader.transaction(),
+                self.assertRaises(psycopg.errors.InsufficientPrivilege),
+            ):
+                reader.execute(
+                    "SELECT authority_revision FROM evidence_authority."
+                    "commit_investigator_evidence_projection("
+                    "%s::jsonb,%s,%s)",
+                    (json.dumps(canonical_record), 1, "EVIDENCE_PROJECTED"),
+                )
             port = PostgresCanonicalEvidenceReadPort(reader, tenant_id=self.tenant)
             resolved = port.resolve(
                 tenant_id=self.tenant,
@@ -1726,6 +1798,15 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(resolved.semantic_lineage_id, "lineage-bank-event-1")
             self.assertEqual(resolved.evidence_id, reference["evidence_id"])
+            with self.assertRaisesRegex(EvidenceBoundaryError, "not bound"):
+                port.resolve(
+                    tenant_id=self.other_tenant,
+                    case_id=self.case_id,
+                    evidence_namespace=reference["evidence_namespace"],
+                    evidence_id=reference["evidence_id"],
+                    purpose=reference["consent_purpose"],
+                    as_of=datetime.now(timezone.utc),
+                )
             with self.runtime.transaction():
                 self._runtime_context(self.runtime)
                 runtime_custody = establish_runtime_database_custody(self.runtime)
@@ -2070,21 +2151,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 )
             )
             self.admin.execute(
-                sql.SQL(
-                    "REVOKE SELECT ON "
-                    "evidence_authority.investigator_evidence_v1 FROM {}"
-                ).format(sql.Identifier(reader_group))
-            )
-            self.admin.execute(
-                sql.SQL("REVOKE USAGE ON SCHEMA evidence_authority FROM {}").format(
-                    sql.Identifier(reader_group)
-                )
-            )
-            self.admin.execute(
                 sql.SQL("DROP ROLE {}").format(sql.Identifier(reader_role))
-            )
-            self.admin.execute(
-                sql.SQL("DROP ROLE {}").format(sql.Identifier(reader_group))
             )
             self.admin.execute(
                 sql.SQL("DROP ROLE {}").format(sql.Identifier(unsafe_role))
