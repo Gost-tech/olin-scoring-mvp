@@ -25,7 +25,11 @@ from olin.investigator.authority import (
     assert_runtime_database_custody,
     establish_runtime_database_custody,
 )
-from olin.investigator.canonical import canonical_digest, normalize_timestamp
+from olin.investigator.canonical import (
+    canonical_digest,
+    canonical_json_bytes,
+    normalize_timestamp,
+)
 from olin.investigator.evidence import (
     EVIDENCE_RESOLVER_CONTRACT_VERSION,
     EvidenceAuthorityResolution,
@@ -134,6 +138,52 @@ class InvestigatorPhase2MigrationFailureTests(unittest.TestCase):
     POSTGRES_AVAILABLE, "explicitly disposable PostgreSQL DSN/psycopg required"
 )
 class InvestigatorPostgresEvidenceTests(unittest.TestCase):
+    _CANONICAL_REFERENCE_FIELDS = (
+        "tenant_id",
+        "case_id",
+        "subject_id",
+        "subject_digest",
+        "evidence_namespace",
+        "evidence_id",
+        "evidence_version",
+        "artifact_digest",
+        "authority_digest",
+        "evidence_class",
+        "lifecycle",
+        "verification_status",
+        "proposition_type",
+        "proposition_schema_version",
+        "proposition_value",
+        "proposition_unit",
+        "verification_method",
+        "period_start",
+        "period_end",
+        "observed_at",
+        "evidence_expires_at",
+        "source_id",
+        "issuer_id",
+        "acquisition_method",
+        "source_class",
+        "source_attestation_id",
+        "source_attestation_version",
+        "source_registry_digest",
+        "source_valid_until",
+        "production_qualified_source",
+        "source_allows_proposition",
+        "consent_namespace",
+        "consent_id",
+        "consent_version",
+        "consent_purpose",
+        "consent_data_class",
+        "consent_use_scope",
+        "consent_status",
+        "consent_expires_at",
+        "retention_until",
+        "integrity_valid",
+        "integrity_reference",
+        "resolver_version",
+    )
+
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parent
@@ -404,6 +454,40 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 authority_record["semantic_independence"] = semantic_independence
             values["authority_digest"] = canonical_digest(authority_record)
         return values
+
+    @classmethod
+    def _canonical_projection(cls, reference, semantics):
+        canonical_reference = {
+            field: reference[field] for field in cls._CANONICAL_REFERENCE_FIELDS
+        }
+        return {
+            "projection_version": "canonical-evidence-projection-1",
+            "authority_digest": reference["authority_digest"],
+            "canonical_reference": canonical_reference,
+            **canonical_reference,
+            "reference_id": reference["reference_id"],
+            "accepted_at": reference["accepted_at"],
+            "supersedes_reference_id": reference["supersedes_reference_id"],
+            "semantic_independence_schema_version": semantics[
+                "semantic_schema_version"
+            ],
+            "semantic_lineage_id": semantics["semantic_lineage_id"],
+            "lineage_relation": semantics["lineage_relation"],
+            "derived_from_evidence_namespace": semantics[
+                "derived_from_evidence_namespace"
+            ],
+            "derived_from_evidence_id": semantics["derived_from_evidence_id"],
+            "derived_from_evidence_version": semantics["derived_from_evidence_version"],
+            "economic_event_id": semantics["economic_event_id"],
+            "upstream_issuer_id": semantics["upstream_issuer_id"],
+            "independence_status": semantics["independence_status"],
+            "independence_attestation_id": semantics["independence_attestation_id"],
+            "independence_attestation_version": semantics[
+                "independence_attestation_version"
+            ],
+            "usability": "USABLE",
+            "unusable_reason": None,
+        }
 
     @staticmethod
     def _python_reference(values):
@@ -1215,23 +1299,28 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             "upstream_issuer_id": semantics["upstream_issuer_id"],
         }
         reference = self._reference(_semantic_independence=authority_semantics)
-        canonical_record = {
-            **reference,
-            **semantics,
-            "projection_version": "canonical-evidence-projection-1",
-            "canonical_reference": {
-                key: value
-                for key, value in reference.items()
-                if key not in {"reference_id", "accepted_at", "supersedes_reference_id"}
-            },
-            "production_qualified_source": True,
-            "source_allows_proposition": True,
-            "consent_status": "ACTIVE",
-            "integrity_valid": True,
-            "semantic_independence_schema_version": 1,
-            "usability": "USABLE",
-            "unusable_reason": None,
-        }
+        canonical_record = self._canonical_projection(reference, semantics)
+        self.assertNotIn("semantic_schema_version", canonical_record)
+        self.assertEqual(
+            canonical_record["semantic_independence_schema_version"],
+            semantics["semantic_schema_version"],
+        )
+        for leaked_field in ("semantic_schema_version", "future_semantic_field"):
+            with (
+                self.subTest(leaked_field=leaked_field),
+                self.assertRaises(psycopg.errors.InvalidParameterValue),
+                self.authority.transaction(),
+            ):
+                self._authority_context(self.authority)
+                self.authority.execute(
+                    "SELECT authority_revision FROM evidence_authority."
+                    "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                    (
+                        json.dumps({**canonical_record, leaked_field: 1}),
+                        0,
+                        "EVIDENCE_PROJECTED",
+                    ),
+                )
         with self.authority.transaction():
             self._authority_context(self.authority)
             revision = self.authority.execute(
@@ -1241,6 +1330,11 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 (json.dumps(canonical_record), 0, "EVIDENCE_PROJECTED"),
             ).fetchone()
         self.assertEqual(revision[0], 1)
+        expected_revision_digest = sha256(
+            ("0" * 64 + ":1:EVIDENCE_PROJECTED:").encode()
+            + canonical_json_bytes(canonical_record)
+        ).hexdigest()
+        self.assertEqual(revision[1], expected_revision_digest)
         tampered_reference = {**reference, "artifact_digest": "f" * 64}
         with (
             self.assertRaises(psycopg.errors.InvalidParameterValue),
@@ -1770,28 +1864,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                     issuer_id=f"issuer-{label}",
                     _semantic_independence=case_authority_semantics,
                 )
-                case_record = {
-                    **case_reference,
-                    **case_semantics,
-                    "projection_version": "canonical-evidence-projection-1",
-                    "canonical_reference": {
-                        key: value
-                        for key, value in case_reference.items()
-                        if key
-                        not in {
-                            "reference_id",
-                            "accepted_at",
-                            "supersedes_reference_id",
-                        }
-                    },
-                    "production_qualified_source": True,
-                    "source_allows_proposition": True,
-                    "consent_status": "ACTIVE",
-                    "integrity_valid": True,
-                    "semantic_independence_schema_version": 1,
-                    "usability": "USABLE",
-                    "unusable_reason": None,
-                }
+                case_record = self._canonical_projection(case_reference, case_semantics)
                 with self.authority.transaction():
                     self._authority_context(self.authority)
                     self.authority.execute(
