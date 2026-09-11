@@ -1530,6 +1530,8 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 self._authority_context(self.authority)
                 with self.assertRaises(AuthorityDenied):
                     assert_evidence_authority_database_custody(self.authority)
+            with self.authority.transaction():
+                self._authority_context(self.authority)
                 with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     self.authority.execute(
                         "SELECT investigator.accept_evidence_reference_v2("
@@ -1543,6 +1545,8 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                             "phase25-semantic-accept",
                         ),
                     )
+            with self.authority.transaction():
+                self._authority_context(self.authority)
                 with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     self.authority.execute(
                         "SELECT authority_revision FROM evidence_authority."
