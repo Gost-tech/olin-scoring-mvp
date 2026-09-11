@@ -1017,6 +1017,93 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
 
     def test_z_phase25_semantic_lineage_and_credential_custody(self):
         identity = self.admin.execute("SELECT session_user,current_user").fetchone()
+        upgrade_case_id = uuid4()
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            self.runtime.execute(
+                "SELECT investigator.create_case("
+                "%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb)",
+                (
+                    upgrade_case_id,
+                    self.tenant,
+                    None,
+                    "phase2-upgrade-path",
+                    uuid4(),
+                    datetime.now(timezone.utc),
+                    "{}",
+                    1,
+                    "phase2-upgrade-case",
+                    sha256(b"{}").hexdigest(),
+                    "{}",
+                ),
+            )
+            upgrade_initial_snapshot = self.runtime.execute(
+                "SELECT snapshot_id FROM investigator.create_snapshot(%s,%s,%s,%s)",
+                (self.tenant, upgrade_case_id, 1, "phase2-upgrade-initial"),
+            ).fetchone()[0]
+        legacy_root = self._reference(
+            case_id=str(upgrade_case_id),
+            evidence_id="phase2-upgrade-evidence",
+            evidence_version="1",
+        )
+        legacy_root_event = uuid4()
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            accepted_root = self.authority.execute(
+                "SELECT investigator.accept_evidence_reference(%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(legacy_root),
+                    upgrade_initial_snapshot,
+                    1,
+                    legacy_root_event,
+                    "phase2-upgrade-root",
+                ),
+            ).fetchone()[0]
+            replayed_root = self.authority.execute(
+                "SELECT investigator.accept_evidence_reference(%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(legacy_root),
+                    upgrade_initial_snapshot,
+                    1,
+                    legacy_root_event,
+                    "phase2-upgrade-root",
+                ),
+            ).fetchone()[0]
+        self.assertEqual(replayed_root, accepted_root)
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            upgrade_after_root = self.runtime.execute(
+                "SELECT snapshot_id FROM investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (self.tenant, upgrade_case_id, 2, "phase2-upgrade-after-root"),
+            ).fetchone()[0]
+        legacy_correction = self._reference(
+            case_id=str(upgrade_case_id),
+            evidence_id=legacy_root["evidence_id"],
+            evidence_version="2",
+            artifact_digest=legacy_root["artifact_digest"],
+            supersedes_reference_id=legacy_root["reference_id"],
+        )
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT investigator.accept_evidence_reference(%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(legacy_correction),
+                    upgrade_after_root,
+                    2,
+                    uuid4(),
+                    "phase2-upgrade-correction",
+                ),
+            )
+        legacy_history_before = self.admin.execute(
+            "SELECT reference_id,tenant_id,case_id,evidence_namespace,evidence_id,"
+            "evidence_version,artifact_digest,authority_digest,"
+            "supersedes_reference_id,acceptance_event_id,acceptance_request_digest "
+            "FROM investigator.investigation_evidence_reference "
+            "WHERE tenant_id=%s AND case_id=%s ORDER BY evidence_version",
+            (self.tenant, upgrade_case_id),
+        ).fetchall()
+        self.assertEqual(len(legacy_history_before), 2)
         migration = (
             self.root
             / "db"
@@ -1027,6 +1114,18 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
         self.assertEqual(
             self.admin.execute("SELECT session_user,current_user").fetchone(), identity
         )
+        self.assertEqual(
+            self.admin.execute(
+                "SELECT reference_id,tenant_id,case_id,evidence_namespace,evidence_id,"
+                "evidence_version,artifact_digest,authority_digest,"
+                "supersedes_reference_id,acceptance_event_id,"
+                "acceptance_request_digest "
+                "FROM investigator.investigation_evidence_reference "
+                "WHERE tenant_id=%s AND case_id=%s ORDER BY evidence_version",
+                (self.tenant, upgrade_case_id),
+            ).fetchall(),
+            legacy_history_before,
+        )
         self.assertFalse(
             self.admin.execute(
                 "SELECT EXISTS ("
@@ -1035,6 +1134,58 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 "USING (tenant_id,case_id,reference_id) "
                 "WHERE sem.reference_id IS NULL)"
             ).fetchone()[0]
+        )
+        migrated_semantics = self.admin.execute(
+            "SELECT ref.reference_id,ref.evidence_version,"
+            "ref.supersedes_reference_id,sem.tenant_id,sem.case_id,"
+            "sem.semantic_schema_version,sem.semantic_lineage_id,"
+            "sem.lineage_relation,sem.derived_from_evidence_namespace,"
+            "sem.derived_from_evidence_id,sem.derived_from_evidence_version,"
+            "sem.economic_event_id,sem.independence_status,"
+            "sem.independence_attestation_id,"
+            "sem.independence_attestation_version "
+            "FROM investigator.investigation_evidence_reference ref "
+            "JOIN investigator.investigation_evidence_semantics sem "
+            "USING (tenant_id,case_id,reference_id) "
+            "WHERE ref.tenant_id=%s AND ref.case_id=%s "
+            "ORDER BY ref.evidence_version",
+            (self.tenant, upgrade_case_id),
+        ).fetchall()
+        self.assertEqual(len(migrated_semantics), 2)
+        root_semantics, correction_semantics = migrated_semantics
+        self.assertEqual(root_semantics[0], UUID(legacy_root["reference_id"]))
+        self.assertEqual(root_semantics[2], None)
+        self.assertEqual(root_semantics[3:6], (self.tenant, upgrade_case_id, 0))
+        self.assertEqual(root_semantics[7:11], ("UNKNOWN", None, None, None))
+        self.assertEqual(
+            root_semantics[11:], (None, "INDEPENDENCE_UNKNOWN", None, None)
+        )
+        self.assertEqual(
+            correction_semantics[0], UUID(legacy_correction["reference_id"])
+        )
+        self.assertEqual(correction_semantics[2], UUID(legacy_root["reference_id"]))
+        self.assertEqual(correction_semantics[3:6], (self.tenant, upgrade_case_id, 0))
+        self.assertEqual(correction_semantics[6], root_semantics[6])
+        self.assertEqual(
+            correction_semantics[7:11],
+            (
+                "CORRECTION",
+                legacy_root["evidence_namespace"],
+                legacy_root["evidence_id"],
+                legacy_root["evidence_version"],
+            ),
+        )
+        self.assertEqual(
+            correction_semantics[11:],
+            (None, "INDEPENDENCE_UNKNOWN", None, None),
+        )
+        self.assertEqual(
+            self.admin.execute(
+                "SELECT count(*) FROM investigator.investigation_evidence_semantics "
+                "WHERE semantic_schema_version=0 "
+                "AND independence_status='INDEPENDENT_VERIFIED'"
+            ).fetchone()[0],
+            0,
         )
 
         semantics = {

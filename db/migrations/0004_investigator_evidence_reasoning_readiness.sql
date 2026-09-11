@@ -396,22 +396,66 @@ CREATE UNIQUE INDEX investigation_evidence_semantics_event_upstream_uq
 
 -- Durable Phase 2 rows remain auditable but are explicitly ineligible for the
 -- reasoning gate until canonical semantic authority is established forward.
+-- The Phase 2 reference table uses forced RLS.  The owner intentionally has no
+-- cross-tenant read path, so the controlled migration principal must perform
+-- this one-time backfill or the SELECT would silently see no legacy rows.
+RESET SESSION AUTHORIZATION;
+
+WITH legacy_semantics AS (
+  SELECT
+    ref.reference_id,
+    ref.tenant_id,
+    ref.case_id,
+    'legacy:' || encode(sha256(convert_to(
+      ref.evidence_namespace || ':' || ref.evidence_id,
+      'UTF8'
+    )), 'hex') AS semantic_lineage_id,
+    CASE
+      WHEN ref.supersedes_reference_id IS NULL THEN 'UNKNOWN'
+      ELSE 'CORRECTION'
+    END AS lineage_relation,
+    prior.evidence_namespace AS derived_from_evidence_namespace,
+    prior.evidence_id AS derived_from_evidence_id,
+    prior.evidence_version AS derived_from_evidence_version,
+    ref.issuer_id AS upstream_issuer_id
+  FROM investigator.investigation_evidence_reference ref
+  LEFT JOIN investigator.investigation_evidence_reference prior
+    ON prior.tenant_id = ref.tenant_id
+   AND prior.case_id = ref.case_id
+   AND prior.reference_id = ref.supersedes_reference_id
+)
 INSERT INTO investigator.investigation_evidence_semantics (
   reference_id, tenant_id, case_id, semantic_schema_version,
-  semantic_lineage_id, lineage_relation, upstream_issuer_id,
+  semantic_lineage_id, lineage_relation,
+  derived_from_evidence_namespace, derived_from_evidence_id,
+  derived_from_evidence_version, upstream_issuer_id,
   independence_status, semantics_digest
 )
 SELECT
-  ref.reference_id, ref.tenant_id, ref.case_id, 0,
-  'legacy:' || encode(sha256(convert_to(
-    ref.evidence_namespace || ':' || ref.evidence_id || ':' || ref.evidence_version,
-    'UTF8'
-  )), 'hex'),
-  'UNKNOWN', ref.issuer_id, 'INDEPENDENCE_UNKNOWN',
+  legacy.reference_id, legacy.tenant_id, legacy.case_id, 0,
+  legacy.semantic_lineage_id, legacy.lineage_relation,
+  legacy.derived_from_evidence_namespace,
+  legacy.derived_from_evidence_id,
+  legacy.derived_from_evidence_version,
+  legacy.upstream_issuer_id, 'INDEPENDENCE_UNKNOWN',
   encode(sha256(convert_to(
-    'legacy:' || ref.reference_id::text, 'UTF8'
+    investigator.canonical_json(jsonb_build_object(
+      'derived_from_evidence_id', legacy.derived_from_evidence_id,
+      'derived_from_evidence_namespace', legacy.derived_from_evidence_namespace,
+      'derived_from_evidence_version', legacy.derived_from_evidence_version,
+      'economic_event_id', NULL,
+      'independence_attestation_id', NULL,
+      'independence_attestation_version', NULL,
+      'independence_status', 'INDEPENDENCE_UNKNOWN',
+      'lineage_relation', legacy.lineage_relation,
+      'semantic_lineage_id', legacy.semantic_lineage_id,
+      'semantic_schema_version', 0,
+      'upstream_issuer_id', legacy.upstream_issuer_id
+    )), 'UTF8'
   )), 'hex')
-FROM investigator.investigation_evidence_reference ref;
+FROM legacy_semantics legacy;
+
+SET SESSION AUTHORIZATION olin_investigator_owner;
 
 ALTER TABLE investigator.investigation_evidence_semantics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investigator.investigation_evidence_semantics FORCE ROW LEVEL SECURITY;
