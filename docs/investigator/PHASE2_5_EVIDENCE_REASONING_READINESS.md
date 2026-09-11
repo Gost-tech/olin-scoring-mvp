@@ -34,12 +34,20 @@ snapshot-invalidation writes take the matching exclusive lock. The shared lock
 must remain held while the returned capability is synchronously consumed.
 Production analytical entry points must use
 `consume_snapshot_current_for_reasoning(...)`, which opens one bounded read-only
-transaction, validates readiness, invokes the consumer, and then ends the
-capability. The capability records the issuing backend and transaction ID;
+transaction and explicitly restores the transaction-local runtime role and
+server-validated tenant context before validating readiness. It invokes the
+consumer and then performs a final database round trip before ending the
+capability. That check requires the same live backend, transaction ID, runtime
+identity, tenant context, authority revision, and authority digest through
+callback completion. The capability records the issuing backend and transaction ID;
 cross-transaction, post-commit, post-rollback, repeated, and serialized use fails
-closed. Statement and idle-in-transaction time are bounded to five seconds and
-lock acquisition to one second. Raw snapshots and serialized payloads are not
-analytical inputs.
+closed. SQL statements and idle-in-transaction time are database-bounded to five
+seconds and lock acquisition to one second. Callback completion is checked
+against a server-derived five-second operation deadline and the earliest
+authority-owned evidence, source, consent, or retention expiry. Python does not
+interrupt non-database callback work; it rejects any result after that deadline,
+while PostgreSQL enforces the SQL and transaction limits. Raw snapshots and
+serialized payloads are not analytical inputs.
 
 ## Semantic independence
 
@@ -69,6 +77,12 @@ the Evidence Authority commits a corresponding projection revision.
 `PostgresCanonicalEvidenceReadPort` queries the versioned, read-only projection:
 
 `evidence_authority.investigator_evidence_v1`
+
+Every reader lookup runs on its dedicated tenant-bound reader connection inside
+an explicit read-only `READ COMMITTED` transaction with bounded statement, lock,
+and idle-in-transaction timeouts. The port establishes only transaction-local
+tenant context and deterministically rolls back on error, so neither an implicit
+long-lived transaction nor an aborted transaction is reusable as authority.
 
 Migration `0004` creates an append-only metadata projection ledger and the
 latest-record view. Each tenant/case revision is monotonic and carries a

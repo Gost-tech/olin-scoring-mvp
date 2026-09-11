@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import RLock
 from uuid import UUID, uuid4
 
@@ -63,6 +63,7 @@ class ReasoningReadySnapshot:
     _connection: object | None = field(repr=False, compare=False)
     _transaction_id: str | None = field(repr=False, compare=False)
     _backend_pid: int | None = field(repr=False, compare=False)
+    _deadline: datetime | None = field(repr=False, compare=False)
 
     def __new__(cls):
         raise TypeError(
@@ -93,6 +94,7 @@ class ReasoningReadySnapshot:
             connection=None,
             transaction_id=None,
             backend_pid=None,
+            deadline=None,
             issuer=issuer,
         )
 
@@ -113,6 +115,7 @@ class ReasoningReadySnapshot:
         connection: object | None,
         transaction_id: str | None,
         backend_pid: int | None,
+        deadline: datetime | None,
         issuer: object,
     ) -> ReasoningReadySnapshot:
         if issuer is not _REASONING_GATE_ISSUER:
@@ -134,6 +137,7 @@ class ReasoningReadySnapshot:
         object.__setattr__(instance, "_connection", connection)
         object.__setattr__(instance, "_transaction_id", transaction_id)
         object.__setattr__(instance, "_backend_pid", backend_pid)
+        object.__setattr__(instance, "_deadline", deadline)
         return instance
 
     def consume(self, consumer):
@@ -172,13 +176,54 @@ class ReasoningReadySnapshot:
         object.__setattr__(self, "_consumed", True)
         result = consumer(self)
         if self._connection is not None:
-            status = getattr(
-                getattr(self._connection, "info", None), "transaction_status", None
-            )
-            if status is not None and getattr(status, "name", "") != "INTRANS":
+            try:
+                final_state = self._connection.execute(
+                    "SELECT pg_backend_pid(),pg_current_xact_id()::text,"
+                    "current_user='olin_investigator_runtime',"
+                    "investigator.tenant_access_allowed(%s),statement_timestamp(),"
+                    "canonical.authority_revision,canonical.authority_state_digest "
+                    "FROM investigator.current_canonical_authority_revision(%s,%s) "
+                    "canonical",
+                    (self.tenant_id, self.tenant_id, self.case_id),
+                ).fetchone()
+            except Exception as error:
                 raise EvidenceBoundaryError(
                     "reasoning consumer ended its authoritative transaction"
+                ) from error
+            if final_state is None or tuple(final_state[:4]) != (
+                self._backend_pid,
+                self._transaction_id,
+                True,
+                True,
+            ):
+                raise EvidenceBoundaryError(
+                    "reasoning consumer changed its authoritative transaction"
                 )
+            final_time = final_state[4]
+            if not isinstance(final_time, datetime) or (
+                self._deadline is not None and final_time > self._deadline
+            ):
+                raise EvidenceBoundaryError("reasoning operation deadline expired")
+            if tuple(final_state[5:]) != (
+                self.authority_revision,
+                self.authority_state_digest,
+            ):
+                raise EvidenceBoundaryError(
+                    "reasoning consumer authority revision changed"
+                )
+            for reference in self.evidence_references:
+                expiries = (
+                    reference.source_valid_until,
+                    reference.consent_expires_at,
+                    reference.retention_until,
+                    reference.evidence_expires_at,
+                )
+                if reference.consent_status != "ACTIVE" or any(
+                    expiry is not None and expiry <= final_time for expiry in expiries
+                ):
+                    raise EvidenceBoundaryError(
+                        "reasoning evidence expired during consumption"
+                    )
         return result
 
     def __reduce__(self):
@@ -421,6 +466,18 @@ class PostgresReasoningSnapshotGate:
                     "snapshot lacks current semantic independence authority"
                 )
             references.append(reference)
+        deadlines = [current_time + timedelta(seconds=5)]
+        for reference in references:
+            deadlines.extend(
+                value
+                for value in (
+                    reference.source_valid_until,
+                    reference.consent_expires_at,
+                    reference.retention_until,
+                    reference.evidence_expires_at,
+                )
+                if value is not None
+            )
         return ReasoningReadySnapshot._issue_values(
             tenant_id=tenant_id,
             case_id=case_id,
@@ -435,6 +492,7 @@ class PostgresReasoningSnapshotGate:
             connection=self._connection,
             transaction_id=str(transaction_id),
             backend_pid=int(backend_pid),
+            deadline=min(deadlines),
             issuer=_REASONING_GATE_ISSUER,
         )
 
@@ -459,6 +517,30 @@ class PostgresReasoningSnapshotGate:
             self._connection.execute(
                 "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
             )
+            self._connection.execute(
+                "SET LOCAL statement_timeout='5000ms'; "
+                "SET LOCAL lock_timeout='1000ms'; "
+                "SET LOCAL idle_in_transaction_session_timeout='5000ms'"
+            )
+            self._connection.execute("SET LOCAL ROLE olin_investigator_runtime")
+            self._runtime_custody.require_connection(self._connection)
+            identity = self._connection.execute(
+                "SELECT investigator.session_tenant_id()=%s", (tenant_id,)
+            ).fetchone()
+            if identity is None or tuple(identity) != (True,):
+                raise EvidenceBoundaryError(
+                    "reasoning transaction login is not bound to the tenant"
+                )
+            self._connection.execute(
+                "SELECT set_config('olin.tenant_id',%s,true)", (str(tenant_id),)
+            ).fetchone()
+            tenant_context = self._connection.execute(
+                "SELECT investigator.tenant_access_allowed(%s)", (tenant_id,)
+            ).fetchone()
+            if tenant_context is None or tuple(tenant_context) != (True,):
+                raise EvidenceBoundaryError(
+                    "reasoning transaction tenant context is unavailable"
+                )
             ready = self.require_snapshot_current_for_reasoning(
                 tenant_id=tenant_id,
                 case_id=case_id,

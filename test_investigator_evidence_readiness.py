@@ -99,11 +99,24 @@ class RuntimeSnapshotPostgres:
     def __init__(self, snapshot_row):
         self.snapshot_row = snapshot_row
         self.calls = []
+        self.final_time = snapshot_row[6]
 
     def execute(self, query, parameters=()):
         self.calls.append((query, parameters))
         if "current_user = 'olin_investigator_runtime'" in query:
             return Cursor((True, True, False, False, True, True, True, True))
+        if "canonical.authority_revision" in query and "case_snapshot" not in query:
+            return Cursor(
+                (
+                    7001,
+                    "42",
+                    True,
+                    True,
+                    self.final_time,
+                    self.snapshot_row[7],
+                    self.snapshot_row[8],
+                )
+            )
         if "transaction_isolation') = 'read committed'" in query and (
             "case_snapshot" not in query
         ):
@@ -464,6 +477,52 @@ class EvidenceReasoningReadinessTests(unittest.TestCase):
         self.assertTrue(
             any("pg_advisory_xact_lock_shared" in call[0] for call in connection.calls)
         )
+
+    def test_postgres_reasoning_capability_rejects_completion_after_deadline(self):
+        self._accept()
+        snapshot = self.boundary.create_snapshot_v2(
+            tenant_id=self.tenant,
+            case_id=self.case_id,
+            expected_case_version=2,
+            actor=self.actor,
+            idempotency_key="test-durable-deadline",
+            as_of=NOW,
+        )
+        payload = json.loads(snapshot.canonical_snapshot_bytes)
+        payload["canonical_authority"] = {
+            "projection_version": "canonical-evidence-projection-1",
+            "authority_revision": 0,
+            "authority_state_digest": "0" * 64,
+        }
+        connection = RuntimeSnapshotPostgres(
+            (
+                payload,
+                canonical_digest(payload),
+                True,
+                True,
+                True,
+                True,
+                NOW,
+                0,
+                "0" * 64,
+                7001,
+                "42",
+            )
+        )
+        gate = PostgresReasoningSnapshotGate(
+            runtime_connection=connection,
+            evidence_authority=self.authority,
+            runtime_custody=establish_runtime_database_custody(connection),
+        )
+        ready = gate.require_snapshot_current_for_reasoning(
+            tenant_id=self.tenant,
+            case_id=self.case_id,
+            snapshot_id=snapshot.snapshot_id,
+            as_of=NOW,
+        )
+        connection.final_time = NOW + timedelta(seconds=6)
+        with self.assertRaisesRegex(EvidenceBoundaryError, "deadline expired"):
+            ready.consume(lambda item: item.snapshot_id)
         other_connection = RuntimeSnapshotPostgres(connection.snapshot_row)
         with self.assertRaisesRegex(AuthorityDenied, "requested connection"):
             PostgresReasoningSnapshotGate(

@@ -235,7 +235,8 @@ BEGIN
   WHERE change.tenant_id = tenant AND change.case_id = case_identifier
   ORDER BY change.authority_revision DESC LIMIT 1;
   next_revision := coalesce(next_revision, 0) + 1;
-  IF expected_authority_revision <> next_revision - 1 THEN
+  IF expected_authority_revision IS NULL
+     OR expected_authority_revision IS DISTINCT FROM next_revision - 1 THEN
     RAISE EXCEPTION 'stale canonical authority revision'
       USING ERRCODE = '40001';
   END IF;

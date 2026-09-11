@@ -14,9 +14,11 @@ import secrets
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
+from time import monotonic
 from uuid import UUID, uuid4
 
 from olin.investigator.authority import (
@@ -489,6 +491,55 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             "usability": "USABLE",
             "unusable_reason": None,
         }
+
+    def _mutated_projection(self, record, **changes):
+        semantics = {
+            "semantic_schema_version": record["semantic_independence_schema_version"],
+            "semantic_lineage_id": record["semantic_lineage_id"],
+            "lineage_relation": record["lineage_relation"],
+            "derived_from_evidence_namespace": record[
+                "derived_from_evidence_namespace"
+            ],
+            "derived_from_evidence_id": record["derived_from_evidence_id"],
+            "derived_from_evidence_version": record["derived_from_evidence_version"],
+            "economic_event_id": record["economic_event_id"],
+            "upstream_issuer_id": record["upstream_issuer_id"],
+            "independence_status": record["independence_status"],
+            "independence_attestation_id": record["independence_attestation_id"],
+            "independence_attestation_version": record[
+                "independence_attestation_version"
+            ],
+        }
+        authority_semantics = {
+            "schema_version": semantics["semantic_schema_version"],
+            "derived_from": None,
+            "economic_event_id": semantics["economic_event_id"],
+            "independence_attestation_id": semantics["independence_attestation_id"],
+            "independence_attestation_version": semantics[
+                "independence_attestation_version"
+            ],
+            "independence_status": semantics["independence_status"],
+            "lineage_relation": semantics["lineage_relation"],
+            "semantic_lineage_id": semantics["semantic_lineage_id"],
+            "upstream_issuer_id": semantics["upstream_issuer_id"],
+        }
+        reference = {field: record[field] for field in self._CANONICAL_REFERENCE_FIELDS}
+        reference.update(
+            reference_id=record["reference_id"],
+            accepted_at=record["accepted_at"],
+            supersedes_reference_id=record["supersedes_reference_id"],
+        )
+        reference.update(changes)
+        reference.pop("authority_digest", None)
+        rebuilt = self._reference(
+            **reference, _semantic_independence=authority_semantics
+        )
+        projection = self._canonical_projection(rebuilt, semantics)
+        projection["usability"] = changes.get("usability", record["usability"])
+        projection["unusable_reason"] = changes.get(
+            "unusable_reason", record["unusable_reason"]
+        )
+        return projection
 
     @staticmethod
     def _python_reference(values):
@@ -1100,7 +1151,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                     ),
                 )
 
-    def test_z_phase25_semantic_lineage_and_credential_custody(self):
+    def test_z_phase25_00_semantic_lineage_and_credential_custody(self):
         identity = self.admin.execute("SELECT session_user,current_user").fetchone()
         upgrade_case_id = uuid4()
         with self.runtime.transaction():
@@ -1336,6 +1387,28 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             + canonical_json_bytes(canonical_record)
         ).hexdigest()
         self.assertEqual(revision[1], expected_revision_digest)
+        with (
+            self.assertRaises(psycopg.errors.SerializationFailure),
+            self.authority.transaction(),
+        ):
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection("
+                "%s::jsonb,%s,%s)",
+                (json.dumps(canonical_record), None, "EVIDENCE_PROJECTED"),
+            )
+        with (
+            self.assertRaises(psycopg.errors.SerializationFailure),
+            self.authority.transaction(),
+        ):
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection("
+                "%s::jsonb,%s,%s)",
+                (json.dumps(canonical_record), 0, "EVIDENCE_PROJECTED"),
+            )
         tampered_reference = {**reference, "artifact_digest": "f" * 64}
         with (
             self.assertRaises(psycopg.errors.InvalidParameterValue),
@@ -1807,342 +1880,6 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                     purpose=reference["consent_purpose"],
                     as_of=datetime.now(timezone.utc),
                 )
-            with self.runtime.transaction():
-                self._runtime_context(self.runtime)
-                runtime_custody = establish_runtime_database_custody(self.runtime)
-            gate = PostgresReasoningSnapshotGate(
-                runtime_connection=self.runtime,
-                evidence_authority=port,
-                runtime_custody=runtime_custody,
-            )
-            with self.runtime.transaction():
-                self.runtime.execute(
-                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
-                )
-                self._runtime_context(self.runtime)
-                escaped_after_commit = gate.require_snapshot_current_for_reasoning(
-                    tenant_id=self.tenant,
-                    case_id=self.case_id,
-                    snapshot_id=current_snapshot,
-                    as_of=datetime.now(timezone.utc),
-                )
-            with self.assertRaisesRegex(EvidenceBoundaryError, "escaped"):
-                escaped_after_commit.consume(lambda ready: ready.snapshot_id)
-            with self.runtime.transaction():
-                self.runtime.execute(
-                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
-                )
-                self._runtime_context(self.runtime)
-                with self.assertRaisesRegex(EvidenceBoundaryError, "does not match"):
-                    escaped_after_commit.consume(lambda ready: ready.snapshot_id)
-
-            timed_out = []
-
-            def exceed_statement_timeout(ready):
-                timed_out.append(ready)
-                self.runtime.execute("SELECT pg_sleep(6)")
-
-            with self.assertRaises(psycopg.errors.QueryCanceled):
-                gate.consume_snapshot_current_for_reasoning(
-                    tenant_id=self.tenant,
-                    case_id=self.case_id,
-                    snapshot_id=current_snapshot,
-                    as_of=datetime.now(timezone.utc),
-                    consumer=exceed_statement_timeout,
-                )
-            with self.assertRaisesRegex(EvidenceBoundaryError, "already consumed"):
-                timed_out[0].consume(lambda ready: ready.snapshot_id)
-
-            withdrawn_record = {**canonical_record, "consent_status": "WITHDRAWN"}
-            writer_started = threading.Event()
-            escaped = []
-
-            def withdraw_concurrently():
-                writer = psycopg.connect(
-                    self._dsn(self.authority_role, self.passwords[self.authority_role])
-                )
-                try:
-                    with writer.transaction():
-                        self._authority_context(writer)
-                        writer_started.set()
-                        return writer.execute(
-                            "SELECT authority_revision FROM "
-                            "evidence_authority."
-                            "commit_investigator_evidence_projection("
-                            "%s::jsonb,%s,%s)",
-                            (json.dumps(withdrawn_record), 1, "CONSENT_CHANGED"),
-                        ).fetchone()[0]
-                finally:
-                    writer.close()
-
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                writer_future = None
-
-                def consume(ready):
-                    nonlocal writer_future
-                    escaped.append(ready)
-                    writer_future = pool.submit(withdraw_concurrently)
-                    self.assertTrue(writer_started.wait(timeout=2))
-                    self.assertFalse(writer_future.done())
-                    return ready.authority_revision
-
-                observed_revision = gate.consume_snapshot_current_for_reasoning(
-                    tenant_id=self.tenant,
-                    case_id=self.case_id,
-                    snapshot_id=current_snapshot,
-                    as_of=datetime.now(timezone.utc),
-                    consumer=consume,
-                )
-                self.assertEqual(observed_revision, 1)
-                self.assertEqual(writer_future.result(timeout=5), 2)
-            with self.assertRaisesRegex(EvidenceBoundaryError, "already consumed"):
-                escaped[0].consume(lambda ready: ready.snapshot_id)
-            with self.assertRaisesRegex(EvidenceBoundaryError, "revision is stale"):
-                gate.consume_snapshot_current_for_reasoning(
-                    tenant_id=self.tenant,
-                    case_id=self.case_id,
-                    snapshot_id=current_snapshot,
-                    as_of=datetime.now(timezone.utc),
-                    consumer=lambda ready: ready.snapshot_id,
-                )
-
-            def prepare_ready_case(label):
-                case_id = uuid4()
-                with self.runtime.transaction():
-                    self._runtime_context(self.runtime)
-                    self.runtime.execute(
-                        "SELECT investigator.create_case("
-                        "%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb)",
-                        (
-                            case_id,
-                            self.tenant,
-                            None,
-                            f"phase25-fence-{label}",
-                            uuid4(),
-                            datetime.now(timezone.utc),
-                            "{}",
-                            1,
-                            f"phase25-fence-case-{label}",
-                            sha256(b"{}").hexdigest(),
-                            "{}",
-                        ),
-                    )
-                    initial = self.runtime.execute(
-                        "SELECT snapshot_id FROM investigator.create_snapshot("
-                        "%s,%s,%s,%s)",
-                        (self.tenant, case_id, 1, f"phase25-fence-initial-{label}"),
-                    ).fetchone()[0]
-                case_semantics = {
-                    **semantics,
-                    "semantic_lineage_id": f"lineage-{label}",
-                    "upstream_issuer_id": f"issuer-{label}",
-                }
-                case_authority_semantics = {
-                    **authority_semantics,
-                    "semantic_lineage_id": f"lineage-{label}",
-                    "upstream_issuer_id": f"issuer-{label}",
-                }
-                case_reference = self._reference(
-                    case_id=str(case_id),
-                    evidence_id=f"artifact-{label}",
-                    source_attestation_id=f"attestation-{label}",
-                    issuer_id=f"issuer-{label}",
-                    _semantic_independence=case_authority_semantics,
-                )
-                case_record = self._canonical_projection(case_reference, case_semantics)
-                with self.authority.transaction():
-                    self._authority_context(self.authority)
-                    self.authority.execute(
-                        "SELECT authority_revision FROM evidence_authority."
-                        "commit_investigator_evidence_projection("
-                        "%s::jsonb,%s,%s)",
-                        (json.dumps(case_record), 0, "EVIDENCE_PROJECTED"),
-                    )
-                    self.authority.execute(
-                        "SELECT investigator.accept_evidence_reference_v2("
-                        "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
-                        (
-                            json.dumps(case_reference),
-                            json.dumps(case_semantics),
-                            initial,
-                            1,
-                            uuid4(),
-                            f"phase25-fence-accept-{label}",
-                        ),
-                    )
-                with self.runtime.transaction():
-                    self._runtime_context(self.runtime)
-                    snapshot = self.runtime.execute(
-                        "SELECT snapshot_id FROM investigator.create_snapshot_v2("
-                        "%s,%s,%s,%s)",
-                        (self.tenant, case_id, 2, f"phase25-fence-ready-{label}"),
-                    ).fetchone()[0]
-                return case_id, snapshot, case_record
-
-            def assert_fenced_change(label, change_kind, changes):
-                case_id, snapshot, base_record = prepare_ready_case(label)
-                changed_record = {**base_record, **changes}
-                writer_started = threading.Event()
-
-                def mutate():
-                    writer = psycopg.connect(
-                        self._dsn(
-                            self.authority_role, self.passwords[self.authority_role]
-                        )
-                    )
-                    try:
-                        with writer.transaction():
-                            self._authority_context(writer)
-                            writer_started.set()
-                            return writer.execute(
-                                "SELECT authority_revision FROM evidence_authority."
-                                "commit_investigator_evidence_projection("
-                                "%s::jsonb,%s,%s)",
-                                (json.dumps(changed_record), 1, change_kind),
-                            ).fetchone()[0]
-                    finally:
-                        writer.close()
-
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    writer_future = None
-
-                    def consume(ready):
-                        nonlocal writer_future
-                        writer_future = pool.submit(mutate)
-                        self.assertTrue(writer_started.wait(timeout=2))
-                        self.assertFalse(writer_future.done())
-                        return ready.authority_revision
-
-                    case_gate = PostgresReasoningSnapshotGate(
-                        runtime_connection=self.runtime,
-                        evidence_authority=port,
-                        runtime_custody=runtime_custody,
-                    )
-                    self.assertEqual(
-                        case_gate.consume_snapshot_current_for_reasoning(
-                            tenant_id=self.tenant,
-                            case_id=case_id,
-                            snapshot_id=snapshot,
-                            as_of=datetime.now(timezone.utc),
-                            consumer=consume,
-                        ),
-                        1,
-                    )
-                    self.assertEqual(writer_future.result(timeout=5), 2)
-
-            assert_fenced_change(
-                "evidence-revocation",
-                "EVIDENCE_REVOKED",
-                {
-                    "lifecycle": "REVOKED",
-                    "usability": "UNUSABLE",
-                    "unusable_reason": "EVIDENCE_REVOKED",
-                },
-            )
-            assert_fenced_change(
-                "source-change",
-                "SOURCE_ATTESTATION_CHANGED",
-                {"source_attestation_version": "2"},
-            )
-            dual_case, dual_snapshot, _ = prepare_ready_case("dual-readiness")
-
-            def issue_readiness():
-                runtime = psycopg.connect(
-                    self._dsn(self.runtime_role, self.passwords[self.runtime_role])
-                )
-                canonical = psycopg.connect(self._dsn(reader_role, reader_password))
-                try:
-                    with runtime.transaction():
-                        self._runtime_context(runtime)
-                        custody = establish_runtime_database_custody(runtime)
-                    dual_gate = PostgresReasoningSnapshotGate(
-                        runtime_connection=runtime,
-                        evidence_authority=PostgresCanonicalEvidenceReadPort(
-                            canonical, tenant_id=self.tenant
-                        ),
-                        runtime_custody=custody,
-                    )
-                    return dual_gate.consume_snapshot_current_for_reasoning(
-                        tenant_id=self.tenant,
-                        case_id=dual_case,
-                        snapshot_id=dual_snapshot,
-                        as_of=datetime.now(timezone.utc),
-                        consumer=lambda ready: (
-                            ready.authority_revision,
-                            ready.authority_state_digest,
-                        ),
-                    )
-                finally:
-                    canonical.close()
-                    runtime.close()
-
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                converged = list(pool.map(lambda _: issue_readiness(), range(2)))
-            self.assertEqual(converged[0], converged[1])
-            self.admin.execute(
-                sql.SQL("GRANT {} TO {}").format(
-                    sql.Identifier(unsafe_role), sql.Identifier(reader_group)
-                )
-            )
-            try:
-                with self.assertRaisesRegex(EvidenceBoundaryError, "custody"):
-                    port.revalidate(
-                        self._python_reference(reference),
-                        as_of=datetime.now(timezone.utc),
-                    )
-            finally:
-                self.admin.execute(
-                    sql.SQL("REVOKE {} FROM {}").format(
-                        sql.Identifier(unsafe_role), sql.Identifier(reader_group)
-                    )
-                )
-            withdrawn = port.revalidate(
-                self._python_reference(reference), as_of=datetime.now(timezone.utc)
-            )
-            self.assertEqual(
-                withdrawn.current_usability(as_of=datetime.now(timezone.utc))[1].value,
-                "CONSENT_WITHDRAWN",
-            )
-            rollback_record = {
-                **withdrawn_record,
-                "lifecycle": "REVOKED",
-                "usability": "UNUSABLE",
-                "unusable_reason": "EVIDENCE_REVOKED",
-            }
-            rollback_writer = psycopg.connect(
-                self._dsn(self.authority_role, self.passwords[self.authority_role])
-            )
-            try:
-                with (
-                    self.assertRaisesRegex(RuntimeError, "force rollback"),
-                    rollback_writer.transaction(),
-                ):
-                    self._authority_context(rollback_writer)
-                    rollback_writer.execute(
-                        "SELECT authority_revision FROM evidence_authority."
-                        "commit_investigator_evidence_projection("
-                        "%s::jsonb,%s,%s)",
-                        (json.dumps(rollback_record), 2, "EVIDENCE_REVOKED"),
-                    )
-                    raise RuntimeError("force rollback")
-            finally:
-                rollback_writer.close()
-            latest_revision = self.admin.execute(
-                "SELECT max(authority_revision) FROM evidence_authority."
-                "investigator_evidence_projection_change "
-                "WHERE tenant_id=%s AND case_id=%s",
-                (self.tenant, self.case_id),
-            ).fetchone()[0]
-            self.assertEqual(latest_revision, 2)
-            with self.authority.transaction():
-                self._authority_context(self.authority)
-                committed_revision = self.authority.execute(
-                    "SELECT authority_revision FROM evidence_authority."
-                    "commit_investigator_evidence_projection("
-                    "%s::jsonb,%s,%s)",
-                    (json.dumps(rollback_record), 2, "EVIDENCE_REVOKED"),
-                ).fetchone()[0]
-            self.assertEqual(committed_revision, 3)
         finally:
             reader.close()
             self.admin.execute(
@@ -2156,6 +1893,568 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             self.admin.execute(
                 sql.SQL("DROP ROLE {}").format(sql.Identifier(unsafe_role))
             )
+
+    @contextmanager
+    def _phase25_reader(self):
+        reader_group = "olin_investigator_evidence_reader"
+        reader_role = "olin_canonical_t_" + self.tenant.hex
+        password = secrets.token_urlsafe(24)
+        self.admin.execute(
+            sql.SQL(
+                "CREATE ROLE {} LOGIN PASSWORD {} INHERIT NOSUPERUSER "
+                "NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+            ).format(sql.Identifier(reader_role), sql.Literal(password))
+        )
+        self.admin.execute(
+            sql.SQL("GRANT {} TO {}").format(
+                sql.Identifier(reader_group), sql.Identifier(reader_role)
+            )
+        )
+        self.admin.execute(
+            sql.SQL("ALTER ROLE {} SET default_transaction_read_only=on").format(
+                sql.Identifier(reader_role)
+            )
+        )
+        connection = psycopg.connect(self._dsn(reader_role, password))
+        try:
+            yield (
+                connection,
+                PostgresCanonicalEvidenceReadPort(connection, tenant_id=self.tenant),
+            )
+        finally:
+            connection.close()
+            self.admin.execute(
+                sql.SQL("REVOKE {} FROM {}").format(
+                    sql.Identifier(reader_group), sql.Identifier(reader_role)
+                )
+            )
+            self.admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(reader_role))
+            )
+
+    def _phase25_ready_case(self, label):
+        semantics = {
+            "semantic_schema_version": 1,
+            "semantic_lineage_id": f"lineage-{label}",
+            "lineage_relation": "ORIGINAL",
+            "derived_from_evidence_namespace": None,
+            "derived_from_evidence_id": None,
+            "derived_from_evidence_version": None,
+            "economic_event_id": None,
+            "upstream_issuer_id": f"issuer-{label}",
+            "independence_status": "INDEPENDENCE_UNKNOWN",
+            "independence_attestation_id": None,
+            "independence_attestation_version": None,
+        }
+        authority_semantics = {
+            "schema_version": 1,
+            "derived_from": None,
+            "economic_event_id": None,
+            "independence_attestation_id": None,
+            "independence_attestation_version": None,
+            "independence_status": "INDEPENDENCE_UNKNOWN",
+            "lineage_relation": "ORIGINAL",
+            "semantic_lineage_id": f"lineage-{label}",
+            "upstream_issuer_id": f"issuer-{label}",
+        }
+        reference = self._reference(
+            evidence_id=f"artifact-{label}",
+            source_attestation_id=f"attestation-{label}",
+            issuer_id=f"issuer-{label}",
+            _semantic_independence=authority_semantics,
+        )
+        record = self._canonical_projection(reference, semantics)
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                (json.dumps(record), 0, "EVIDENCE_PROJECTED"),
+            )
+            self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(reference),
+                    json.dumps(semantics),
+                    self.initial_snapshot_id,
+                    1,
+                    uuid4(),
+                    f"phase25-ready-{label}",
+                ),
+            )
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            snapshot = self.runtime.execute(
+                "SELECT snapshot_id FROM investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (self.tenant, self.case_id, 2, f"phase25-snapshot-{label}"),
+            ).fetchone()[0]
+            custody = establish_runtime_database_custody(self.runtime)
+        return reference, record, snapshot, custody
+
+    def _assert_writer_waiting(self, backend_pid, blocker_pid):
+        deadline = monotonic() + 2
+        while monotonic() < deadline:
+            waiting = self.admin.execute(
+                "SELECT EXISTS (SELECT 1 FROM pg_locks "
+                "WHERE pid=%s AND locktype='advisory' AND NOT granted "
+                "AND %s=ANY(pg_blocking_pids(pid)))",
+                (backend_pid, blocker_pid),
+            ).fetchone()[0]
+            if waiting:
+                return
+            threading.Event().wait(0.01)
+        self.fail("authority writer never reached the advisory-lock wait")
+
+    def test_z_phase25_01_transaction_capability_lifecycle(self):
+        _, _, snapshot, custody = self._phase25_ready_case("capability")
+        with self._phase25_reader() as (_, port):
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=custody,
+            )
+            self.assertEqual(
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=lambda ready: ready.snapshot_id,
+                ),
+                snapshot,
+            )
+            with self.runtime.transaction():
+                self.assertEqual(
+                    self.runtime.execute(
+                        "SELECT current_user=session_user,"
+                        "nullif(current_setting('olin.tenant_id',true),'') IS NULL"
+                    ).fetchone(),
+                    (True, True),
+                )
+            with self.runtime.transaction():
+                self.runtime.execute(
+                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+                )
+                self._runtime_context(self.runtime)
+                after_commit = gate.require_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                )
+            with self.assertRaisesRegex(EvidenceBoundaryError, "escaped"):
+                after_commit.consume(lambda ready: ready.snapshot_id)
+            with self.runtime.transaction():
+                self.runtime.execute(
+                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+                )
+                self._runtime_context(self.runtime)
+                with self.assertRaisesRegex(EvidenceBoundaryError, "does not match"):
+                    after_commit.consume(lambda ready: ready.snapshot_id)
+            escaped = []
+            with (
+                self.assertRaisesRegex(RuntimeError, "force rollback"),
+                self.runtime.transaction(),
+            ):
+                self.runtime.execute(
+                    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+                )
+                self._runtime_context(self.runtime)
+                escaped.append(
+                    gate.require_snapshot_current_for_reasoning(
+                        tenant_id=self.tenant,
+                        case_id=self.case_id,
+                        snapshot_id=snapshot,
+                        as_of=datetime.now(timezone.utc),
+                    )
+                )
+                raise RuntimeError("force rollback")
+            with self.assertRaisesRegex(EvidenceBoundaryError, "escaped"):
+                escaped[0].consume(lambda ready: ready.snapshot_id)
+
+            callback_capabilities = []
+
+            def fail_callback(ready):
+                callback_capabilities.append(ready)
+                raise RuntimeError("callback failed")
+
+            with self.assertRaisesRegex(RuntimeError, "callback failed"):
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=fail_callback,
+                )
+            with self.assertRaisesRegex(EvidenceBoundaryError, "already consumed"):
+                callback_capabilities[0].consume(lambda ready: ready.snapshot_id)
+
+            def switch_transaction(ready):
+                self.runtime.execute("COMMIT")
+                self.runtime.execute("BEGIN READ ONLY")
+                return ready.snapshot_id
+
+            with self.assertRaisesRegex(
+                EvidenceBoundaryError, "authoritative transaction"
+            ):
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=switch_transaction,
+                )
+
+    def test_z_phase25_02_authority_revision_and_rollback(self):
+        _, record, _, _ = self._phase25_ready_case("revision")
+        changed = self._mutated_projection(record, consent_status="WITHDRAWN")
+        for invalid_revision in (None, 0):
+            with (
+                self.subTest(expected_revision=invalid_revision),
+                self.assertRaises(psycopg.errors.SerializationFailure),
+                self.authority.transaction(),
+            ):
+                self._authority_context(self.authority)
+                self.authority.execute(
+                    "SELECT authority_revision FROM evidence_authority."
+                    "commit_investigator_evidence_projection("
+                    "%s::jsonb,%s,%s)",
+                    (
+                        json.dumps(changed),
+                        invalid_revision,
+                        "CONSENT_CHANGED",
+                    ),
+                )
+        rollback_writer = psycopg.connect(
+            self._dsn(self.authority_role, self.passwords[self.authority_role])
+        )
+        try:
+            with (
+                self.assertRaisesRegex(RuntimeError, "force rollback"),
+                rollback_writer.transaction(),
+            ):
+                self._authority_context(rollback_writer)
+                rollback_writer.execute(
+                    "SELECT authority_revision FROM evidence_authority."
+                    "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                    (json.dumps(changed), 1, "CONSENT_CHANGED"),
+                )
+                raise RuntimeError("force rollback")
+        finally:
+            rollback_writer.close()
+        self.assertEqual(
+            self.admin.execute(
+                "SELECT max(authority_revision) FROM evidence_authority."
+                "investigator_evidence_projection_change "
+                "WHERE tenant_id=%s AND case_id=%s",
+                (self.tenant, self.case_id),
+            ).fetchone()[0],
+            1,
+        )
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            revision = self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                (json.dumps(changed), 1, "CONSENT_CHANGED"),
+            ).fetchone()[0]
+        self.assertEqual(revision, 2)
+
+    def test_z_phase25_03_timeout_and_reader_lock_cleanup(self):
+        reference, _, snapshot, custody = self._phase25_ready_case("timeouts")
+        with self._phase25_reader() as (reader, port):
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=custody,
+            )
+            escaped = []
+
+            def exceed_statement_timeout(ready):
+                escaped.append(ready)
+                self.runtime.execute("SELECT pg_sleep(6)")
+
+            with self.assertRaises(psycopg.errors.QueryCanceled):
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=exceed_statement_timeout,
+                )
+            with self.assertRaisesRegex(EvidenceBoundaryError, "already consumed"):
+                escaped[0].consume(lambda ready: ready.snapshot_id)
+            self.assertEqual(
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=lambda ready: ready.snapshot_id,
+                ),
+                snapshot,
+            )
+
+            blocker = psycopg.connect(ADMIN_DSN)
+            try:
+                blocker.execute(
+                    "LOCK TABLE evidence_authority."
+                    "investigator_evidence_projection_change IN ACCESS EXCLUSIVE MODE"
+                )
+                with self.assertRaises(psycopg.errors.LockNotAvailable):
+                    port.revalidate(
+                        self._python_reference(reference),
+                        as_of=datetime.now(timezone.utc),
+                    )
+                self.assertEqual(reader.info.transaction_status.name, "IDLE")
+            finally:
+                blocker.rollback()
+                blocker.close()
+            self.assertEqual(
+                port.revalidate(
+                    self._python_reference(reference),
+                    as_of=datetime.now(timezone.utc),
+                ).evidence_id,
+                reference["evidence_id"],
+            )
+            self.assertEqual(reader.info.transaction_status.name, "IDLE")
+
+    def _phase25_fencing_race(self, label, change_kind, changes):
+        reference, record, snapshot, custody = self._phase25_ready_case(label)
+        changed_record = self._mutated_projection(record, **changes)
+        with self._phase25_reader() as (_, port):
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=custody,
+            )
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                writer_future = None
+                writer_pid = []
+                writer_ready = threading.Event()
+
+                def mutate():
+                    writer = psycopg.connect(
+                        self._dsn(
+                            self.authority_role, self.passwords[self.authority_role]
+                        )
+                    )
+                    try:
+                        with writer.transaction():
+                            self._authority_context(writer)
+                            writer_pid.append(
+                                writer.execute("SELECT pg_backend_pid()").fetchone()[0]
+                            )
+                            writer_ready.set()
+                            return writer.execute(
+                                "SELECT authority_revision FROM evidence_authority."
+                                "commit_investigator_evidence_projection("
+                                "%s::jsonb,%s,%s)",
+                                (json.dumps(changed_record), 1, change_kind),
+                            ).fetchone()[0]
+                    finally:
+                        writer.close()
+
+                def consume(ready):
+                    nonlocal writer_future
+                    writer_future = pool.submit(mutate)
+                    self.assertTrue(writer_ready.wait(timeout=2))
+                    self._assert_writer_waiting(writer_pid[0], ready._backend_pid)
+                    return ready.authority_revision
+
+                self.assertEqual(
+                    gate.consume_snapshot_current_for_reasoning(
+                        tenant_id=self.tenant,
+                        case_id=self.case_id,
+                        snapshot_id=snapshot,
+                        as_of=datetime.now(timezone.utc),
+                        consumer=consume,
+                    ),
+                    1,
+                )
+                self.assertEqual(writer_future.result(timeout=5), 2)
+            changed = port.resolve(
+                tenant_id=self.tenant,
+                case_id=self.case_id,
+                evidence_namespace=reference["evidence_namespace"],
+                evidence_id=reference["evidence_id"],
+                purpose=reference["consent_purpose"],
+                as_of=datetime.now(timezone.utc),
+            )
+            self.assertEqual(
+                changed.authority_digest(), changed_record["authority_digest"]
+            )
+            with self.assertRaisesRegex(EvidenceBoundaryError, "revision is stale"):
+                gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=lambda ready: ready.snapshot_id,
+                )
+
+    def test_z_phase25_04_consent_withdrawal_fencing(self):
+        self._phase25_fencing_race(
+            "consent-race", "CONSENT_CHANGED", {"consent_status": "WITHDRAWN"}
+        )
+
+    def test_z_phase25_05_evidence_revocation_fencing(self):
+        self._phase25_fencing_race(
+            "evidence-race",
+            "EVIDENCE_REVOKED",
+            {
+                "lifecycle": "REVOKED",
+                "usability": "UNUSABLE",
+                "unusable_reason": "EVIDENCE_REVOKED",
+            },
+        )
+
+    def test_z_phase25_06_source_attestation_fencing(self):
+        self._phase25_fencing_race(
+            "source-race",
+            "SOURCE_ATTESTATION_CHANGED",
+            {"source_attestation_version": "2"},
+        )
+
+    def test_z_phase25_07_simultaneous_readiness_converges(self):
+        _, _, snapshot, _ = self._phase25_ready_case("dual-readiness")
+        barrier = threading.Barrier(2)
+        reader_group = "olin_investigator_evidence_reader"
+        reader_role = "olin_canonical_t_" + self.tenant.hex
+        reader_password = secrets.token_urlsafe(24)
+        self.admin.execute(
+            sql.SQL(
+                "CREATE ROLE {} LOGIN PASSWORD {} INHERIT NOSUPERUSER "
+                "NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+            ).format(sql.Identifier(reader_role), sql.Literal(reader_password))
+        )
+        self.admin.execute(
+            sql.SQL("GRANT {} TO {}").format(
+                sql.Identifier(reader_group), sql.Identifier(reader_role)
+            )
+        )
+        self.admin.execute(
+            sql.SQL("ALTER ROLE {} SET default_transaction_read_only=on").format(
+                sql.Identifier(reader_role)
+            )
+        )
+
+        def issue_readiness(_):
+            runtime = psycopg.connect(
+                self._dsn(self.runtime_role, self.passwords[self.runtime_role])
+            )
+            canonical = psycopg.connect(self._dsn(reader_role, reader_password))
+            try:
+                with runtime.transaction():
+                    self._runtime_context(runtime)
+                    custody = establish_runtime_database_custody(runtime)
+                gate = PostgresReasoningSnapshotGate(
+                    runtime_connection=runtime,
+                    evidence_authority=PostgresCanonicalEvidenceReadPort(
+                        canonical, tenant_id=self.tenant
+                    ),
+                    runtime_custody=custody,
+                )
+                return gate.consume_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                    consumer=lambda ready: (
+                        barrier.wait(timeout=2),
+                        ready.authority_revision,
+                        ready.authority_state_digest,
+                    )[1:],
+                )
+            finally:
+                canonical.close()
+                runtime.close()
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                converged = list(pool.map(issue_readiness, range(2)))
+            self.assertEqual(converged[0], converged[1])
+        finally:
+            self.admin.execute(
+                sql.SQL("REVOKE {} FROM {}").format(
+                    sql.Identifier(reader_group), sql.Identifier(reader_role)
+                )
+            )
+            self.admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(reader_role))
+            )
+
+    def test_z_phase25_08_abandoned_readiness_releases_fence(self):
+        _, record, snapshot, _ = self._phase25_ready_case("abandoned")
+        changed = self._mutated_projection(record, consent_status="WITHDRAWN")
+        runtime = psycopg.connect(
+            self._dsn(self.runtime_role, self.passwords[self.runtime_role])
+        )
+        try:
+            with self._phase25_reader() as (_, port):
+                runtime.execute("BEGIN READ ONLY")
+                self._runtime_context(runtime)
+                custody = establish_runtime_database_custody(runtime)
+                gate = PostgresReasoningSnapshotGate(
+                    runtime_connection=runtime,
+                    evidence_authority=port,
+                    runtime_custody=custody,
+                )
+                ready = gate.require_snapshot_current_for_reasoning(
+                    tenant_id=self.tenant,
+                    case_id=self.case_id,
+                    snapshot_id=snapshot,
+                    as_of=datetime.now(timezone.utc),
+                )
+                runtime.close()
+                with self.assertRaisesRegex(EvidenceBoundaryError, "escaped"):
+                    ready.consume(lambda capability: capability.snapshot_id)
+                with self.authority.transaction():
+                    self._authority_context(self.authority)
+                    revision = self.authority.execute(
+                        "SELECT authority_revision FROM evidence_authority."
+                        "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                        (json.dumps(changed), 1, "CONSENT_CHANGED"),
+                    ).fetchone()[0]
+                self.assertEqual(revision, 2)
+        finally:
+            runtime.close()
+
+    def test_z_phase25_09_terminated_backend_cannot_return_capability(self):
+        _, _, snapshot, _ = self._phase25_ready_case("terminated-backend")
+        runtime = psycopg.connect(
+            self._dsn(self.runtime_role, self.passwords[self.runtime_role])
+        )
+        try:
+            with self._phase25_reader() as (_, port):
+                with runtime.transaction():
+                    self._runtime_context(runtime)
+                    custody = establish_runtime_database_custody(runtime)
+                gate = PostgresReasoningSnapshotGate(
+                    runtime_connection=runtime,
+                    evidence_authority=port,
+                    runtime_custody=custody,
+                )
+
+                def terminate_backend(ready):
+                    self.assertTrue(
+                        self.admin.execute(
+                            "SELECT pg_terminate_backend(%s)", (ready._backend_pid,)
+                        ).fetchone()[0]
+                    )
+                    return ready.snapshot_id
+
+                with self.assertRaises((EvidenceBoundaryError, psycopg.Error)):
+                    gate.consume_snapshot_current_for_reasoning(
+                        tenant_id=self.tenant,
+                        case_id=self.case_id,
+                        snapshot_id=snapshot,
+                        as_of=datetime.now(timezone.utc),
+                        consumer=terminate_backend,
+                    )
+        finally:
+            runtime.close()
 
 
 if __name__ == "__main__":

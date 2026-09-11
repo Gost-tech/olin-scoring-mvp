@@ -8,6 +8,7 @@ Investigator runtime receives only the resolved, immutable contract object.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from typing import Any, Protocol
@@ -543,7 +544,32 @@ class PostgresCanonicalEvidenceReadPort:
             )
         self._connection = connection
         self._tenant_id = tenant_id
-        self._assert_reader_custody()
+        self._is_test_fake = module.startswith("psycopg.testing")
+        if self._is_test_fake:
+            self._assert_reader_custody()
+        else:
+            with self._reader_transaction():
+                self._assert_reader_custody()
+
+    @contextmanager
+    def _reader_transaction(self):
+        status = getattr(
+            getattr(self._connection, "info", None), "transaction_status", None
+        )
+        if status is not None and getattr(status, "name", "") != "IDLE":
+            raise EvidenceBoundaryError(
+                "canonical evidence reader connection must be idle"
+            )
+        with self._connection.transaction():
+            self._connection.execute(
+                "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"
+            )
+            self._connection.execute(
+                "SET LOCAL statement_timeout='5000ms'; "
+                "SET LOCAL lock_timeout='1000ms'; "
+                "SET LOCAL idle_in_transaction_session_timeout='5000ms'"
+            )
+            yield
 
     def _assert_reader_custody(self) -> None:
         try:
@@ -635,6 +661,35 @@ class PostgresCanonicalEvidenceReadPort:
             raise EvidenceBoundaryError(
                 "canonical evidence reader is not bound to the requested tenant"
             )
+        if not self._is_test_fake:
+            with self._reader_transaction():
+                return self._row_in_transaction(
+                    tenant_id=tenant_id,
+                    case_id=case_id,
+                    evidence_namespace=evidence_namespace,
+                    evidence_id=evidence_id,
+                    purpose=purpose,
+                    as_of=as_of,
+                )
+        return self._row_in_transaction(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            evidence_namespace=evidence_namespace,
+            evidence_id=evidence_id,
+            purpose=purpose,
+            as_of=as_of,
+        )
+
+    def _row_in_transaction(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        evidence_namespace: str,
+        evidence_id: str,
+        purpose: str,
+        as_of: datetime,
+    ) -> dict[str, object]:
         self._assert_reader_custody()
         self._connection.execute(
             "SELECT set_config('olin.tenant_id', %s, true)", (str(tenant_id),)
