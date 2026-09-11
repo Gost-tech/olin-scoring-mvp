@@ -492,6 +492,29 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             "unusable_reason": None,
         }
 
+    @staticmethod
+    def _authority_semantics(semantics):
+        derived_from = None
+        if semantics["derived_from_evidence_id"] is not None:
+            derived_from = {
+                "evidence_namespace": semantics["derived_from_evidence_namespace"],
+                "evidence_id": semantics["derived_from_evidence_id"],
+                "evidence_version": semantics["derived_from_evidence_version"],
+            }
+        return {
+            "schema_version": semantics["semantic_schema_version"],
+            "derived_from": derived_from,
+            "economic_event_id": semantics["economic_event_id"],
+            "independence_attestation_id": semantics["independence_attestation_id"],
+            "independence_attestation_version": semantics[
+                "independence_attestation_version"
+            ],
+            "independence_status": semantics["independence_status"],
+            "lineage_relation": semantics["lineage_relation"],
+            "semantic_lineage_id": semantics["semantic_lineage_id"],
+            "upstream_issuer_id": semantics["upstream_issuer_id"],
+        }
+
     def _mutated_projection(self, record, **changes):
         semantics = {
             "semantic_schema_version": record["semantic_independence_schema_version"],
@@ -510,19 +533,6 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 "independence_attestation_version"
             ],
         }
-        authority_semantics = {
-            "schema_version": semantics["semantic_schema_version"],
-            "derived_from": None,
-            "economic_event_id": semantics["economic_event_id"],
-            "independence_attestation_id": semantics["independence_attestation_id"],
-            "independence_attestation_version": semantics[
-                "independence_attestation_version"
-            ],
-            "independence_status": semantics["independence_status"],
-            "lineage_relation": semantics["lineage_relation"],
-            "semantic_lineage_id": semantics["semantic_lineage_id"],
-            "upstream_issuer_id": semantics["upstream_issuer_id"],
-        }
         reference = {field: record[field] for field in self._CANONICAL_REFERENCE_FIELDS}
         reference.update(
             reference_id=record["reference_id"],
@@ -532,7 +542,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
         reference.update(changes)
         reference.pop("authority_digest", None)
         rebuilt = self._reference(
-            **reference, _semantic_independence=authority_semantics
+            **reference, _semantic_independence=self._authority_semantics(semantics)
         )
         projection = self._canonical_projection(rebuilt, semantics)
         projection["usability"] = changes.get("usability", record["usability"])
@@ -1337,20 +1347,9 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             "independence_attestation_id": None,
             "independence_attestation_version": None,
         }
-        authority_semantics = {
-            "schema_version": semantics["semantic_schema_version"],
-            "derived_from": None,
-            "economic_event_id": semantics["economic_event_id"],
-            "independence_attestation_id": semantics["independence_attestation_id"],
-            "independence_attestation_version": semantics[
-                "independence_attestation_version"
-            ],
-            "independence_status": semantics["independence_status"],
-            "lineage_relation": semantics["lineage_relation"],
-            "semantic_lineage_id": semantics["semantic_lineage_id"],
-            "upstream_issuer_id": semantics["upstream_issuer_id"],
-        }
-        reference = self._reference(_semantic_independence=authority_semantics)
+        reference = self._reference(
+            _semantic_independence=self._authority_semantics(semantics)
+        )
         canonical_record = self._canonical_projection(reference, semantics)
         self.assertNotIn("semantic_schema_version", canonical_record)
         self.assertEqual(
@@ -1946,22 +1945,11 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             "independence_attestation_id": None,
             "independence_attestation_version": None,
         }
-        authority_semantics = {
-            "schema_version": 1,
-            "derived_from": None,
-            "economic_event_id": None,
-            "independence_attestation_id": None,
-            "independence_attestation_version": None,
-            "independence_status": "INDEPENDENCE_UNKNOWN",
-            "lineage_relation": "ORIGINAL",
-            "semantic_lineage_id": f"lineage-{label}",
-            "upstream_issuer_id": f"issuer-{label}",
-        }
         reference = self._reference(
             evidence_id=f"artifact-{label}",
             source_attestation_id=f"attestation-{label}",
             issuer_id=f"issuer-{label}",
-            _semantic_independence=authority_semantics,
+            _semantic_independence=self._authority_semantics(semantics),
         )
         record = self._canonical_projection(reference, semantics)
         with self.authority.transaction():
@@ -1991,6 +1979,27 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             ).fetchone()[0]
             custody = establish_runtime_database_custody(self.runtime)
         return reference, record, snapshot, custody
+
+    def _phase25_python_reference(self, port, projection):
+        resolution = port.resolve(
+            tenant_id=UUID(projection["tenant_id"]),
+            case_id=UUID(projection["case_id"]),
+            evidence_namespace=projection["evidence_namespace"],
+            evidence_id=projection["evidence_id"],
+            purpose=projection["consent_purpose"],
+            as_of=datetime.now(timezone.utc),
+        )
+        self.assertEqual(resolution.authority_digest(), projection["authority_digest"])
+        return EvidenceReference.from_resolution(
+            reference_id=UUID(projection["reference_id"]),
+            resolution=resolution,
+            supersedes_reference_id=(
+                UUID(projection["supersedes_reference_id"])
+                if projection["supersedes_reference_id"]
+                else None
+            ),
+            accepted_at=datetime.fromisoformat(projection["accepted_at"]),
+        )
 
     def _assert_writer_waiting(self, backend_pid, blocker_pid):
         deadline = monotonic() + 2
@@ -2162,7 +2171,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
         self.assertEqual(revision, 2)
 
     def test_z_phase25_03_timeout_and_reader_lock_cleanup(self):
-        reference, _, snapshot, custody = self._phase25_ready_case("timeouts")
+        reference, record, snapshot, custody = self._phase25_ready_case("timeouts")
         with self._phase25_reader() as (reader, port):
             gate = PostgresReasoningSnapshotGate(
                 runtime_connection=self.runtime,
@@ -2198,13 +2207,14 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
 
             blocker = psycopg.connect(ADMIN_DSN)
             try:
+                canonical_reference = self._phase25_python_reference(port, record)
                 blocker.execute(
                     "LOCK TABLE evidence_authority."
                     "investigator_evidence_projection_change IN ACCESS EXCLUSIVE MODE"
                 )
                 with self.assertRaises(psycopg.errors.LockNotAvailable):
                     port.revalidate(
-                        self._python_reference(reference),
+                        canonical_reference,
                         as_of=datetime.now(timezone.utc),
                     )
                 self.assertEqual(reader.info.transaction_status.name, "IDLE")
@@ -2213,7 +2223,7 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 blocker.close()
             self.assertEqual(
                 port.revalidate(
-                    self._python_reference(reference),
+                    canonical_reference,
                     as_of=datetime.now(timezone.utc),
                 ).evidence_id,
                 reference["evidence_id"],
