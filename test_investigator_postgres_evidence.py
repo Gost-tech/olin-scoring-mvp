@@ -32,6 +32,11 @@ from olin.investigator.canonical import (
     canonical_json_bytes,
     normalize_timestamp,
 )
+from olin.investigator.claims import (
+    MERCHANT_ASSERTION_PROFILE,
+    PHASE3_RULES_VERSION,
+    ClaimsAssessment,
+)
 from olin.investigator.evidence import (
     EVIDENCE_RESOLVER_CONTRACT_VERSION,
     EvidenceAuthorityResolution,
@@ -1257,6 +1262,13 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             / "0004_investigator_evidence_reasoning_readiness.sql"
         ).read_text(encoding="utf-8")
         self.admin.execute(migration)
+        assertion_migration = (
+            self.root
+            / "db"
+            / "migrations"
+            / "0005_investigator_phase3_assertion_metadata.sql"
+        ).read_text(encoding="utf-8")
+        self.admin.execute(assertion_migration)
         self.assertEqual(
             self.admin.execute("SELECT session_user,current_user").fetchone(), identity
         )
@@ -1980,6 +1992,180 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
             custody = establish_runtime_database_custody(self.runtime)
         return reference, record, snapshot, custody
 
+    def _phase3_target_case(self, label):
+        current = datetime.now(timezone.utc)
+        period_start = (current - timedelta(days=31)).isoformat()
+        period_end = (current - timedelta(days=1)).isoformat()
+
+        fact_semantics = {
+            "semantic_schema_version": 1,
+            "semantic_lineage_id": f"bank-lineage-{label}",
+            "lineage_relation": "ORIGINAL",
+            "derived_from_evidence_namespace": None,
+            "derived_from_evidence_id": None,
+            "derived_from_evidence_version": None,
+            "economic_event_id": f"bank-period-{label}",
+            "upstream_issuer_id": f"bank-issuer-{label}",
+            "independence_status": "INDEPENDENCE_UNKNOWN",
+            "independence_attestation_id": None,
+            "independence_attestation_version": None,
+        }
+        fact = self._reference(
+            evidence_id=f"bank-visible-{label}",
+            proposition_type="bank_visible_inflows",
+            proposition_value="118000",
+            proposition_unit="MXN",
+            period_start=period_start,
+            period_end=period_end,
+            issuer_id=f"bank-issuer-{label}",
+            source_attestation_id=f"bank-attestation-{label}",
+            _semantic_independence=self._authority_semantics(fact_semantics),
+        )
+        fact_record = self._canonical_projection(fact, fact_semantics)
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                (json.dumps(fact_record), 0, "EVIDENCE_PROJECTED"),
+            )
+            self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(fact),
+                    json.dumps(fact_semantics),
+                    self.initial_snapshot_id,
+                    1,
+                    uuid4(),
+                    f"phase3-fact-{label}",
+                ),
+            )
+
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            fact_snapshot = self.runtime.execute(
+                "SELECT snapshot_id FROM investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (self.tenant, self.case_id, 2, f"phase3-fact-snapshot-{label}"),
+            ).fetchone()[0]
+
+        claim_semantics = {
+            "semantic_schema_version": 1,
+            "semantic_lineage_id": f"merchant-lineage-{label}",
+            "lineage_relation": "ORIGINAL",
+            "derived_from_evidence_namespace": None,
+            "derived_from_evidence_id": None,
+            "derived_from_evidence_version": None,
+            "economic_event_id": f"merchant-period-{label}",
+            "upstream_issuer_id": f"merchant-{label}",
+            "independence_status": "INDEPENDENCE_UNKNOWN",
+            "independence_attestation_id": None,
+            "independence_attestation_version": None,
+        }
+        claim = self._reference(
+            evidence_id=f"merchant-revenue-{label}",
+            evidence_class="MERCHANT_SUPPLIED_ARTIFACT",
+            verification_status="UNVERIFIED",
+            proposition_type="monthly_revenue",
+            proposition_value="260000",
+            proposition_unit="MXN",
+            verification_method=MERCHANT_ASSERTION_PROFILE,
+            period_start=period_start,
+            period_end=period_end,
+            source_id="merchant-assertion-registry",
+            issuer_id=f"merchant-{label}",
+            acquisition_method="recorded_merchant_assertion",
+            source_class="merchant_self_reported",
+            source_attestation_id=f"merchant-attestation-{label}",
+            _semantic_independence=self._authority_semantics(claim_semantics),
+        )
+        claim_record = self._canonical_projection(claim, claim_semantics)
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                (json.dumps(claim_record), 1, "EVIDENCE_PROJECTED"),
+            )
+            self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(claim),
+                    json.dumps(claim_semantics),
+                    fact_snapshot,
+                    2,
+                    uuid4(),
+                    f"phase3-claim-{label}",
+                ),
+            )
+
+        with self.runtime.transaction():
+            self._runtime_context(self.runtime)
+            snapshot = self.runtime.execute(
+                "SELECT snapshot_id FROM investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (self.tenant, self.case_id, 3, f"phase3-target-snapshot-{label}"),
+            ).fetchone()[0]
+            custody = establish_runtime_database_custody(self.runtime)
+        return snapshot, custody
+
+    def _accept_phase3_external_assertion(self, label, **changes):
+        current = datetime.now(timezone.utc)
+        semantics = {
+            "semantic_schema_version": 1,
+            "semantic_lineage_id": f"external-lineage-{label}",
+            "lineage_relation": "ORIGINAL",
+            "derived_from_evidence_namespace": None,
+            "derived_from_evidence_id": None,
+            "derived_from_evidence_version": None,
+            "economic_event_id": None,
+            "upstream_issuer_id": f"external-issuer-{label}",
+            "independence_status": "INDEPENDENCE_UNKNOWN",
+            "independence_attestation_id": None,
+            "independence_attestation_version": None,
+        }
+        values = {
+            "evidence_id": f"external-assertion-{label}",
+            "evidence_class": "EXTERNAL_EVIDENCE",
+            "verification_status": "UNVERIFIED",
+            "proposition_type": "monthly_revenue",
+            "proposition_schema_version": 1,
+            "proposition_value": "240000",
+            "proposition_unit": "MXN",
+            "verification_method": "external_assertion_recorded:v1",
+            "period_start": (current - timedelta(days=31)).isoformat(),
+            "period_end": (current - timedelta(days=1)).isoformat(),
+            "source_id": "external-assertion-registry",
+            "issuer_id": f"external-issuer-{label}",
+            "source_class": "external_claim_source",
+            "source_attestation_id": f"external-attestation-{label}",
+        }
+        values.update(changes)
+        reference = self._reference(
+            **values,
+            _semantic_independence=self._authority_semantics(semantics),
+        )
+        record = self._canonical_projection(reference, semantics)
+        with self.authority.transaction():
+            self._authority_context(self.authority)
+            self.authority.execute(
+                "SELECT authority_revision FROM evidence_authority."
+                "commit_investigator_evidence_projection(%s::jsonb,%s,%s)",
+                (json.dumps(record), 0, "EVIDENCE_PROJECTED"),
+            )
+            return self.authority.execute(
+                "SELECT investigator.accept_evidence_reference_v2("
+                "%s::jsonb,%s::jsonb,%s,%s,%s,%s)",
+                (
+                    json.dumps(reference),
+                    json.dumps(semantics),
+                    self.initial_snapshot_id,
+                    1,
+                    uuid4(),
+                    f"phase3-external-{label}",
+                ),
+            ).fetchone()[0]
+
     def _phase25_python_reference(self, port, projection):
         resolution = port.resolve(
             tenant_id=UUID(projection["tenant_id"]),
@@ -2114,6 +2300,84 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                     as_of=datetime.now(timezone.utc),
                     consumer=switch_transaction,
                 )
+
+    def test_z_phase3_01_claims_kernel_runs_only_inside_durable_wrapper(self):
+        _, _, snapshot, custody = self._phase25_ready_case("phase3-wrapper")
+        with self._phase25_reader() as (_, port):
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=custody,
+            )
+            result = gate.assess_claims_current(
+                tenant_id=self.tenant,
+                case_id=self.case_id,
+                snapshot_id=snapshot,
+                as_of=datetime.now(timezone.utc),
+            )
+        self.assertIsInstance(result, ClaimsAssessment)
+        self.assertEqual(result.rules_version, PHASE3_RULES_VERSION)
+        self.assertEqual(result.snapshot_id, snapshot)
+        self.assertEqual(result.authority_revision, 1)
+        self.assertEqual(len(result.verified_facts), 1)
+        self.assertEqual(result.claims, ())
+        self.assertEqual(result.unknowns, ())
+        self.assertEqual(result.contradictions, ())
+        self.assertEqual(result.possible_explanations, ())
+        self.assertEqual(self.runtime.info.transaction_status.name, "IDLE")
+
+    def test_z_phase3_02_real_target_case_preserves_epistemic_classes(self):
+        snapshot, custody = self._phase3_target_case("target")
+        with self._phase25_reader() as (_, port):
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=custody,
+            )
+            result = gate.assess_claims_current(
+                tenant_id=self.tenant,
+                case_id=self.case_id,
+                snapshot_id=snapshot,
+                as_of=datetime.now(timezone.utc),
+            )
+
+        self.assertEqual(result.authority_revision, 2)
+        self.assertEqual(
+            [fact.proposition.value for fact in result.verified_facts], ["118000"]
+        )
+        self.assertEqual(
+            [claim.proposition.value for claim in result.claims], ["260000"]
+        )
+        self.assertIsNone(result.claims[0].assertion_timestamp)
+        self.assertEqual(len(result.unknowns), 1)
+        self.assertEqual(len(result.contradictions), 1)
+        self.assertEqual(len(result.possible_explanations), 5)
+
+    def test_z_phase3_03_assertion_constraint_is_closed_and_versioned(self):
+        self.assertIsInstance(self._accept_phase3_external_assertion("valid"), UUID)
+
+    def test_z_phase3_04_assertion_constraint_rejects_invalid_profiles(self):
+        variants = (
+            {"verification_method": "external_assertion_recorded"},
+            {"verification_method": None},
+            {"proposition_schema_version": None},
+            {"proposition_value": None},
+            {
+                "evidence_class": "MERCHANT_SUPPLIED_ARTIFACT",
+                "verification_method": "external_assertion_recorded:v1",
+            },
+            {
+                "evidence_class": "VERIFIED_FACT",
+                "verification_status": "UNVERIFIED",
+                "verification_method": "external_assertion_recorded:v1",
+            },
+        )
+        for index, changes in enumerate(variants):
+            with (
+                self.subTest(changes=changes),
+                self.assertRaises(psycopg.Error),
+            ):
+                self._accept_phase3_external_assertion(f"invalid-{index}", **changes)
 
     def test_z_phase25_02_authority_revision_and_rollback(self):
         _, record, _, _ = self._phase25_ready_case("revision")

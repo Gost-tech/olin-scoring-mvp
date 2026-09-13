@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from contextvars import ContextVar
+from dataclasses import dataclass, field, fields
 from datetime import datetime, timedelta
+from decimal import Decimal
+from enum import Enum
 from threading import RLock
 from uuid import UUID, uuid4
 
@@ -140,10 +144,148 @@ class ReasoningReadySnapshot:
         object.__setattr__(instance, "_deadline", deadline)
         return instance
 
-    def consume(self, consumer):
-        """Pass this capability to a future reasoning consumer exactly once."""
+    def _operation_fingerprint(self) -> tuple[object, ...]:
+        return (
+            id(self._connection),
+            self._transaction_id,
+            self._backend_pid,
+            self._deadline,
+            self.tenant_id,
+            self.case_id,
+            self.snapshot_id,
+            self.snapshot_digest,
+            self.authority_state_digest,
+            self.evidence_state_digest,
+            self.authority_revision,
+            self.canonical_projection_version,
+            self.checked_at,
+            canonical_digest(
+                tuple(
+                    reference.canonical_record()
+                    for reference in self.evidence_references
+                )
+            ),
+        )
+
+    def _require_phase3_operation(self) -> None:
+        operation = _PHASE3_OPERATION.get()
+        if operation is None or operation[0] is not self or not operation[2][0]:
+            raise TypeError("Phase 3 requires the approved transaction-bound wrapper")
+        if operation[1] != self._operation_fingerprint():
+            raise EvidenceBoundaryError("reasoning-ready capability was altered")
+
+    @staticmethod
+    def _is_closed_eager(value: object) -> bool:
+        from . import claims, evidence
+
+        value_type = type(value)
+        if value is None or value_type in (
+            bool,
+            int,
+            str,
+            bytes,
+            Decimal,
+            datetime,
+            UUID,
+        ):
+            return True
+        if isinstance(value, Enum):
+            return value_type in (
+                claims.Confidence,
+                claims.DimensionalScope,
+                claims.EpistemicType,
+                claims.Materiality,
+                evidence.IndependenceStatus,
+                evidence.LineageRelation,
+                evidence.VerificationStatus,
+            )
+        if value_type is tuple:
+            return all(ReasoningReadySnapshot._is_closed_eager(item) for item in value)
+        if value_type is frozenset:
+            return all(ReasoningReadySnapshot._is_closed_eager(item) for item in value)
+        phase3_types = (
+            claims.Claim,
+            claims.ClaimsAssessment,
+            claims.Contradiction,
+            claims.PossibleExplanation,
+            claims.Proposition,
+            claims.Provenance,
+            claims.Unknown,
+            claims.VerifiedFact,
+        )
+        if value_type in phase3_types and getattr(
+            getattr(value_type, "__dataclass_params__", None), "frozen", False
+        ):
+            return all(
+                ReasoningReadySnapshot._is_closed_eager(getattr(value, item.name))
+                for item in fields(value)
+            )
+        return False
+
+    def _current_transaction_state(self, *, stage: str) -> datetime:
+        try:
+            state = self._connection.execute(
+                "SELECT pg_backend_pid(),pg_current_xact_id()::text,"
+                "current_user='olin_investigator_runtime',"
+                "investigator.tenant_access_allowed(%s),statement_timestamp(),"
+                "canonical.authority_revision,canonical.authority_state_digest "
+                "FROM investigator.current_canonical_authority_revision(%s,%s) "
+                "canonical",
+                (self.tenant_id, self.tenant_id, self.case_id),
+            ).fetchone()
+        except Exception as error:
+            raise EvidenceBoundaryError(
+                f"reasoning consumer {stage} its authoritative transaction"
+            ) from error
+        if state is None or tuple(state[:4]) != (
+            self._backend_pid,
+            self._transaction_id,
+            True,
+            True,
+        ):
+            raise EvidenceBoundaryError(
+                "reasoning consumer changed its authoritative transaction"
+            )
+        server_time = state[4]
+        if not isinstance(server_time, datetime) or (
+            self._deadline is not None and server_time > self._deadline
+        ):
+            raise EvidenceBoundaryError("reasoning operation deadline expired")
+        if tuple(state[5:]) != (
+            self.authority_revision,
+            self.authority_state_digest,
+        ):
+            raise EvidenceBoundaryError("reasoning consumer authority revision changed")
+        for reference in self.evidence_references:
+            expiries = (
+                reference.source_valid_until,
+                reference.consent_expires_at,
+                reference.retention_until,
+                reference.evidence_expires_at,
+            )
+            if reference.consent_status != "ACTIVE" or any(
+                expiry is not None and expiry <= server_time for expiry in expiries
+            ):
+                raise EvidenceBoundaryError(
+                    "reasoning evidence expired during consumption"
+                )
+        return server_time
+
+    def _consume(self, consumer, *, pre_final_check=None):
         if not callable(consumer):
             raise TypeError("reasoning consumer must be callable")
+        call = type(consumer).__call__
+        if any(
+            check(candidate)
+            for candidate in (consumer, call)
+            if candidate is not None
+            for check in (
+                inspect.iscoroutinefunction,
+                inspect.isasyncgenfunction,
+                inspect.isgeneratorfunction,
+            )
+        ):
+            raise TypeError("reasoning consumer must be synchronous")
         if self._consumed:
             raise EvidenceBoundaryError(
                 "reasoning-ready capability was already consumed"
@@ -173,64 +315,48 @@ class ReasoningReadySnapshot:
                 raise EvidenceBoundaryError(
                     "reasoning-ready capability transaction does not match"
                 )
+            # This server-derived check is deliberately adjacent to invocation.
+            self._current_transaction_state(stage="ended")
         object.__setattr__(self, "_consumed", True)
         result = consumer(self)
+        if inspect.isawaitable(result):
+            close = getattr(result, "close", None)
+            if callable(close):
+                close()
+            raise TypeError("reasoning consumer returned an asynchronous result")
+        if inspect.isgenerator(result) or inspect.isasyncgen(result):
+            close = getattr(result, "close", None)
+            if callable(close):
+                close()
+            raise TypeError("reasoning consumer returned a deferred result")
+        if not self._is_closed_eager(result):
+            raise TypeError("reasoning consumer must return closed eager data")
+        if pre_final_check is not None:
+            pre_final_check()
         if self._connection is not None:
-            try:
-                final_state = self._connection.execute(
-                    "SELECT pg_backend_pid(),pg_current_xact_id()::text,"
-                    "current_user='olin_investigator_runtime',"
-                    "investigator.tenant_access_allowed(%s),statement_timestamp(),"
-                    "canonical.authority_revision,canonical.authority_state_digest "
-                    "FROM investigator.current_canonical_authority_revision(%s,%s) "
-                    "canonical",
-                    (self.tenant_id, self.tenant_id, self.case_id),
-                ).fetchone()
-            except Exception as error:
-                raise EvidenceBoundaryError(
-                    "reasoning consumer ended its authoritative transaction"
-                ) from error
-            if final_state is None or tuple(final_state[:4]) != (
-                self._backend_pid,
-                self._transaction_id,
-                True,
-                True,
-            ):
-                raise EvidenceBoundaryError(
-                    "reasoning consumer changed its authoritative transaction"
-                )
-            final_time = final_state[4]
-            if not isinstance(final_time, datetime) or (
-                self._deadline is not None and final_time > self._deadline
-            ):
-                raise EvidenceBoundaryError("reasoning operation deadline expired")
-            if tuple(final_state[5:]) != (
-                self.authority_revision,
-                self.authority_state_digest,
-            ):
-                raise EvidenceBoundaryError(
-                    "reasoning consumer authority revision changed"
-                )
-            for reference in self.evidence_references:
-                expiries = (
-                    reference.source_valid_until,
-                    reference.consent_expires_at,
-                    reference.retention_until,
-                    reference.evidence_expires_at,
-                )
-                if reference.consent_status != "ACTIVE" or any(
-                    expiry is not None and expiry <= final_time for expiry in expiries
-                ):
-                    raise EvidenceBoundaryError(
-                        "reasoning evidence expired during consumption"
-                    )
+            self._current_transaction_state(stage="ended")
         return result
+
+    def consume(self, consumer):
+        """Pass this capability to a synchronous eager consumer exactly once."""
+        return self._consume(consumer)
+
+    def _consume_phase3(self, consumer):
+        self._require_phase3_operation()
+        if self._connection is None or self._transaction_id is None:
+            raise EvidenceBoundaryError(
+                "Phase 3 requires a transaction-bound readiness capability"
+            )
+        return self._consume(consumer, pre_final_check=self._require_phase3_operation)
 
     def __reduce__(self):
         raise TypeError("reasoning-ready capabilities cannot be serialized")
 
 
 _REASONING_GATE_ISSUER = object()
+_PHASE3_OPERATION: ContextVar[
+    tuple[ReasoningReadySnapshot, tuple[object, ...], list[bool]] | None
+] = ContextVar("investigator_phase3_operation", default=None)
 
 
 class PostgresReasoningSnapshotGate:
@@ -506,6 +632,25 @@ class PostgresReasoningSnapshotGate:
         consumer,
     ):
         """Validate and consume readiness inside one server-controlled transaction."""
+        return self._consume_in_new_transaction(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            snapshot_id=snapshot_id,
+            as_of=as_of,
+            consumer=consumer,
+            phase3=False,
+        )
+
+    def _consume_in_new_transaction(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+        consumer,
+        phase3: bool,
+    ):
         status = getattr(
             getattr(self._connection, "info", None), "transaction_status", None
         )
@@ -547,7 +692,41 @@ class PostgresReasoningSnapshotGate:
                 snapshot_id=snapshot_id,
                 as_of=as_of,
             )
+            if phase3:
+                if ready._connection is None or ready._transaction_id is None:
+                    raise EvidenceBoundaryError(
+                        "Phase 3 requires a transaction-bound readiness capability"
+                    )
+                lease = [True]
+                token = _PHASE3_OPERATION.set(
+                    (ready, ready._operation_fingerprint(), lease)
+                )
+                try:
+                    return ready._consume_phase3(consumer)
+                finally:
+                    lease[0] = False
+                    _PHASE3_OPERATION.reset(token)
             return ready.consume(consumer)
+
+    def assess_claims_current(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+    ):
+        """Run the deterministic Phase 3 kernel inside the sealed transaction."""
+        from .claims import assess_claims
+
+        return self._consume_in_new_transaction(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            snapshot_id=snapshot_id,
+            as_of=as_of,
+            consumer=assess_claims,
+            phase3=True,
+        )
 
 
 class InvestigatorEvidenceBoundary:

@@ -30,6 +30,9 @@ PHASE2_MIGRATION_PATH = (
 PHASE25_MIGRATION_PATH = (
     ROOT / "db" / "migrations" / "0004_investigator_evidence_reasoning_readiness.sql"
 )
+PHASE3_MIGRATION_PATH = (
+    ROOT / "db" / "migrations" / "0005_investigator_phase3_assertion_metadata.sql"
+)
 
 PROHIBITED_CAPABILITIES = {
     "credit.approve",
@@ -418,6 +421,30 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
             "approved_amount",
             "payment_ledger",
             "provider.call",
+        ):
+            self.assertNotIn(forbidden, sql)
+
+    def test_phase3_migration_only_adds_closed_assertion_profiles(self):
+        sql = PHASE3_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        for fragment in (
+            "investigator migration 0004 must be applied first",
+            "drop constraint investigation_evidence_reference_proposition_check",
+            "add constraint investigation_evidence_reference_proposition_check",
+            "merchant_assertion_recorded:v1",
+            "external_assertion_recorded:v1",
+            "proposition_schema_version = 1",
+            ") is true",
+            "reset session authorization",
+            "commit;",
+        ):
+            self.assertIn(fragment, sql)
+        for forbidden in (
+            "create table",
+            "create role",
+            "grant ",
+            "credit_score",
+            "approved_amount",
+            "reasoning_result",
         ):
             self.assertNotIn(forbidden, sql)
 
