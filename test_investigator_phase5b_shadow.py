@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from olin.investigator_shadow import (
     ACTIONS,
+    TEXT_FIELDS,
     VERSION,
     canonical,
     digest,
@@ -33,6 +34,64 @@ def context():
 
 
 class ShadowSchemaTests(unittest.TestCase):
+    def test_original_text_bounds_for_every_field_and_abstention(self):
+        samples = [
+            ("a" * 499, True),
+            ("a" * 500, True),
+            ("a" * 501, False),
+            (" " + "a" * 499 + " ", False),
+            ("Which accounts are represented?" + " " * 600, False),
+            ("", False),
+            (" \t\n", False),
+            ("\t\nMeaningful question\t\n", True),
+            (None, False),
+            (42, False),
+            ([], False),
+            ({}, False),
+            ("é" * 500, True),
+            ("é" * 501, False),
+            ("🌿" * 500, True),
+            ("🌿" * 501, False),
+        ]
+        for field in (*TEXT_FIELDS, "abstention_reason"):
+            for text, valid in samples:
+                with self.subTest(
+                    field=field,
+                    text_type=type(text).__name__,
+                    length=len(text) if isinstance(text, str) else None,
+                ):
+                    value = fake_proposal(context())
+                    if field == "abstention_reason":
+                        value["proposals"] = []
+                        value[field] = text
+                    else:
+                        value["proposals"][0][field] = text
+                    if valid:
+                        self.assertEqual(validate_output(value, context()), value)
+                    else:
+                        with self.assertRaises(ValueError):
+                            validate_output(value, context())
+
+    def test_coordinator_rejects_oversized_runner_proposal(self):
+        from olin.investigator_shadow_service import ShadowResearchService
+
+        for field in TEXT_FIELDS:
+            with self.subTest(field=field):
+                runner = Runner({"mode": "fake"})
+                output = runner.generate(context())
+                output["proposal"]["proposals"][0][field] = "Question" + " " * 600
+                service = ShadowResearchService(None, None, runner, synthetic_cases=[])
+                record = {"context": context(), "events": []}
+                with (
+                    patch.object(service, "_call", return_value=record) as call,
+                    patch.object(service, "_fresh"),
+                    patch.object(service, "_bind_human", return_value=record),
+                    patch.object(runner, "generate", return_value=output),
+                ):
+                    service.generate(None, None, None)
+                final = call.call_args.args[4]
+                self.assertEqual(final, {"status": "INVALID_OUTPUT", "proposal": None})
+
     def test_http_rejects_forged_context_actor_and_unauthenticated_research(self):
         import test_investigator_phase5a_workflow as app_tests
         from olin.investigator_app import build_handler

@@ -210,7 +210,7 @@ def validate_output(value: object, context: dict) -> dict:
 
 
 def _validate_text(text):
-    if not isinstance(text, str) or not 1 <= len(text.strip()) <= 500:
+    if not isinstance(text, str) or not text.strip() or len(text) > 500:
         raise ValueError("bounded text required")
     if re.search(
         r"[0-9<>`]|\b(score|pd|approve|decline|pricing|loan|verified=true|independent=true|exec|curl|sudo)\b",
