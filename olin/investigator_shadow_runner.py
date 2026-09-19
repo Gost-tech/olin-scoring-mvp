@@ -16,8 +16,10 @@ from .investigator_shadow import OUTPUT_SCHEMA, PROMPT, canonical, fake_proposal
 
 
 class Runner:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, *, response_observer=None):
         self.config = config
+        # Optional private evaluation sink, never a model tool or public log.
+        self.response_observer = response_observer
         self.lock = threading.Lock()
         self.used = 0
         self.mode = config.get("mode")
@@ -83,6 +85,8 @@ class Runner:
         started = time.monotonic()
         if self.mode == "fake":
             proposal = fake_proposal(context)
+            if self.response_observer is not None:
+                self.response_observer(canonical(proposal).encode())
             usage = None
         else:
             # Count input bytes conservatively as a token upper bound. No tokenizer dependency.
@@ -121,6 +125,8 @@ class Runner:
                 )
                 response = transport.getresponse()
                 raw = response.read(32001)
+                if self.response_observer is not None:
+                    self.response_observer(raw)
                 if response.status != 200 or len(raw) > 32000:
                     raise ValueError("model response unavailable or oversized")
                 data = json.loads(raw)
