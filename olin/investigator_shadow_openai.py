@@ -24,9 +24,68 @@ REQUEST_RESERVE_USD = (400000 * INPUT_RATE + 1024 * OUTPUT_RATE) / 1000000
 
 
 class HostedFailure(Exception):
-    def __init__(self, status):
+    def __init__(self, status, details=None):
         super().__init__(status)  # Closed status only, never provider bodies.
         self.status = status
+        self.details = details or {}
+
+
+def http_failure(http_status, raw):
+    """Closed categories only; no messages, parameters or unknown codes retained.
+
+    https://developers.openai.com/api/docs/guides/error-codes
+    A bare 429 is not proof of exhausted funds. All HTTP failures stop this run.
+    """
+    billing = {
+        "insufficient_quota",
+        "credit_balance_exhausted",
+        "organization_spend_limit_exceeded",
+        "project_spend_limit_exceeded",
+        "organization_usage_limit_exceeded",
+    }
+    codes = billing | {
+        "invalid_api_key",
+        "model_not_found",
+        "rate_limit_exceeded",
+        "slow_down",
+    }
+    types = {
+        "insufficient_quota",
+        "rate_limit_error",
+        "invalid_request_error",
+        "authentication_error",
+    }
+    error = {}
+    try:
+        if len(raw) <= 32000:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
+                error = parsed["error"]
+    except (ValueError, UnicodeError):
+        pass
+    code, kind = error.get("code"), error.get("type")
+    code = code if isinstance(code, str) and code in codes else None
+    kind = kind if isinstance(kind, str) and kind in types else None
+    status = "TRANSPORT_FAILURE_AMBIGUOUS"
+    if http_status == 401:
+        status = "AUTHENTICATION_FAILED"
+    elif http_status == 403 or (http_status == 404 and code == "model_not_found"):
+        status = "ACCESS_DENIED"
+    elif http_status == 429:
+        if code in billing or (code is None and kind == "insufficient_quota"):
+            status = "BILLING_OR_QUOTA_BLOCKED"
+        elif code in {"rate_limit_exceeded", "slow_down"} or kind == "rate_limit_error":
+            status = "RATE_LIMITED"
+    return HostedFailure(
+        status,
+        {
+            "http_status": http_status
+            if type(http_status) is int and 100 <= http_status <= 599
+            else None,
+            "error_code": code,
+            "error_type": kind,
+        },
+    )
 
 
 def validate_config(config):
@@ -137,13 +196,14 @@ def generate(config, context, credential_loader, observer):
         )
         response = transport.getresponse()
         raw = response.read(32001)
+        if response.status != 200:
+            # Error bodies may echo credentials; only allowlisted metadata exits.
+            raise http_failure(response.status, raw)
         # Never persist an echoed credential, including error-response bodies.
         if credential.encode() in raw:
             raise HostedFailure("REDACTED_PROVIDER_RESPONSE")
         if observer is not None:
             observer(raw)
-        if response.status != 200:
-            raise HostedFailure("TRANSPORT_FAILURE_AMBIGUOUS")
         if len(raw) > 32000:
             raise ValueError("oversized provider response")
         data = json.loads(raw)

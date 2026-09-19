@@ -260,9 +260,120 @@ class EvaluationPostgresTests(unittest.TestCase):
         )
         report = run(attempt)
         self.assertEqual(report["results"][0]["status"], "AMBIGUOUS")
-        self.assertEqual(attempt.call_count, 2)
+        attempt.assert_not_called()
+        self.assertEqual(report["attempted_cases"], 1)
+        self.assertFalse((self.path / "account-complete.started.json").exists())
+        self.assertFalse((self.path / "cost-debt-unknown.started.json").exists())
         run(attempt)
-        self.assertEqual(attempt.call_count, 2)
+        attempt.assert_not_called()
+
+    def test_hosted_error_stops_and_survives_restart_without_unsent_receipts(self):
+        from test_investigator_shadow_openai import configuration
+
+        scenarios = [
+            (401, "invalid_api_key", "AUTHENTICATION_FAILED"),
+            (403, None, "ACCESS_DENIED"),
+            (404, "model_not_found", "ACCESS_DENIED"),
+            (429, "credit_balance_exhausted", "BILLING_OR_QUOTA_BLOCKED"),
+            (429, "project_spend_limit_exceeded", "BILLING_OR_QUOTA_BLOCKED"),
+            (429, "rate_limit_exceeded", "RATE_LIMITED"),
+            (429, None, "TRANSPORT_FAILURE_AMBIGUOUS"),
+            (500, None, "TRANSPORT_FAILURE_AMBIGUOUS"),
+            (None, None, "TIMEOUT_AMBIGUOUS"),
+        ]
+        for index, (http, code, expected) in enumerate(scenarios):
+            with self.subTest(http=http, code=code):
+                directory = ev.private_directory(self.path / str(index))
+                ev.save_once(directory / "manifest.json", self.manifest)
+
+                def attempt(config, supplied):
+                    return ev.worker(
+                        {
+                            "config": config,
+                            "context": supplied,
+                            "credential_file": "/mock-only",
+                        }
+                    )
+
+                with (
+                    patch(
+                        "olin.investigator_shadow_openai.http.client.HTTPSConnection"
+                    ) as transport,
+                    patch.object(
+                        ev,
+                        "read_dedicated_credential",
+                        return_value="synthetic-test-only-credential",
+                    ),
+                ):
+                    response = transport.return_value.getresponse.return_value
+                    response.status = http
+                    response.read.return_value = ev.canonical(
+                        {
+                            "error": {
+                                "code": code,
+                                "message": "synthetic-test-only-credential",
+                            }
+                        }
+                    ).encode()
+                    if http is None:
+                        transport.return_value.request.side_effect = TimeoutError()
+                    for _ in range(2):
+                        report = ev.evaluate(
+                            self.fixture.service,
+                            self.fixture.identity,
+                            directory,
+                            mode="real",
+                            config=configuration(),
+                            attempt=attempt,
+                        )
+                        self.assertEqual(report["attempted_cases"], 1)
+                    self.assertEqual(transport.return_value.request.call_count, 1)
+                self.assertEqual(report["results"][0]["status"], expected)
+                for case in ("account-complete", "cost-debt-unknown"):
+                    result = next(
+                        r for r in report["results"] if r["rubric_id"] == case
+                    )
+                    self.assertEqual(result["status"], "NOT_ATTEMPTED")
+                    self.assertEqual(result["stop_reason"], expected)
+                    self.assertFalse((directory / (case + ".started.json")).exists())
+                self.assertNotIn("synthetic-test-only-credential", ev.canonical(report))
+
+    def test_hosted_stop_recovers_after_result_publication_interruption(self):
+        from test_investigator_shadow_openai import configuration
+
+        save = ev.save_once
+
+        def interrupted(path, value):
+            if path.name == "coverage-unknown.result.json":
+                raise RuntimeError("interrupted final publication")
+            return save(path, value)
+
+        attempt = MagicMock(
+            return_value={"status": "AUTHENTICATION_FAILED", "proposal": None}
+        )
+        with (
+            patch.object(ev, "save_once", side_effect=interrupted),
+            self.assertRaises(RuntimeError),
+        ):
+            ev.evaluate(
+                self.fixture.service,
+                self.fixture.identity,
+                self.path,
+                mode="real",
+                config=configuration(),
+                attempt=attempt,
+            )
+        report = ev.evaluate(
+            self.fixture.service,
+            self.fixture.identity,
+            self.path,
+            mode="real",
+            config=configuration(),
+            attempt=attempt,
+        )
+        self.assertEqual(attempt.call_count, 1)
+        self.assertEqual(report["attempted_cases"], 1)
+        self.assertEqual(report["results"][0]["status"], "AMBIGUOUS")
 
     def test_missing_summary_recovers_without_repeating_any_attempt(self):
         write = ev.write_once

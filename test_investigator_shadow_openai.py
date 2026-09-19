@@ -212,8 +212,64 @@ class HostedAdapterTests(unittest.TestCase):
         self.transport.return_value.request.side_effect = None
         for code in (302, 401, 429, 500):
             self.response.status = code
-            self.assertEqual(self.worker()["status"], "TRANSPORT_FAILURE_AMBIGUOUS")
+            self.assertEqual(
+                self.worker()["status"],
+                "AUTHENTICATION_FAILED"
+                if code == 401
+                else "TRANSPORT_FAILURE_AMBIGUOUS",
+            )
         self.assertEqual(self.transport.call_count, 6)
+
+    def test_http_categories_are_allowlisted_and_error_bodies_never_escape(self):
+        cases = [
+            (401, "invalid_api_key", "authentication_error", "AUTHENTICATION_FAILED"),
+            (403, None, "invalid_request_error", "ACCESS_DENIED"),
+            (404, "model_not_found", "invalid_request_error", "ACCESS_DENIED"),
+            (429, "rate_limit_exceeded", "rate_limit_error", "RATE_LIMITED"),
+            (429, "slow_down", "rate_limit_error", "RATE_LIMITED"),
+            (429, None, None, "TRANSPORT_FAILURE_AMBIGUOUS"),
+            (
+                500,
+                "sensitive-not-allowlisted",
+                "private-type",
+                "TRANSPORT_FAILURE_AMBIGUOUS",
+            ),
+            (429, None, "insufficient_quota", "BILLING_OR_QUOTA_BLOCKED"),
+        ] + [
+            (429, code, "insufficient_quota", "BILLING_OR_QUOTA_BLOCKED")
+            for code in (
+                "insufficient_quota",
+                "credit_balance_exhausted",
+                "project_spend_limit_exceeded",
+                "organization_spend_limit_exceeded",
+                "organization_usage_limit_exceeded",
+            )
+        ]
+        for http, code, kind, expected in cases:
+            with self.subTest(http=http, code=code):
+                self.response.status = http
+                self.response.read.return_value = canonical(
+                    {
+                        "error": {
+                            "code": code,
+                            "type": kind,
+                            "message": self.credential,
+                            "param": "sensitive-param",
+                        }
+                    }
+                ).encode()
+                result = self.worker()
+                self.assertEqual(result["status"], expected)
+                self.assertEqual(result["failure_details"]["http_status"], http)
+                self.assertEqual(result["raw_response_base64"], [])
+                for forbidden in (
+                    self.credential,
+                    "sensitive-param",
+                    "sensitive-not-allowlisted",
+                    "private-type",
+                ):
+                    self.assertNotIn(forbidden, canonical(result))
+        self.assertEqual(self.transport.call_count, len(cases))
 
     def test_credential_echo_is_never_published(self):
         self.response.read.return_value = self.credential.encode()

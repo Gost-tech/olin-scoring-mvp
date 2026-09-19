@@ -274,6 +274,7 @@ def worker(payload):
     """Runs in a sanitized process. Receives config + minimized context ONLY."""
     raw = []
     known_usage = None
+    failure_details = {}
     started = time.monotonic()
     runner = Runner(
         payload["config"],
@@ -296,6 +297,7 @@ def worker(payload):
         }
     except HostedFailure as exc:
         status = exc.status
+        failure_details = exc.details
     except TimeoutError:
         status = "TIMEOUT_AMBIGUOUS"
     except (ValueError, KeyError, TypeError):
@@ -310,6 +312,7 @@ def worker(payload):
         "usage": known_usage,
         "cost": None,
         "endpoint_computation_stopped": "UNKNOWN",
+        "failure_details": failure_details,
     }
 
 
@@ -371,6 +374,25 @@ def evaluate(
         return _evaluate_locked(workflow, identity, directory, mode, config, attempt)
 
 
+def hosted_stop_reason(config, result):
+    if config.get("mode") != "openai":
+        return None
+    stops = {
+        "AUTHENTICATION_FAILED",
+        "ACCESS_DENIED",
+        "BILLING_OR_QUOTA_BLOCKED",
+        "RATE_LIMITED",
+        "TRANSPORT_FAILURE_AMBIGUOUS",
+        "TIMEOUT_AMBIGUOUS",
+        "AMBIGUOUS",
+        "REDACTED_PROVIDER_RESPONSE",
+    }
+    for field in ("generation_status", "status"):
+        if result.get(field) in stops:
+            return result[field]
+    return None
+
+
 def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
     manifest = load_private(directory / "manifest.json")
     if (
@@ -397,6 +419,17 @@ def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
     expected_ids = [c["id"] for c in frozen_dataset()["cases"]]
     if [r["rubric_id"] for r in manifest["cases"]] != expected_ids:
         raise ValueError("frozen case list required")
+    # Recover the stop BEFORE any new request. Receipt-only attempts are ambiguous.
+    stop_reason = None
+    for case in expected_ids:
+        final = directory / (case + ".result.json")
+        if final.exists():
+            previous = load_private(final)
+        elif (directory / (case + ".started.json")).exists():
+            previous = {"status": "AMBIGUOUS"}
+        else:
+            continue
+        stop_reason = stop_reason or hosted_stop_reason(config, previous)
     for row in manifest["cases"]:
         case = row["rubric_id"]
         start_path, final_path = (
@@ -443,6 +476,8 @@ def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
                 status="AMBIGUOUS",
                 endpoint_computation_stopped="UNKNOWN",
             )
+        elif row["status"] == "MODEL_VISIBLE" and stop_reason:
+            result.update(pipeline_status="RUN_STOPPED", stop_reason=stop_reason)
         elif row["status"] == "MODEL_VISIBLE":
             case_id = uuid5(UUID(manifest["namespace"]), case)
             if str(case_id) != row["case_id"]:
@@ -506,6 +541,7 @@ def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
                     except Exception:  # noqa: BLE001 - any recheck failure excludes the result
                         result["generation_status"] = result["status"]
                         result["status"] = "STALE_CONTEXT_EXCLUDED"
+        stop_reason = stop_reason or hosted_stop_reason(config, result)
         save_once(final_path, result)
         results.append(result)
     report = {
