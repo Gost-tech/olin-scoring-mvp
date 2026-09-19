@@ -1,0 +1,14 @@
+{
+  "contract_version": "investigator-shadow-research-1",
+  "mode": "synthetic-only",
+  "default": "deny",
+  "ordinary_runtime_ai_invoke": "deny",
+  "runner_capabilities": ["configured-local-model-transport"],
+  "runner_tools": [],
+  "runner_database_access": false,
+  "proposal_authority": "UNTRUSTED_RESEARCH_ONLY",
+  "max_proposals": 3,
+  "max_attempts_per_round": 1,
+  "disclosure": "same-analyst-durable-human-selection-and-fresh-currentness",
+  "real_inference_default": "disabled"
+}

@@ -58,6 +58,9 @@ jobs:
       - name: Run pilot safety suite
         id: pilot_safety
         run: python -m unittest discover -v
+      - name: Run required Investigator Phase 5B research suite
+        id: shadow_research
+        run: python -m unittest -v test_investigator_postgres_shadow
       - name: Run legacy compatibility checks
         id: legacy_compatibility
         run: |
@@ -72,6 +75,7 @@ jobs:
             steps.postgres_boundary.outcome == 'success' &&
             steps.evidence_boundary.outcome == 'success' &&
             steps.investigation_workflow.outcome == 'success' &&
+            steps.shadow_research.outcome == 'success' &&
             steps.pilot_safety.outcome == 'success'
           }}
         run: python -m olin.synthetic_portfolio --cases 1000 --seed 42

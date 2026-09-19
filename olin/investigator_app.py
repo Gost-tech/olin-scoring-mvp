@@ -949,16 +949,28 @@ button,input,select,textarea{font:inherit;padding:10px;border:1px solid #9dac9f;
 <main class="shell"><h1>OLIN Investigator</h1><p>Human-controlled investigation using current canonical evidence.</p>
 <section id="login" class="card"><h2>Analyst access</h2><input id="name" placeholder="Analyst name"><input id="token" type="password" placeholder="Development token"><button onclick="login()">Sign in</button></section>
 <section id="workspace" class="hidden"><div class="card"><label>Case UUID <input id="caseId"></label><button onclick="refreshCase()">Open / refresh current case</button><p id="status" class="muted"></p></div>
-<div id="analysis"></div><div class="card"><h2>Human-selected next action</h2><div id="catalogue" class="actions"></div></div><div id="history" class="card"><h2>Action history</h2></div></section>
+<div id="analysis"></div><div class="card"><h2>Human-selected next action</h2><div id="catalogue" class="actions"></div></div><div id="history" class="card"><h2>Action history</h2></div>
+<section class="card"><h2>Shadow research — separate and untrusted</h2><p>Freeze a round BEFORE choosing your initial human action. Then record that action above. Suggestions are withheld by the server until selection. A fake provider is a plumbing demonstration, not model intelligence. Human investigation does not depend on research availability.</p>
+<button onclick="startShadow()">Freeze or resume pre-selection research context</button>
+<button onclick="shadowOperation('generate')">Generate isolated shadow attempt</button>
+<button onclick="shadowOperation('disclose')">Reveal after human selection</button>
+<button onclick="shadowOperation('history')">Research history and performed outcome</button>
+<button onclick="rateShadow()">Record research usefulness</button>
+<pre id="shadowResult" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section></section>
 <div id="message"></div></main><script>
 let sessionToken='', currentCase='', currentAnalysis=null;
+let shadowRound='', shadowCase='';
+const shadowPanel=document.getElementById('shadowResult');
+async function startShadow(){shadowPanel.textContent='';try{let r;try{r=await api('/api/cases/'+encodeURIComponent(currentCase)+'/shadow')}catch(_){r=await api('/api/cases/'+encodeURIComponent(currentCase)+'/shadow',{method:'POST',body:JSON.stringify({idempotency_key:crypto.randomUUID()})})}shadowRound=r.round_id;shadowCase=currentCase;shadowPanel.textContent=JSON.stringify(r,null,2)}catch(e){shadowPanel.textContent='Research unavailable: '+e.message}}
+async function shadowOperation(op){shadowPanel.textContent='';if(!shadowRound||shadowCase!==currentCase){shadowPanel.textContent='Freeze a comparison round for this case first.';return}try{const r=await api('/api/cases/'+encodeURIComponent(currentCase)+'/shadow/'+shadowRound+'/'+op,{method:'POST',body:'{}'});shadowPanel.textContent=JSON.stringify(r,null,2)}catch(e){shadowPanel.textContent='Research unavailable/stale: '+e.message}}
+async function rateShadow(){if(!shadowRound||shadowCase!==currentCase)return;const usefulness=prompt('USEFUL, NOT_USEFUL or UNCERTAIN');if(!usefulness)return;const reason=prompt('Why? This is a human research interpretation, not evidence truth.');if(!reason)return;try{await api('/api/cases/'+encodeURIComponent(currentCase)+'/shadow/'+shadowRound+'/rate',{method:'POST',body:JSON.stringify({usefulness,reason,idempotency_key:crypto.randomUUID()})});notice('Research annotation recorded.')}catch(e){notice(e.message,true)}}
 const nameInput=document.getElementById('name'),tokenInput=document.getElementById('token'),loginPanel=document.getElementById('login'),workspacePanel=document.getElementById('workspace'),caseInput=document.getElementById('caseId'),statusPanel=document.getElementById('status'),analysisPanel=document.getElementById('analysis'),cataloguePanel=document.getElementById('catalogue'),historyPanel=document.getElementById('history');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(path, options={}){const headers={'Content-Type':'application/json',...(options.headers||{})};if(sessionToken)headers.Authorization='Bearer '+sessionToken;const r=await fetch(path,{...options,headers,cache:'no-store'});const body=await r.json();if(!r.ok)throw new Error(body.message||body.code);return body}
 function notice(text,bad=false){document.getElementById('message').innerHTML=`<div class="card ${bad?'error':'ok'}">${esc(text)}</div>`}
 async function login(){try{const body=await api('/api/session',{method:'POST',body:JSON.stringify({name:nameInput.value,token:tokenInput.value})});sessionToken=body.access_token;tokenInput.value='';loginPanel.classList.add('hidden');workspacePanel.classList.remove('hidden');renderCatalogue(body.catalogue);notice('Authenticated analyst session.');}catch(e){notice(e.message,true)}}
 function renderCatalogue(items){cataloguePanel.innerHTML=items.map(x=>`<div><strong>${esc(x.unresolved_question)}</strong><p>${esc(x.purpose)}</p><button onclick="selectAction('${esc(x.action_type)}')">Select this action</button></div>`).join('')}
-async function refreshCase(){currentCase=caseInput.value.trim();statusPanel.textContent='Checking current server-authorized state…';analysisPanel.innerHTML='';try{const body=await api('/api/cases/'+encodeURIComponent(currentCase));currentAnalysis=body;renderAnalysis(body);await refreshHistory();statusPanel.textContent='Checked as of '+body.server_checked_at+'; refresh rechecks authority.';}catch(e){currentAnalysis=null;statusPanel.textContent='Current analysis unavailable.';notice(e.message,true)}}
+async function refreshCase(){currentCase=caseInput.value.trim();shadowPanel.textContent='Research display cleared. Reveal rechecks current authority.';statusPanel.textContent='Checking current server-authorized state…';analysisPanel.innerHTML='';try{const body=await api('/api/cases/'+encodeURIComponent(currentCase));currentAnalysis=body;renderAnalysis(body);await refreshHistory();statusPanel.textContent='Checked as of '+body.server_checked_at+'; refresh rechecks authority.';}catch(e){currentAnalysis=null;statusPanel.textContent='Current analysis unavailable.';notice(e.message,true)}}
 function refs(x){return (x.provenance||[]).map(p=>esc(p.reference_id)+' / '+esc(p.source_id)+' / '+esc(p.verification_status)).join('<br>')||'No direct evidence reference (derived rule output).'}
 function values(items,cls){return items.map(x=>`<div class="card ${cls}"><span class="label">${esc(x.value_type)} · ${esc(x.quantity)}</span><div class="value">${esc(x.value)} ${esc(x.unit)}</div><p>${esc(x.period_start)} — ${esc(x.period_end)}</p><small>Meaning: ${esc(x.dimensional_scope)} · rule ${esc(x.rule_id)}</small><details><summary>Evidence and provenance</summary><small>${refs(x)}</small></details></div>`).join('')}
 function renderAnalysis(body){const r=body.reconstruction,b=r.input_assessment,c=body.change_summary;analysisPanel.innerHTML=`<div class="card"><h2>Current case</h2><p><b>${esc(body.case_id)}</b> · snapshot ${esc(b.snapshot_id)}</p><p>Authority revision ${esc(b.authority_revision)} · Phase 3 ${esc(b.phase3_rules_version)} · Phase 4 ${esc(r.rules_version)}</p><p>Server checked as of ${esc(body.server_checked_at)}</p></div><div class="grid">${values(r.observed_values,'observed')}${values(r.claimed_values,'claimed')}${values(r.derived_values,'disagreement')}</div><div class="card"><h2>Coverage</h2>${r.coverage_diagnostics.map(x=>`<p><b>${esc(x.coverage_type)}</b>: ${esc(x.status)} — ${esc(x.why)}</p>`).join('')}</div><div class="card unknown"><h2>Unknowns remain unknown</h2>${r.unresolved_quantities.map(x=>`<p><b>${esc(x.quantity)}</b>: ${esc(x.status)} — ${esc(x.why_unresolved)}</p>`).join('')}</div><div class="card disagreement"><h2>Reconciliation disagreements</h2>${r.contradictions_carried_forward.map(x=>`<p><b>${esc(x.contradiction_type)}</b> · ${esc(x.materiality)} · rule ${esc(x.rule_id)}</p>`).join('')||'<p>None in the current assessment.</p>'}</div><div class="card"><h2>Snapshot-bound change</h2><p>Historical selection snapshot: ${esc(c.historical_selected_snapshot_id||'none')}</p><p>Current snapshot: ${esc(c.current_snapshot_id)}</p><p>Canonical evidence added: ${c.canonical_evidence_added.map(x=>esc(x.reference_id)+' / '+esc(x.proposition_type)+' / '+esc(x.source_id)).join('<br>')||'none'}</p><p>Current values supported by added evidence: ${c.current_values_supported_by_added_evidence.map(esc).join(', ')||'none'}</p><p>Current coverage supported by added evidence: ${c.current_coverage_supported_by_added_evidence.map(esc).join(', ')||'none'}</p><p>Questions still unresolved: ${c.questions_still_unresolved.map(esc).join(', ')||'none listed'}</p><small>${esc(c.historical_notice)}</small></div>`}
@@ -973,7 +985,9 @@ async function stopAction(id,seq,status){const reason=prompt('Reason: EVIDENCE_U
 
 
 def build_handler(
-    authenticator: InvestigatorAuthenticator, service: InvestigatorWorkflowService
+    authenticator: InvestigatorAuthenticator,
+    service: InvestigatorWorkflowService,
+    shadow=None,
 ) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "OlinInvestigator/1"
@@ -1062,6 +1076,61 @@ def build_handler(
                 if method == "GET" and len(parts) == 3:
                     self._json(200, service.current_analysis(identity, case_id))
                     return
+                if len(parts) >= 4 and parts[3] == "shadow":
+                    if shadow is None:
+                        raise InvestigatorAppError(
+                            503,
+                            "RESEARCH_DISABLED",
+                            "Shadow research is not configured; human workflow remains available",
+                        )
+                    body = self._body() if method == "POST" else {}
+                    if method == "GET" and len(parts) == 4:
+                        self._json(200, shadow.resume(identity, case_id))
+                        return
+                    if (
+                        method == "POST"
+                        and len(parts) == 4
+                        and set(body) == {"idempotency_key"}
+                    ):
+                        self._json(
+                            201,
+                            shadow.create(identity, case_id, body["idempotency_key"]),
+                        )
+                        return
+                    if method == "POST" and len(parts) == 6:
+                        round_id = UUID(parts[4])
+                        operation = parts[5]
+                        if (
+                            operation in {"generate", "disclose", "history"}
+                            and not body
+                        ):
+                            self._json(
+                                200,
+                                getattr(shadow, operation)(identity, case_id, round_id),
+                            )
+                            return
+                        if operation == "rate" and set(body) == {
+                            "usefulness",
+                            "reason",
+                            "idempotency_key",
+                        }:
+                            self._json(
+                                200,
+                                shadow.rate(
+                                    identity,
+                                    case_id,
+                                    round_id,
+                                    body["usefulness"],
+                                    body["reason"],
+                                    body["idempotency_key"],
+                                ),
+                            )
+                            return
+                    raise InvestigatorAppError(
+                        400,
+                        "INVALID_RESEARCH_REQUEST",
+                        "Closed research command required",
+                    )
                 if len(parts) == 4 and parts[3] == "actions":
                     if method == "GET":
                         self._json(
@@ -1174,8 +1243,27 @@ def main() -> None:
         action_connect=_connect("OLIN_INVESTIGATOR_ACTION_DATABASE_URL"),
         synthetic_operator=operator,
     )
+    shadow = None
+    if os.environ.get("OLIN_INVESTIGATOR_SHADOW_RUNNER_URL"):
+        from .investigator_shadow_service import ShadowResearchService, ShadowTransport
+
+        shadow = ShadowResearchService(
+            service,
+            _connect("OLIN_INVESTIGATOR_RESEARCH_DATABASE_URL"),
+            ShadowTransport(
+                os.environ["OLIN_INVESTIGATOR_SHADOW_RUNNER_URL"],
+                os.environ.get("OLIN_INVESTIGATOR_SHADOW_RUNNER_TOKEN", ""),
+                provider=os.environ.get("OLIN_INVESTIGATOR_SHADOW_PROVIDER", "fake"),
+                model=os.environ.get(
+                    "OLIN_INVESTIGATOR_SHADOW_MODEL", "deterministic-fake-1"
+                ),
+            ),
+            synthetic_cases=json.loads(
+                os.environ.get("OLIN_INVESTIGATOR_SHADOW_SYNTHETIC_CASES", "[]")
+            ),
+        )
     server = ThreadingHTTPServer(
-        (args.host, args.port), build_handler(authenticator, service)
+        (args.host, args.port), build_handler(authenticator, service, shadow)
     )
     try:
         server.serve_forever()
