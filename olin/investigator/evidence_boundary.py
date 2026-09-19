@@ -176,7 +176,7 @@ class ReasoningReadySnapshot:
 
     @staticmethod
     def _is_closed_eager(value: object) -> bool:
-        from . import claims, evidence
+        from . import claims, evidence, reconstruction
 
         value_type = type(value)
         if value is None or value_type in (
@@ -198,6 +198,11 @@ class ReasoningReadySnapshot:
                 evidence.IndependenceStatus,
                 evidence.LineageRelation,
                 evidence.VerificationStatus,
+                reconstruction.CoverageStatus,
+                reconstruction.CoverageType,
+                reconstruction.EconomicDimension,
+                reconstruction.EconomicValueType,
+                reconstruction.ReconstructionStatus,
             )
         if value_type is tuple:
             return all(ReasoningReadySnapshot._is_closed_eager(item) for item in value)
@@ -212,6 +217,13 @@ class ReasoningReadySnapshot:
             claims.Provenance,
             claims.Unknown,
             claims.VerifiedFact,
+            reconstruction.AssessmentBinding,
+            reconstruction.ConstrainedRange,
+            reconstruction.CoverageDiagnostic,
+            reconstruction.DimensionAssessment,
+            reconstruction.EconomicReconstruction,
+            reconstruction.EconomicValue,
+            reconstruction.UnknownEconomicQuantity,
         )
         if value_type in phase3_types and getattr(
             getattr(value_type, "__dataclass_params__", None), "frozen", False
@@ -725,6 +737,31 @@ class PostgresReasoningSnapshotGate:
             snapshot_id=snapshot_id,
             as_of=as_of,
             consumer=assess_claims,
+            phase3=True,
+        )
+
+    def reconstruct_economics_current(
+        self,
+        *,
+        tenant_id: UUID,
+        case_id: UUID,
+        snapshot_id: UUID,
+        as_of: datetime,
+    ):
+        """Run Phase 3 and accepted Phase 4 reconstruction in one transaction."""
+        from .claims import assess_claims
+        from .reconstruction import _accept_and_reconstruct
+
+        def reconstruct(ready):
+            assessment = assess_claims(ready)
+            return _accept_and_reconstruct(assessment, ready)
+
+        return self._consume_in_new_transaction(
+            tenant_id=tenant_id,
+            case_id=case_id,
+            snapshot_id=snapshot_id,
+            as_of=as_of,
+            consumer=reconstruct,
             phase3=True,
         )
 

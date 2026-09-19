@@ -45,6 +45,10 @@ from olin.investigator.evidence import (
     EvidenceUsability,
 )
 from olin.investigator.evidence_boundary import PostgresReasoningSnapshotGate
+from olin.investigator.reconstruction import (
+    PHASE4_RULES_VERSION,
+    EconomicReconstruction,
+)
 from olin.investigator_evidence_adapter import PostgresCanonicalEvidenceReadPort
 
 ADMIN_DSN = os.getenv("OLIN_INVESTIGATOR_TEST_ADMIN_DSN", "").strip()
@@ -2378,6 +2382,47 @@ class InvestigatorPostgresEvidenceTests(unittest.TestCase):
                 self.assertRaises(psycopg.Error),
             ):
                 self._accept_phase3_external_assertion(f"invalid-{index}", **changes)
+
+    def test_z_phase4_01_real_target_reconstructs_only_inside_current_wrapper(self):
+        snapshot, custody = self._phase3_target_case("phase4-target")
+        with self._phase25_reader() as (_, port):
+            gate = PostgresReasoningSnapshotGate(
+                runtime_connection=self.runtime,
+                evidence_authority=port,
+                runtime_custody=custody,
+            )
+            result = gate.reconstruct_economics_current(
+                tenant_id=self.tenant,
+                case_id=self.case_id,
+                snapshot_id=snapshot,
+                as_of=datetime.now(timezone.utc),
+            )
+
+        self.assertIsInstance(result, EconomicReconstruction)
+        self.assertEqual(result.rules_version, PHASE4_RULES_VERSION)
+        self.assertEqual(result.input_assessment.snapshot_id, snapshot)
+        self.assertEqual(
+            [item.value for item in result.observed_values],
+            ["118000"],
+        )
+        self.assertEqual(
+            [item.value for item in result.claimed_values],
+            ["260000"],
+        )
+        self.assertEqual(
+            [
+                item.value
+                for item in result.derived_values
+                if item.quantity == "revenue_reconciliation_gap"
+            ],
+            ["142000"],
+        )
+        self.assertIn(
+            "total_sustainable_revenue",
+            {item.quantity for item in result.unresolved_quantities},
+        )
+        self.assertEqual(len(result.contradictions_carried_forward), 1)
+        self.assertEqual(self.runtime.info.transaction_status.name, "IDLE")
 
     def test_z_phase25_02_authority_revision_and_rollback(self):
         _, record, _, _ = self._phase25_ready_case("revision")
