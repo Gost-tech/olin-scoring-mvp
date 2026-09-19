@@ -740,19 +740,26 @@ class InvestigatorWorkflowService:
         if matched is None:
             raise InvestigatorAppError(404, "ACTION_NOT_FOUND", "Action not found")
         response_key = f"synthetic-response:{action_id}:{fixture}"
-        if any(
-            transition["idempotency_key"] == response_key
-            for transition in matched["transitions"]
-        ):
+        receipt = next(
+            (t for t in matched["transitions"] if t["idempotency_key"] == response_key),
+            None,
+        )
+        final_key = (
+            f"synthetic-accepted:{action_id}:{fixture}"
+            if fixture == "useful_coverage"
+            else f"synthetic-terminal:{action_id}:{fixture}"
+        )
+        finalized = next(
+            (t for t in matched["transitions"] if t["idempotency_key"] == final_key),
+            None,
+        )
+        # A receipt is not an outcome. Resume only its still-pending transition;
+        # unrelated later history must not be overwritten by a retry.
+        if finalized is not None and fixture != "useful_coverage":
             return {
-                "outcome": matched["transitions"][-1]["to_status"],
-                "evidence_references": sorted(
-                    {
-                        reference
-                        for transition in matched["transitions"]
-                        for reference in transition["evidence_references"]
-                    }
-                ),
+                "outcome": finalized["to_status"],
+                "reason_code": finalized["reason_code"],
+                "reason_detail": finalized["reason_detail"],
                 "synthetic": True,
                 "replayed": True,
             }
@@ -766,11 +773,18 @@ class InvestigatorWorkflowService:
                 "This action has no supported coverage-evidence handoff",
             )
         current = matched["transitions"][-1]
-        if current["to_status"] != ActionStatus.REQUESTED.value:
+        if finalized is None and not (
+            (receipt is None and current["to_status"] == ActionStatus.REQUESTED.value)
+            or (
+                receipt is not None
+                and current == receipt
+                and current["to_status"] == ActionStatus.RESPONSE_RECEIVED.value
+            )
+        ):
             raise InvestigatorAppError(
                 409,
                 "INVALID_ACTION_STATE",
-                "Only a requested action can receive a response",
+                "Response requires a requested action or its pending receipt",
             )
         result = self._synthetic_operator.submit(
             tenant_id=identity.tenant_id,
@@ -845,11 +859,25 @@ class InvestigatorWorkflowService:
             raise InvestigatorAppError(
                 409, "INVALID_HANDOFF", "Synthetic handoff outcome is unsupported"
             )
+        if finalized is not None:
+            # Accepted replays also traverse the canonical/currentness and
+            # action-bound delta checks above; history is never authority.
+            if finalized["evidence_references"] != [result["evidence_reference"]]:
+                raise InvestigatorAppError(
+                    409, "INVALID_HANDOFF", "Replay evidence differs from history"
+                )
+            result["outcome"] = finalized["to_status"]
+            result["replayed"] = True
+            return result
         response = self._transition_action(
             identity,
             case_id,
             action_id,
-            expected_sequence=int(current["transition_sequence"]),
+            expected_sequence=(
+                int(receipt["transition_sequence"]) - 1
+                if receipt is not None
+                else int(current["transition_sequence"])
+            ),
             to_status=ActionStatus.RESPONSE_RECEIVED.value,
             reason_code=None,
             reason_detail=None,
@@ -863,7 +891,11 @@ class InvestigatorWorkflowService:
             cost_currency=None,
             idempotency_key=response_key,
         )
-        response_sequence = int(response["transitions"][-1]["transition_sequence"])
+        response_sequence = next(
+            int(t["transition_sequence"])
+            for t in response["transitions"]
+            if t["idempotency_key"] == response_key
+        )
         if outcome == ActionStatus.EVIDENCE_ACCEPTED.value:
             self._transition_action(
                 identity,

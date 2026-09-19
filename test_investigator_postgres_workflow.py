@@ -6,10 +6,14 @@ name ends in ``_investigator_test`` and OLIN_INVESTIGATOR_TEST_DISPOSABLE=YES.
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 ADMIN_DSN = os.getenv("OLIN_INVESTIGATOR_TEST_ADMIN_DSN", "").strip()
@@ -227,6 +231,30 @@ class InvestigatorPostgresWorkflowTests(unittest.TestCase):
             "total_sustainable_revenue",
             {x["quantity"] for x in after["reconstruction"]["unresolved_quantities"]},
         )
+
+        self.service.transition_action(
+            self.identity,
+            self.case_id,
+            action_id,
+            expected_sequence=4,
+            to_status="COMPLETED_UNRESOLVED",
+            reason_code="QUESTION_STILL_UNRESOLVED",
+            reason_detail="Revenue channels remain unknown",
+            evidence_references=[],
+            effort_minutes=None,
+            cost_amount=None,
+            cost_currency=None,
+            idempotency_key=f"close-{action_id}",
+        )
+        replay = self.service.synthetic_response(
+            self.identity, self.case_id, action_id, fixture="useful_coverage"
+        )
+        self.assertEqual(replay["outcome"], "EVIDENCE_ACCEPTED")
+        closed_history = self.service.list_actions(self.identity, self.case_id)[0][
+            "transitions"
+        ]
+        self.assertEqual(len(closed_history), 5)
+        self.assertEqual(closed_history[-1]["to_status"], "COMPLETED_UNRESOLVED")
         self.assertNotEqual(
             before["reconstruction"]["input_assessment"]["snapshot_id"],
             after["reconstruction"]["input_assessment"]["snapshot_id"],
@@ -454,6 +482,216 @@ class InvestigatorPostgresWorkflowTests(unittest.TestCase):
             }["BANK_ACCOUNT_COVERAGE"],
             "COMPLETE",
         )
+
+    def _interrupt_after_receipt(self, fixture, outcome):
+        requested = self._select_and_request(f"{fixture}-{self.case_id}")
+        action_id = UUID(requested["action"]["action_id"])
+        transition = self.service._transition_action
+
+        def interrupted(*args, **kwargs):
+            if kwargs["to_status"] == outcome:
+                raise RuntimeError("injected failure after durable receipt")
+            return transition(*args, **kwargs)
+
+        with (
+            patch.object(self.service, "_transition_action", side_effect=interrupted),
+            self.assertRaisesRegex(RuntimeError, "after durable receipt"),
+        ):
+            self.service.synthetic_response(
+                self.identity, self.case_id, action_id, fixture=fixture
+            )
+        history = self.service.list_actions(self.identity, self.case_id)[0][
+            "transitions"
+        ]
+        self.assertEqual(
+            [t["to_status"] for t in history],
+            ["SELECTED", "REQUESTED", "RESPONSE_RECEIVED"],
+        )
+        return action_id
+
+    def test_h_unavailable_receipt_recovers_once_and_preserves_closed_reason(self):
+        action_id = self._interrupt_after_receipt("unavailable", "STOPPED")
+        first = self.service.synthetic_response(
+            self.identity, self.case_id, action_id, fixture="unavailable"
+        )
+        for _ in range(3):
+            replay = self.service.synthetic_response(
+                self.identity, self.case_id, action_id, fixture="unavailable"
+            )
+            self.assertTrue(replay["replayed"])
+            for key in ("outcome", "reason_code", "reason_detail"):
+                self.assertEqual(first[key], replay[key])
+        history = self.service.list_actions(self.identity, self.case_id)[0][
+            "transitions"
+        ]
+        self.assertEqual(
+            [t["to_status"] for t in history],
+            ["SELECTED", "REQUESTED", "RESPONSE_RECEIVED", "STOPPED"],
+        )
+        self.assertEqual(history[-1]["reason_code"], "EVIDENCE_UNAVAILABLE")
+        self.assertEqual(history[-1]["reason_detail"], first["reason_detail"])
+
+    def test_i_accepted_receipt_recovers_without_duplicate_evidence(self):
+        action_id = self._interrupt_after_receipt(
+            "useful_coverage", "EVIDENCE_ACCEPTED"
+        )
+        before_retry = self.service.current_analysis(self.identity, self.case_id)
+        for _ in range(3):
+            recovered = self.service.synthetic_response(
+                self.identity, self.case_id, action_id, fixture="useful_coverage"
+            )
+            self.assertEqual(recovered["outcome"], "EVIDENCE_ACCEPTED")
+            self.assertTrue(recovered["replayed"])
+        after = self.service.current_analysis(self.identity, self.case_id)
+        for field in (
+            "observed_values",
+            "claimed_values",
+            "derived_values",
+            "coverage_diagnostics",
+            "unresolved_quantities",
+        ):
+            self.assertEqual(
+                before_retry["reconstruction"][field], after["reconstruction"][field]
+            )
+        self.assertEqual(
+            before_retry["reconstruction"]["input_assessment"]["snapshot_id"],
+            after["reconstruction"]["input_assessment"]["snapshot_id"],
+        )
+        history = self.service.list_actions(self.identity, self.case_id)[0]
+        transitions = history["transitions"]
+        self.assertEqual(
+            [t["to_status"] for t in transitions],
+            ["SELECTED", "REQUESTED", "RESPONSE_RECEIVED", "EVIDENCE_ACCEPTED"],
+        )
+        self.assertEqual(
+            transitions[-1]["evidence_references"],
+            transitions[-2]["evidence_references"],
+        )
+        self.assertTrue(
+            self.service._action_bound_evidence_delta(
+                self.identity,
+                self.case_id,
+                action_id,
+                history["action"]["selected_snapshot_id"],
+                recovered["new_snapshot_id"],
+                recovered["evidence_reference"],
+            )
+        )
+        coverage = {
+            x["coverage_type"]: x["status"]
+            for x in after["reconstruction"]["coverage_diagnostics"]
+        }
+        self.assertEqual(coverage["BANK_ACCOUNT_COVERAGE"], "COMPLETE")
+        self.assertEqual(coverage["REVENUE_CHANNEL_COVERAGE"], "UNKNOWN")
+        self.assertIn(
+            "total_sustainable_revenue",
+            {x["quantity"] for x in after["reconstruction"]["unresolved_quantities"]},
+        )
+
+    def test_j_receipt_recovery_does_not_overwrite_concurrent_terminal_transition(self):
+        action_id = self._interrupt_after_receipt("unavailable", "STOPPED")
+        with self.assertRaises(psycopg.errors.SerializationFailure):
+            self.service.transition_action(
+                self.identity,
+                self.case_id,
+                action_id,
+                expected_sequence=2,
+                to_status="ESCALATED",
+                reason_code="QUESTION_STILL_UNRESOLVED",
+                reason_detail="Stale concurrent writer",
+                evidence_references=[],
+                effort_minutes=None,
+                cost_amount=None,
+                cost_currency=None,
+                idempotency_key="stale-after-receipt",
+            )
+        self.service.transition_action(
+            self.identity,
+            self.case_id,
+            action_id,
+            expected_sequence=3,
+            to_status="ESCALATED",
+            reason_code="QUESTION_STILL_UNRESOLVED",
+            reason_detail="Human escalation",
+            evidence_references=[],
+            effort_minutes=None,
+            cost_amount=None,
+            cost_currency=None,
+            idempotency_key="human-escalation",
+        )
+        with self.assertRaises(InvestigatorAppError):
+            self.service.synthetic_response(
+                self.identity, self.case_id, action_id, fixture="unavailable"
+            )
+        history = self.service.list_actions(self.identity, self.case_id)[0][
+            "transitions"
+        ]
+        self.assertEqual(len(history), 4)
+        self.assertEqual(history[-1]["reason_detail"], "Human escalation")
+
+    def test_k_revoked_evidence_after_receipt_cannot_be_finalized(self):
+        action_id = self._interrupt_after_receipt(
+            "useful_coverage", "EVIDENCE_ACCEPTED"
+        )
+        record, revision = self.admin.execute(
+            "SELECT canonical_record,authority_revision FROM "
+            "evidence_authority.investigator_evidence_projection_change "
+            "WHERE tenant_id=%s AND case_id=%s ORDER BY authority_revision DESC LIMIT 1",
+            (self.tenant, self.case_id),
+        ).fetchone()
+        record["usability"] = "UNUSABLE"
+        record["unusable_reason"] = "EVIDENCE_REVOKED"
+        with self._connect(self.authority_role)() as authority, authority.transaction():
+            self.operator._authority_context(authority, self.tenant)
+            authority.execute(
+                "SELECT evidence_authority.commit_investigator_evidence_projection("
+                "%s::jsonb,%s,%s)",
+                (json.dumps(record), revision, "EVIDENCE_REVOKED"),
+            )
+        for _ in range(2):
+            with self.assertRaises((InvestigatorAppError, RuntimeError)):
+                self.service.synthetic_response(
+                    self.identity, self.case_id, action_id, fixture="useful_coverage"
+                )
+        history = self.service.list_actions(self.identity, self.case_id)[0][
+            "transitions"
+        ]
+        self.assertEqual(len(history), 3)
+        self.assertEqual(history[-1]["to_status"], "RESPONSE_RECEIVED")
+
+    def test_l_concurrent_receipt_retries_converge_on_one_final_transition(self):
+        action_id = self._interrupt_after_receipt(
+            "duplicate_response", "COMPLETED_UNRESOLVED"
+        )
+        submit = self.service._synthetic_operator.submit
+        barrier = Barrier(2)
+
+        def synchronized(**kwargs):
+            result = submit(**kwargs)
+            barrier.wait(timeout=10)
+            return result
+
+        def retry():
+            return self.service.synthetic_response(
+                self.identity, self.case_id, action_id, fixture="duplicate_response"
+            )
+
+        with (
+            patch.object(
+                self.service._synthetic_operator, "submit", side_effect=synchronized
+            ),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            results = list(pool.map(lambda _: retry(), range(2)))
+        self.assertEqual(
+            [r["outcome"] for r in results],
+            ["COMPLETED_UNRESOLVED", "COMPLETED_UNRESOLVED"],
+        )
+        history = self.service.list_actions(self.identity, self.case_id)[0][
+            "transitions"
+        ]
+        self.assertEqual(len(history), 4)
+        self.assertEqual(history[-1]["to_status"], "COMPLETED_UNRESOLVED")
 
 
 if __name__ == "__main__":

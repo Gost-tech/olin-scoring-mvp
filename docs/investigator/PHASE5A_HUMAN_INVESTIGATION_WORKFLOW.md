@@ -70,5 +70,14 @@ an accepted administrative transition. If snapshot creation is interrupted
 after canonical acceptance, an idempotent retry detects the accepted reference
 and creates or reuses the missing current snapshot.
 
+A durable `RESPONSE_RECEIVED` records receipt only, not completed processing.
+An exact retry resumes the missing outcome from that receipt's sequence without
+duplicating receipt or canonical evidence. Accepted retries rerun canonical
+currentness and the action-bound evidence delta before completing history;
+revocation cannot be bypassed by a receipt. A finalized retry returns the original
+response outcome, not an unrelated later action status. Concurrent retries use
+the existing idempotency/sequence constraints; an intervening human terminal
+transition is not overwritten. No transaction spans operator and action history.
+
 This development operator simulates acquisition. It does not represent a real
 bank, provider, merchant response, or production verification.
