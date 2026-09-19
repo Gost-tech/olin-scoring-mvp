@@ -52,6 +52,9 @@ jobs:
       - name: Run required Investigator Phase 2 evidence boundary suite
         id: evidence_boundary
         run: python -m unittest -v test_investigator_postgres_evidence
+      - name: Run required Investigator Phase 5A workflow suite
+        id: investigation_workflow
+        run: python -m unittest -v test_investigator_postgres_workflow
       - name: Run pilot safety suite
         id: pilot_safety
         run: python -m unittest discover -v
@@ -68,6 +71,7 @@ jobs:
             !cancelled() &&
             steps.postgres_boundary.outcome == 'success' &&
             steps.evidence_boundary.outcome == 'success' &&
+            steps.investigation_workflow.outcome == 'success' &&
             steps.pilot_safety.outcome == 'success'
           }}
         run: python -m olin.synthetic_portfolio --cases 1000 --seed 42

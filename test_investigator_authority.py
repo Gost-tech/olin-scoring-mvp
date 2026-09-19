@@ -33,6 +33,9 @@ PHASE25_MIGRATION_PATH = (
 PHASE3_MIGRATION_PATH = (
     ROOT / "db" / "migrations" / "0005_investigator_phase3_assertion_metadata.sql"
 )
+PHASE5A_MIGRATION_PATH = (
+    ROOT / "db" / "migrations" / "0006_investigator_human_action_workflow.sql"
+)
 
 PROHIBITED_CAPABILITIES = {
     "credit.approve",
@@ -65,11 +68,11 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
     def test_contract_and_schema_are_valid_json(self):
         contract = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["contract_version"], "investigator-authority-1.3")
+        self.assertEqual(contract["contract_version"], "investigator-authority-1.4")
         self.assertEqual(contract["default"], "deny")
         self.assertEqual(schema["properties"]["default"]["const"], "deny")
         self.assertEqual(len(contract["principals"]), len(set(contract["principals"])))
-        self.assertEqual(contract["allowed_routes"], [])
+        self.assertEqual(len(contract["allowed_routes"]), 7)
         self.assertEqual(
             contract["allowed_event_types"],
             [
@@ -101,6 +104,14 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "investigator.session_tenant_id",
                 "investigator.context_tenant_id",
                 "investigator.tenant_access_allowed",
+                "investigator.investigation_action",
+                "investigator.investigation_action_transition",
+                "investigator.action_session_tenant_id",
+                "investigator.action_tenant_access_allowed",
+                "investigator.select_investigation_action",
+                "investigator.transition_investigation_action",
+                "investigator.read_investigation_actions",
+                "evidence_authority.investigator_evidence_projection_change",
             },
         )
 
@@ -136,6 +147,15 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
         self.assertTrue(
             is_allowed("investigator_runtime", "snapshot.reasoning.require")
         )
+        self.assertTrue(
+            is_allowed("investigator_action_writer", "investigation_action.select")
+        )
+        self.assertTrue(
+            is_allowed("investigator_action_writer", "investigation_action.transition")
+        )
+        self.assertTrue(
+            is_allowed("investigator_action_writer", "investigation_action.read")
+        )
         allowed = {
             name
             for name, rule in authority_contract()["capabilities"].items()
@@ -153,6 +173,9 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                 "evidence.reference.read",
                 "snapshot.v2.create",
                 "snapshot.reasoning.require",
+                "investigation_action.select",
+                "investigation_action.transition",
+                "investigation_action.read",
             },
         )
 
@@ -220,9 +243,9 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
         del missing_deny["capabilities"]["credit.approve"]
         mutations.append(missing_deny)
 
-        route_added = copy.deepcopy(original)
-        route_added["allowed_routes"] = ["POST /api/investigator"]
-        mutations.append(route_added)
+        route_removed = copy.deepcopy(original)
+        route_removed["allowed_routes"] = route_removed["allowed_routes"][:-1]
+        mutations.append(route_removed)
 
         event_added = copy.deepcopy(original)
         event_added["allowed_event_types"].append("CREDIT_APPROVED")
@@ -297,9 +320,12 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
         )
         self.assertEqual(json.loads(result.stdout), [])
 
-    def test_phase0_has_no_investigator_http_entrypoint_or_routes(self):
+    def test_phase5a_uses_separate_investigator_http_entrypoint(self):
         self.assertFalse((ROOT / "olin" / "investigator" / "server.py").exists())
-        self.assertEqual(authority_contract()["allowed_routes"], ())
+        self.assertTrue((ROOT / "olin" / "investigator_app.py").exists())
+        self.assertNotIn(
+            "olin.server", (ROOT / "olin" / "investigator_app.py").read_text()
+        )
 
     def test_migration_contains_fail_closed_postgres_controls(self):
         sql = MIGRATION_PATH.read_text(encoding="utf-8").lower()
@@ -445,6 +471,34 @@ print(json.dumps([name for name in forbidden if name in sys.modules]))
             "credit_score",
             "approved_amount",
             "reasoning_result",
+        ):
+            self.assertNotIn(forbidden, sql)
+
+    def test_phase5a_migration_is_additive_append_only_and_least_privilege(self):
+        sql = PHASE5A_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+        for fragment in (
+            "create role olin_investigator_action_writer",
+            "create table investigator.investigation_action",
+            "create table investigator.investigation_action_transition",
+            "force row level security",
+            "create function investigator.select_investigation_action",
+            "create function investigator.transition_investigation_action",
+            "isolated tenant-bound action writer is required",
+            "selected snapshot is stale or mismatched",
+            "selected authority or evidence state is stale",
+            "action history is append-only",
+            "grant execute on function investigator.select_investigation_action",
+            "reset session authorization",
+            "commit;",
+        ):
+            self.assertIn(fragment, sql)
+        for forbidden in (
+            "alter table investigator.investigation_event add",
+            "create table investigator.claims_assessment",
+            "economic_reconstruction jsonb",
+            "grant insert on investigator.investigation_action to olin_investigator_action_writer",
+            "credit_score",
+            "approved_amount",
         ):
             self.assertNotIn(forbidden, sql)
 

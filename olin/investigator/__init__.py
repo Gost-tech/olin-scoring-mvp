@@ -67,10 +67,24 @@ from .spine import (
     rebuild_case,
     rebuild_snapshot_input,
 )
+from .workflow import (
+    ACTION_CATALOGUE,
+    ACTION_CATALOGUE_VERSION,
+    ActionDefinition,
+    ActionStatus,
+    ActionType,
+    StopReason,
+    WorkflowValidationError,
+)
 
 __all__ = [
+    "ACTION_CATALOGUE",
+    "ACTION_CATALOGUE_VERSION",
     "PHASE4_RULES_VERSION",
     "PHASE4_SCHEMA_VERSION",
+    "ActionDefinition",
+    "ActionStatus",
+    "ActionType",
     "ActorContext",
     "ActorContextError",
     "ActorType",
@@ -110,11 +124,13 @@ __all__ = [
     "ReconstructionStatus",
     "SpineConflict",
     "SpineNotFound",
+    "StopReason",
     "Unknown",
     "UnknownEconomicQuantity",
     "UnusableReason",
     "VerificationStatus",
     "VerifiedFact",
+    "WorkflowValidationError",
     "assert_evidence_authority_database_custody",
     "assert_runtime_database_custody",
     "controlled_test_system_actor",

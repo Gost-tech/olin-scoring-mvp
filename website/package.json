@@ -10,7 +10,7 @@
     "check": "astro check",
     "qa:static": "node scripts/qa-static.mjs",
     "qa:visual": "node scripts/visual-qa.cjs",
-    "test": "pnpm run build && pnpm run qa:static && pnpm run qa:visual",
+    "test": "pnpm run config:production && pnpm run build && pnpm run qa:static && pnpm run qa:visual",
     "config:production": "node scripts/prepare-production-config.mjs",
     "deploy": "pnpm run config:production && pnpm run test && pnpm dlx wrangler@latest deploy --config wrangler.jsonc",
     "video:build": "zsh demo-output/build.sh"

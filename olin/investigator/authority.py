@@ -52,9 +52,11 @@ _ALLOWED_EFFECTS = frozenset(
         "READ_SNAPSHOT_RECORD",
         "READ_EVIDENCE_REFERENCE",
         "REASONING_CURRENTNESS_GATE",
+        "INVESTIGATION_ACTION_RECORD",
+        "READ_INVESTIGATION_ACTION_RECORD",
     }
 )
-_PHASE0_PRINCIPALS = ["investigator_runtime"]
+_PHASE0_PRINCIPALS = ["investigator_runtime", "investigator_action_writer"]
 _PHASE1_EVENT_TYPES = [
     "CASE_CREATED",
     "INVESTIGATION_EVENT_RECORDED",
@@ -88,6 +90,16 @@ _PHASE2_OBJECTS = _PHASE1_OBJECTS | {
     "investigator.create_snapshot_v2",
     "investigator.current_canonical_authority_revision",
 }
+_PHASE5_OBJECTS = _PHASE2_OBJECTS | {
+    "evidence_authority.investigator_evidence_projection_change",
+    "investigator.investigation_action",
+    "investigator.investigation_action_transition",
+    "investigator.action_session_tenant_id",
+    "investigator.action_tenant_access_allowed",
+    "investigator.select_investigation_action",
+    "investigator.transition_investigation_action",
+    "investigator.read_investigation_actions",
+}
 _PHASE0_ENVIRONMENT = {
     "HOME",
     "HOSTNAME",
@@ -96,7 +108,13 @@ _PHASE0_ENVIRONMENT = {
     "LOG_LEVEL",
     "OLIN_INVESTIGATOR_AUTH_AUDIENCE",
     "OLIN_INVESTIGATOR_AUTH_ISSUER",
+    "OLIN_INVESTIGATOR_ACTION_DATABASE_URL",
+    "OLIN_INVESTIGATOR_CANONICAL_READER_DATABASE_URL",
     "OLIN_INVESTIGATOR_DATABASE_URL",
+    "OLIN_INVESTIGATOR_SESSION_SECRET",
+    "OLIN_INVESTIGATOR_SYNTHETIC_OPERATOR_TOKEN",
+    "OLIN_INVESTIGATOR_SYNTHETIC_OPERATOR_URL",
+    "OLIN_INVESTIGATOR_USERS",
     "PATH",
     "PORT",
     "PYTHONDONTWRITEBYTECODE",
@@ -224,6 +242,53 @@ _PHASE2_ALLOWS = {
         "writes": [],
     },
 }
+_PHASE5_ALLOWS = {
+    **_PHASE2_ALLOWS,
+    "investigation_action.select": {
+        "decision": "allow",
+        "principals": ["investigator_action_writer"],
+        "effect": "INVESTIGATION_ACTION_RECORD",
+        "reads": [
+            "investigator.investigation_case",
+            "investigator.case_snapshot",
+            "investigator.case_snapshot_invalidation",
+            "evidence_authority.investigator_evidence_projection_change",
+        ],
+        "writes": [
+            "investigator.investigation_action",
+            "investigator.investigation_action_transition",
+        ],
+    },
+    "investigation_action.transition": {
+        "decision": "allow",
+        "principals": ["investigator_action_writer"],
+        "effect": "INVESTIGATION_ACTION_RECORD",
+        "reads": [
+            "investigator.investigation_action",
+            "investigator.investigation_action_transition",
+        ],
+        "writes": ["investigator.investigation_action_transition"],
+    },
+    "investigation_action.read": {
+        "decision": "allow",
+        "principals": ["investigator_action_writer"],
+        "effect": "READ_INVESTIGATION_ACTION_RECORD",
+        "reads": [
+            "investigator.investigation_action",
+            "investigator.investigation_action_transition",
+        ],
+        "writes": [],
+    },
+}
+_PHASE5_ROUTES = [
+    "GET /investigator",
+    "POST /api/session",
+    "GET /api/cases/{case_id}",
+    "GET /api/cases/{case_id}/actions",
+    "POST /api/cases/{case_id}/actions",
+    "POST /api/cases/{case_id}/actions/{action_id}/transitions",
+    "POST /api/cases/{case_id}/actions/{action_id}/synthetic-response",
+]
 _REQUIRED_DENIES = {
     "credit.approve": "CREDIT_APPROVE",
     "credit.decline": "CREDIT_DECLINE",
@@ -249,10 +314,10 @@ _REQUIRED_DENIES = {
 
 
 def _validate_contract(contract: dict) -> None:
-    if contract.get("contract_version") != "investigator-authority-1.3":
+    if contract.get("contract_version") != "investigator-authority-1.4":
         raise RuntimeError("Unsupported Investigator authority contract")
-    if contract.get("deployment_profile") != "investigator_v1_phase2_5":
-        raise RuntimeError("Investigator deployment profile must be Phase 2.5")
+    if contract.get("deployment_profile") != "investigator_v1_phase5a":
+        raise RuntimeError("Investigator deployment profile must be Phase 5A")
     if contract.get("default") != "deny":
         raise RuntimeError("Investigator authority contract must default to deny")
     principals = contract.get("principals")
@@ -264,7 +329,7 @@ def _validate_contract(contract: dict) -> None:
     if len(principals) != len(set(principals)):
         raise RuntimeError("Investigator authority principals must be unique")
     if principals != _PHASE0_PRINCIPALS:
-        raise RuntimeError("Investigator Phase 2 principal must be exact")
+        raise RuntimeError("Investigator Phase 5A principals must be exact")
     if not isinstance(capabilities, dict):
         raise TypeError("Investigator authority capabilities are missing")
     surfaces = contract.get("forbidden_surfaces")
@@ -274,10 +339,10 @@ def _validate_contract(contract: dict) -> None:
     forbidden_tables = set(surfaces.get("database_tables", []))
     if forbidden_tables.intersection(allowed_objects):
         raise RuntimeError("A forbidden database object is allowlisted")
-    if set(allowed_objects) != _PHASE2_OBJECTS:
-        raise RuntimeError("Investigator Phase 2 database objects must be exact")
-    if contract.get("allowed_routes") != []:
-        raise RuntimeError("Investigator Phase 2 exposes no routes")
+    if set(allowed_objects) != _PHASE5_OBJECTS:
+        raise RuntimeError("Investigator Phase 5A database objects must be exact")
+    if contract.get("allowed_routes") != _PHASE5_ROUTES:
+        raise RuntimeError("Investigator Phase 5A routes must be exact")
     if contract.get("allowed_event_types") != _PHASE2_EVENT_TYPES:
         raise RuntimeError("Investigator Phase 2 event types must be exact")
     allowed_environment = contract.get("allowed_environment_variables")
@@ -293,7 +358,7 @@ def _validate_contract(contract: dict) -> None:
     forbidden_names = set(surfaces.get("environment_variables", []))
     forbidden_prefixes = tuple(surfaces.get("environment_prefixes", []))
     if set(allowed_environment) != _PHASE0_ENVIRONMENT:
-        raise RuntimeError("Investigator Phase 2 environment allowlist must be exact")
+        raise RuntimeError("Investigator Phase 5A environment allowlist must be exact")
     for name in allowed_environment:
         if name in forbidden_names or name.startswith(forbidden_prefixes):
             raise RuntimeError(f"Forbidden environment name is allowlisted: {name}")
@@ -329,10 +394,10 @@ def _validate_contract(contract: dict) -> None:
             raise RuntimeError(
                 f"Required authority denial is absent or changed: {name}"
             )
-    expected_capabilities = set(_PHASE2_ALLOWS) | set(_REQUIRED_DENIES)
+    expected_capabilities = set(_PHASE5_ALLOWS) | set(_REQUIRED_DENIES)
     if set(capabilities) != expected_capabilities:
         raise RuntimeError("Investigator Phase 2 capability set must be exact")
-    for name, expected in _PHASE2_ALLOWS.items():
+    for name, expected in _PHASE5_ALLOWS.items():
         if capabilities[name] != expected:
             raise RuntimeError(f"Allowed capability is not exact: {name}")
 
