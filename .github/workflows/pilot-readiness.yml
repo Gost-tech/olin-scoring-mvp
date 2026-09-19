@@ -47,17 +47,29 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q olin scripts test_live_readiness.py
       - name: Run required Investigator PostgreSQL boundary suite
+        id: postgres_boundary
         run: python -m unittest -v test_investigator_postgres_rls
       - name: Run required Investigator Phase 2 evidence boundary suite
+        id: evidence_boundary
         run: python -m unittest -v test_investigator_postgres_evidence
       - name: Run pilot safety suite
+        id: pilot_safety
         run: python -m unittest discover -v
       - name: Run legacy compatibility checks
+        id: legacy_compatibility
         run: |
           python -m olin.test_v2
           python test_full_flow.py
           python test_belvo_pipeline.py
       - name: Run 1,000-case synthetic gate
+        id: synthetic_gate
+        if: >-
+          ${{
+            !cancelled() &&
+            steps.postgres_boundary.outcome == 'success' &&
+            steps.evidence_boundary.outcome == 'success' &&
+            steps.pilot_safety.outcome == 'success'
+          }}
         run: python -m olin.synthetic_portfolio --cases 1000 --seed 42
 
   website:
