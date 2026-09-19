@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from functools import partial
 from pathlib import Path
 from uuid import UUID, uuid5
 
@@ -30,6 +31,7 @@ from olin.investigator_shadow import (
     project,
     validate_output,
 )
+from olin.investigator_shadow_openai import HostedFailure, read_dedicated_credential
 from olin.investigator_shadow_runner import Runner
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,7 +90,11 @@ def configuration(mode, config):
         if config is not None:
             raise ValueError("dry run accepts no real configuration")
         return {"mode": "fake"}
-    if mode != "real" or not isinstance(config, dict) or config.get("mode") != "ollama":
+    if (
+        mode != "real"
+        or not isinstance(config, dict)
+        or config.get("mode") not in {"ollama", "openai"}
+    ):
         raise ValueError(
             "real mode requires explicit local adapter approval/configuration"
         )
@@ -272,6 +278,11 @@ def worker(payload):
     runner = Runner(
         payload["config"],
         response_observer=lambda b: raw.append(base64.b64encode(b).decode()),
+        credential_loader=(
+            partial(read_dedicated_credential, payload.get("credential_file"))
+            if payload["config"].get("mode") == "openai"
+            else None
+        ),
     )
     try:
         result = runner.generate(payload["context"])
@@ -283,6 +294,8 @@ def worker(payload):
             "proposal_digest": digest(value),
             "raw_response_base64": raw,
         }
+    except HostedFailure as exc:
+        status = exc.status
     except TimeoutError:
         status = "TIMEOUT_AMBIGUOUS"
     except (ValueError, KeyError, TypeError):
@@ -300,7 +313,7 @@ def worker(payload):
     }
 
 
-def isolated_attempt(config, context):
+def isolated_attempt(config, context, *, credential_file=None):
     # No DB, canonical/action credentials, rubrics, human choices or artifacts.
     try:
         completed = subprocess.run(
@@ -311,7 +324,17 @@ def isolated_attempt(config, context):
                 "scripts.evaluate_investigator_shadow",
                 "worker",
             ],
-            input=canonical({"config": config, "context": context}),
+            input=canonical(
+                {
+                    "config": config,
+                    "context": context,
+                    **(
+                        {"credential_file": str(credential_file)}
+                        if credential_file is not None
+                        else {}
+                    ),
+                }
+            ),
             text=True,
             capture_output=True,
             timeout=35,
@@ -547,6 +570,7 @@ def main():
     parser.add_argument("--tenant")
     parser.add_argument("--namespace", type=UUID)
     parser.add_argument("--config", type=Path)
+    parser.add_argument("--credential-file", type=Path)
     args = parser.parse_args()
     if args.operation == "worker":
         print(canonical(worker(json.loads(sys.stdin.read(64000)))))
@@ -554,6 +578,11 @@ def main():
     config = None if args.config is None else json.loads(args.config.read_text())
     if args.operation != "prepare":
         configuration(args.operation, config)  # Refuse before DB setup or inference.
+    if config and config.get("mode") == "openai":
+        if args.credential_file is None or not args.credential_file.is_absolute():
+            parser.error("hosted mode requires an absolute dedicated --credential-file")
+    elif args.credential_file is not None:
+        parser.error("credential file is permitted only for explicit hosted real mode")
     if not args.directory or not args.tenant:
         parser.error("--directory and --tenant required")
     workflow, identity = connections(args.tenant)
@@ -573,7 +602,12 @@ def main():
         print("Prepared private authorized manifest; no inference.")
     else:
         report = evaluate(
-            workflow, identity, args.directory, mode=args.operation, config=config
+            workflow,
+            identity,
+            args.directory,
+            mode=args.operation,
+            config=config,
+            attempt=partial(isolated_attempt, credential_file=args.credential_file),
         )
         print(
             f"{args.operation}: {report['attempted_cases']}/{report['pipeline_cases']} cases attempted; private report written."

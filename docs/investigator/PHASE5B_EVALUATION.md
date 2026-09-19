@@ -1,5 +1,11 @@
 # Bounded first shadow evaluation (harness version 1)
 
+Optional hosted transport: see [PHASE5B_HOSTED_CONNECTION.md](PHASE5B_HOSTED_CONNECTION.md)
+for the explicitly disabled-by-default `shadow-hosted-1` extension, dedicated
+worker-only credential custody, three-request cap and spending/transmission
+approval requirements. The original local-adapter protocol below remains valid;
+the extension does not alter frozen rubrics, prompt, schema or coverage.
+
 This is a synthetic research evaluator, not a model-quality result, canonical
 writer extension, bank pilot, or new provider. The Phase 5B authority amendment
 is unchanged. No model installation, download or inference is authorized here.

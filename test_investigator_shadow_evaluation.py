@@ -184,6 +184,86 @@ class EvaluationPostgresTests(unittest.TestCase):
             self.assertNotIn("untrusted_test_text", str(row["context"]))
         self.assertTrue((self.path / "summary.md").exists())
 
+    def test_hosted_three_authorized_cases_mocked_transport_and_replay(self):
+        from test_investigator_shadow_openai import configuration, envelope
+
+        calls = []
+
+        def attempt(config, supplied):
+            calls.append(supplied)
+            response = envelope()
+            response["output"][0]["content"][0]["text"] = ev.canonical(
+                fake_proposal(supplied)
+            )
+            with (
+                patch(
+                    "olin.investigator_shadow_openai.http.client.HTTPSConnection"
+                ) as transport,
+                patch.object(
+                    ev,
+                    "read_dedicated_credential",
+                    return_value="synthetic-test-only-credential",
+                ),
+            ):
+                transport.return_value.getresponse.return_value.status = 200
+                transport.return_value.getresponse.return_value.read.return_value = (
+                    ev.canonical(response).encode()
+                )
+                return ev.worker(
+                    {
+                        "config": config,
+                        "context": supplied,
+                        "credential_file": "/mock-only",
+                    }
+                )
+
+        for _ in range(2):
+            report = ev.evaluate(
+                self.fixture.service,
+                self.fixture.identity,
+                self.path,
+                mode="real",
+                config=configuration(),
+                attempt=attempt,
+            )
+            self.assertEqual(report["attempted_cases"], 3)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(
+            [r["status"] for r in report["results"] if r["attempted"]],
+            ["VALID", "ABSTAINED", "VALID"],
+        )
+        for supplied in calls:
+            self.assertNotIn("split", supplied)
+            self.assertNotIn("human_selection", supplied)
+            self.assertNotIn("expected", supplied)
+
+    def test_hosted_interrupted_attempt_never_repeats_or_falls_back(self):
+        from test_investigator_shadow_openai import configuration
+
+        class Interruption(BaseException):
+            pass
+
+        def run(attempt):
+            return ev.evaluate(
+                self.fixture.service,
+                self.fixture.identity,
+                self.path,
+                mode="real",
+                config=configuration(),
+                attempt=attempt,
+            )
+
+        with self.assertRaises(Interruption):
+            run(MagicMock(side_effect=Interruption))
+        attempt = MagicMock(
+            return_value={"status": "TIMEOUT_AMBIGUOUS", "proposal": None}
+        )
+        report = run(attempt)
+        self.assertEqual(report["results"][0]["status"], "AMBIGUOUS")
+        self.assertEqual(attempt.call_count, 2)
+        run(attempt)
+        self.assertEqual(attempt.call_count, 2)
+
     def test_missing_summary_recovers_without_repeating_any_attempt(self):
         write = ev.write_once
 

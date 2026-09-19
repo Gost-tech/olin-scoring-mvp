@@ -16,16 +16,22 @@ from .investigator_shadow import OUTPUT_SCHEMA, PROMPT, canonical, fake_proposal
 
 
 class Runner:
-    def __init__(self, config: dict, *, response_observer=None):
+    def __init__(self, config: dict, *, response_observer=None, credential_loader=None):
         self.config = config
         # Optional private evaluation sink, never a model tool or public log.
         self.response_observer = response_observer
+        self.credential_loader = credential_loader
         self.lock = threading.Lock()
         self.used = 0
         self.mode = config.get("mode")
         if self.mode == "fake":
             self.model = "deterministic-fake-1"
             self.limit = 100
+        elif self.mode == "openai":
+            from .investigator_shadow_openai import validate_config
+
+            validate_config(config)
+            self.model, self.limit = config["model"], config["max_requests"]
         elif self.mode == "ollama":
             required = {
                 "mode",
@@ -88,6 +94,12 @@ class Runner:
             if self.response_observer is not None:
                 self.response_observer(canonical(proposal).encode())
             usage = None
+        elif self.mode == "openai":
+            from .investigator_shadow_openai import generate
+
+            proposal, usage = generate(
+                self.config, context, self.credential_loader, self.response_observer
+            )
         else:
             # Count input bytes conservatively as a token upper bound. No tokenizer dependency.
             content = canonical(context)

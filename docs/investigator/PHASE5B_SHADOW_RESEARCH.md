@@ -1,5 +1,11 @@
 # Phase 5B isolated synthetic shadow research — version 1
 
+The optional evaluator-only hosted extension is separately specified in
+[PHASE5B_HOSTED_CONNECTION.md](PHASE5B_HOSTED_CONNECTION.md), amendment
+`shadow-hosted-1`. It does not change the application/default denial below or
+authorize execution. The following local-only description remains the original
+accepted application transport contract.
+
 Founder-authorized amendment to blueprint sections 10/12/17: only the isolated
 research runner may invoke one operator-approved local inference endpoint for
 synthetic minimized context. The ordinary `investigator-authority-1.4` contract,
