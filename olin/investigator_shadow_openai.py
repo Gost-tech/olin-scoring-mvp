@@ -11,14 +11,42 @@ import json
 import os
 import re
 import stat
+from copy import deepcopy
 from decimal import Decimal
 
-from .investigator_shadow import OUTPUT_SCHEMA, PROMPT, canonical, validate_output
+from .investigator_shadow import (
+    ACTION_CATALOGUE_VERSION,
+    CATALOGUE_GUIDANCE_DIGEST,
+    OUTPUT_SCHEMA,
+    PROMPT,
+    canonical,
+    digest,
+    validate_output,
+)
 
 AMENDMENT = "shadow-hosted-1"
 MODEL = "gpt-5.4-mini-2026-03-17"
 ENDPOINT = "https://api.openai.com/v1/responses"
-PAYLOAD_VERSION = "shadow-openai-messages-1"
+PAYLOAD_VERSION = "shadow-openai-structured-2"
+TRANSPORT_SCHEMA_VERSION = "shadow-openai-schema-1"
+
+
+def provider_schema():
+    """Fixed, loss-explicit adaptation of the application contract, not a compiler.
+
+    uniqueItems is not in the documented provider subset; local validation still
+    enforces uniqueness. Singleton enum expresses const; nullable enum gets an
+    explicit type. All remaining application schema constraints are retained.
+    """
+    schema = deepcopy(OUTPUT_SCHEMA)
+    version = schema["properties"]["schema_version"].pop("const")
+    schema["properties"]["schema_version"].update(type="string", enum=[version])
+    fields = schema["properties"]["proposals"]["items"]["properties"]
+    fields["references"].pop("uniqueItems")
+    fields["action_type"]["type"] = ["string", "null"]
+    return schema
+
+
 # Standard USD rates checked 2026-09-19; no cache discount assumed.
 INPUT_RATE = Decimal("0.75")
 OUTPUT_RATE = Decimal("4.50")
@@ -212,13 +240,19 @@ def request_body(context):
             "background": False,
             "service_tier": "default",
             "input": [
-                {"role": "developer", "content": PROMPT + canonical(OUTPUT_SCHEMA)},
+                {"role": "developer", "content": PROMPT},
                 {"role": "user", "content": canonical(context)},
             ],
             "max_output_tokens": 1024,
             "reasoning": {"effort": "none"},
-            # Provider JSON mode is not closed-schema validation or authority.
-            "text": {"format": {"type": "json_object"}},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "shadow_proposal",
+                    "strict": True,
+                    "schema": provider_schema(),
+                }
+            },
         }
     ).encode("utf-8")
 
@@ -227,16 +261,19 @@ def generate(config, context, credential_loader, observer, diagnostics=None):
     """Exactly one HTTPS request; no redirects, retries, fallback or polling."""
     if credential_loader is None:
         raise ValueError("dedicated isolated credential custody required")
-    content, instructions = canonical(context), PROMPT + canonical(OUTPUT_SCHEMA)
-    if len((content + instructions).encode()) > config["max_input_tokens"]:
-        raise ValueError("approved input byte upper bound exceeded")
     body = request_body(context)
+    if len(body) > config["max_input_tokens"]:
+        raise ValueError("approved input byte upper bound exceeded")
     if diagnostics is None:
         diagnostics = {}
     diagnostics.clear()  # Never attribute a prior request ID to a later failure.
     diagnostics.update(
         payload_version=PAYLOAD_VERSION,
         payload_sha256=hashlib.sha256(body).hexdigest(),
+        transport_schema_version=TRANSPORT_SCHEMA_VERSION,
+        transport_schema_digest=digest(provider_schema()),
+        catalogue_version=ACTION_CATALOGUE_VERSION,
+        catalogue_guidance_digest=CATALOGUE_GUIDANCE_DIGEST,
     )
     credential = credential_loader()
     transport = http.client.HTTPSConnection("api.openai.com", 443, timeout=30)

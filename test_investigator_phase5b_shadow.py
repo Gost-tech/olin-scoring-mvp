@@ -45,7 +45,7 @@ class ShadowSchemaTests(unittest.TestCase):
             "could clarify its scope without establishing total revenue."
         )
         self.assertEqual(validate_output(value, context()), value)
-        self.assertEqual(PROMPT_VERSION, "shadow-prompt-2")
+        self.assertEqual(PROMPT_VERSION, "shadow-prompt-3")
         for instruction in (
             "ONLY in the dedicated references array",
             "no digits",

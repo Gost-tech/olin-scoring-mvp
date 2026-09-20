@@ -8,7 +8,7 @@ import re
 
 VERSION = "shadow-proposal-1"
 CONTEXT_VERSION = "shadow-context-1"
-PROMPT_VERSION = "shadow-prompt-2"
+PROMPT_VERSION = "shadow-prompt-3"
 ACTIONS = ("REQUEST_ACCOUNT_CHANNEL_RECORD", "CLARIFY_MERCHANT_ASSERTION_SCOPE")
 TEXT_FIELDS = (
     "question",
@@ -25,6 +25,10 @@ Do not invent amounts, certainty, permissions, verification, credit conclusions,
 tools or executable instructions. No numerical predictions. Abstain when no
 admissible question exists. Concise evidence-linked rationales, not chain of thought.
 Put reference aliases ONLY in the dedicated references array; every alias must
+come from the supplied context. Every proposal must include its references array.
+Keeping aliases out of narrative text does not make that array optional. Use only
+applicable citations; do not fabricate references or assign every reference to
+every proposal. Citation membership alone does not establish support. Every alias must
 come from the supplied context. Narrative fields and abstention_reason must contain
 no digits. Do not repeat identifiers, numbered lists, numeric dates or financial
 amounts in narrative fields. Explain evidence relationships in words, carrying
@@ -33,6 +37,8 @@ financial amounts to evade validation. The digit filter is a formatting constrai
 not proof of factual correctness.
 Account coverage is not revenue-channel coverage or sustainable revenue.
 Never assume missing data means zero or adverse quality. No action is executed.
+Preserve the precise reconciliation subtype: a reconciliation difference is not
+proof that a merchant claim is false or that fraud occurred.
 """
 
 
@@ -48,6 +54,60 @@ def canonical(value: object) -> str:
 
 def digest(value: object) -> str:
     return hashlib.sha256(canonical(value).encode()).hexdigest()
+
+
+# Frozen projection of server-owned catalogue metadata, drift-tested against the
+# source catalogue without importing workflow/evidence modules into the runner.
+# Never include a case-specific question
+# (the existing merchant question includes a fixture amount). Purpose describes
+# the question topic without leaking that fixture's expected answer.
+ACTION_CATALOGUE_VERSION = "investigator-action-catalogue-1.0"
+CATALOGUE_GUIDANCE = {
+    ACTIONS[0]: {
+        "purpose": "Narrow unknown bank-account and revenue-channel coverage.",
+        "permitted_data_scope": "Account/channel identifiers and period-specific coverage status only; no credentials or unrestricted transaction bodies.",
+        "requested_source": "A supported regulated-financial-institution coverage attestation.",
+        "prerequisites": [
+            "Active case authority and usable evidence consent.",
+            "The source is already supported by the canonical evidence profile.",
+        ],
+        "resolution_criteria": [
+            "A proposition-specific canonical coverage record identifies subject and exact period.",
+            "Canonical authority, not the analyst response, determines verification.",
+        ],
+    },
+    ACTIONS[1]: {
+        "purpose": "Clarify the meaning of an attributed merchant assertion.",
+        "permitted_data_scope": "Merchant clarification of period, scope, and included channels; no verified-evidence designation.",
+        "requested_source": "The attributed merchant or authorized case representative.",
+        "prerequisites": [
+            "The merchant assertion is present in the current assessment.",
+            "Permission exists to request clarification.",
+        ],
+        "resolution_criteria": [
+            "A new attributed claim records an exact period and scope.",
+            "The clarification remains a claim unless separately verified by canonical authority.",
+        ],
+    },
+}
+CATALOGUE_GUIDANCE[ACTIONS[0]]["supported_scope"] = (
+    "The supported attestation can establish the specified bank-account coverage "
+    "proposition for its subject and period. It does not by itself verify "
+    "business-total revenue, complete revenue-channel coverage or sustainable revenue."
+)
+CATALOGUE_GUIDANCE[ACTIONS[1]]["supported_scope"] = (
+    "A merchant response clarifies what the merchant asserts about period, scope "
+    "and channels. It does not independently establish channel existence, amounts, "
+    "completeness or truth."
+)
+CATALOGUE_GUIDANCE_DIGEST = digest(CATALOGUE_GUIDANCE)
+PROMPT += "Trusted bounded action catalogue " + canonical(
+    {
+        "version": ACTION_CATALOGUE_VERSION,
+        "guidance_digest": CATALOGUE_GUIDANCE_DIGEST,
+        "actions": CATALOGUE_GUIDANCE,
+    }
+)
 
 
 OUTPUT_SCHEMA = {

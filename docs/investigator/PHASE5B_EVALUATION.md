@@ -43,6 +43,53 @@ Retain all prior receipts and the unknown-cost first-attempt reservation. A priv
 linked continuation records code/prompt/input digests and fresh-context differences.
 Other eligible cases remain untested. No more inference after this final attempt.
 
+## Authorized offline development revision: shadow-prompt-3
+
+The subsequent founder task permits implementation and mocked testing only.
+The original THREE requests are exhausted; historical receipts, prompts, inputs
+and responses are unchanged, including the final INVALID_OUTPUT response.
+This is development-informed instruction revision, not a controlled improvement
+or an untouched evaluation of the original frozen prompt.
+
+Prompt three digest:
+`ce368f751ad2df77dd9bd2c4d78c9604e518b101cc875a06a2de4ed34d25beeb`.
+It explicitly requires the references array on every proposal, applicable supplied
+aliases only, no invented or indiscriminately assigned citations, and retains
+the narrative digit constraint. Syntactic citation membership is not support.
+
+Trusted generation instructions now contain a bounded projection of the existing
+`investigator-action-catalogue-1.0`, digest
+`28e24d41228d283896141ac7d8208a801874fac7d9a5129231f14b2fa251947c`.
+Purpose, permitted scope, requested source, prerequisites and resolution criteria
+are copied exactly from the server catalogue and drift-tested against it. The
+case-specific question containing a fixture amount is deliberately not projected.
+The isolated runner imports no workflow/database module to obtain this projection.
+Explicit scope descriptions, checked against the existing canonical operator:
+
+- REQUEST_ACCOUNT_CHANNEL_RECORD: the supported attestation establishes the
+  specified bank-account coverage proposition for its subject/period, not total
+  business revenue, complete revenue-channel coverage or sustainable revenue.
+- CLARIFY_MERCHANT_ASSERTION_SCOPE: the response clarifies the merchant's asserted
+  period/scope/channels; it does not independently establish channel existence,
+  amounts, completeness or truth. Existing permission prerequisites still apply.
+
+The precise reconciliation subtype must not be elevated to false-claim or fraud
+proof. The following are HANDWRITTEN REVIEW EXAMPLES, NOT MODEL OUTPUT or automatic
+semantic validation:
+
+| Supported interpretation | Unsupported extension |
+|---|---|
+| The attestation can narrow bank-account coverage for its stated period. | It proves total or sustainable revenue. |
+| Clarification explains which channels the merchant says are included. | It independently verifies those channels exist. |
+| The observed and claimed quantities require scope reconciliation. | The arithmetic difference establishes fraud. |
+
+Schema, context, dataset, held-out split, action execution permissions and economic
+rules are unchanged. Hosted strict-schema transport is documented in
+PHASE5B_HOSTED_CONNECTION.md. Fresh matching prompt/context authorization remains
+required; old manifests do not authorize this revised generation contract.
+Human ratings remain NOT_REVIEWED, unperformed outcomes UNKNOWN. No semantic model
+improvement or additional model-visible scenario coverage is established.
+
 ## Frozen coverage manifest
 
 `shadow-evaluation-1` remains seven development and three held-out rubrics. The

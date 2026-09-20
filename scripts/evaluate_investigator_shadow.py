@@ -37,7 +37,7 @@ from olin.investigator_shadow_runner import Runner
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "tests/fixtures/shadow_evaluation_v1.json"
 DATASET_SHA = "32978bf2c44fa0fe0eb35ec4c2c8ad35fcd3f336ad6c1e2052cb2701f5c5282c"
-PROMPT_SHA = "fbd240ab7a898b687f15551811db04c4d08a8ae515dad67df7a1816e015438d4"
+PROMPT_SHA = "ce368f751ad2df77dd9bd2c4d78c9604e518b101cc875a06a2de4ed34d25beeb"
 SCHEMA_SHA = "3389c069351f8d3273d4114e44e8b50f5bfd3c1eb962a41a31705a8fcbb58843"
 GAPS = {
     "period-mismatch": (

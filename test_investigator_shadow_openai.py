@@ -1,5 +1,6 @@
 """Hosted adapter contract: synthetic mocks ONLY; no real credential or network."""
 
+import copy
 import hashlib
 import json
 import os
@@ -8,13 +9,25 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from olin.investigator_shadow import OUTPUT_SCHEMA, PROMPT, canonical, fake_proposal
+from olin.investigator_shadow import (
+    ACTION_CATALOGUE_VERSION,
+    CATALOGUE_GUIDANCE,
+    CATALOGUE_GUIDANCE_DIGEST,
+    OUTPUT_SCHEMA,
+    PROMPT,
+    canonical,
+    digest,
+    fake_proposal,
+    validate_output,
+)
 from olin.investigator_shadow_openai import (
     AMENDMENT,
     ENDPOINT,
     MODEL,
     PAYLOAD_VERSION,
     REQUEST_RESERVE_USD,
+    TRANSPORT_SCHEMA_VERSION,
+    provider_schema,
     read_dedicated_credential,
     request_body,
 )
@@ -60,6 +73,115 @@ def envelope():
 
 
 class HostedAdapterTests(unittest.TestCase):
+    def test_provider_mapping_preserves_application_contract(self):
+        self.assertEqual(digest(OUTPUT_SCHEMA), ev.SCHEMA_SHA)
+        mapped = provider_schema()
+        self.assertIsNot(mapped, OUTPUT_SCHEMA)
+        fields = mapped["properties"]["proposals"]["items"]["properties"]
+        self.assertEqual(
+            mapped["properties"]["schema_version"],
+            {
+                "type": "string",
+                "enum": [OUTPUT_SCHEMA["properties"]["schema_version"]["const"]],
+            },
+        )
+        self.assertEqual(fields["action_type"]["type"], ["string", "null"])
+        self.assertNotIn("uniqueItems", fields["references"])
+        # Invert ONLY the three documented representation adaptations. Exact
+        # equality detects missing required fields, bounds, or closed objects.
+        mapped["properties"]["schema_version"] = copy.deepcopy(
+            OUTPUT_SCHEMA["properties"]["schema_version"]
+        )
+        fields["action_type"].pop("type")
+        fields["references"]["uniqueItems"] = True
+        self.assertEqual(mapped, OUTPUT_SCHEMA)
+        self.transport.assert_not_called()
+
+    def test_catalogue_projection_matches_authoritative_catalogue(self):
+        from olin.investigator.workflow import ACTION_CATALOGUE, ActionType
+        from olin.investigator.workflow import ACTION_CATALOGUE_VERSION as version
+
+        self.assertEqual(ACTION_CATALOGUE_VERSION, version)
+        for action, guidance in CATALOGUE_GUIDANCE.items():
+            source = ACTION_CATALOGUE[ActionType(action)].canonical_record()
+            for key, value in guidance.items():
+                if key != "supported_scope":
+                    self.assertEqual(value, source[key])
+        self.assertNotIn("260,000", PROMPT)
+        self.assertIn("Every proposal must include its references array", PROMPT)
+        # Handwritten review expectations, NOT generated model behavior or a
+        # semantic classifier. Local admissibility cannot prove these meanings.
+        for phrase in (
+            "does not by itself verify business-total revenue",
+            "does not independently establish channel existence",
+        ):
+            self.assertIn(phrase, canonical(CATALOGUE_GUIDANCE))
+        self.assertIn(
+            "proof that a merchant claim is false or that fraud occurred", PROMPT
+        )
+
+    def test_provider_schema_uses_only_audited_keywords(self):
+        # A future schema extension must receive an explicit provider audit.
+        keywords = {
+            "type",
+            "properties",
+            "required",
+            "additionalProperties",
+            "items",
+            "enum",
+            "maxItems",
+            "minLength",
+            "maxLength",
+        }
+
+        def inspect(node):
+            self.assertLessEqual(set(node), keywords)
+            if node.get("type") == "object":
+                self.assertIs(node["additionalProperties"], False)
+                self.assertEqual(set(node["required"]), set(node["properties"]))
+                for child in node["properties"].values():
+                    inspect(child)
+            if "items" in node:
+                inspect(node["items"])
+
+        schema = provider_schema()
+        inspect(schema)
+        self.assertIn(
+            "references", schema["properties"]["proposals"]["items"]["required"]
+        )
+        self.assertEqual(schema["properties"]["proposals"]["maxItems"], 3)
+        self.assertNotIn("minItems", schema["properties"]["proposals"])
+
+    def test_entire_structured_body_is_bounded_before_credential_loading(self):
+        value = context()
+        value["facts"] = ["synthetic text " * 1000]
+        self.assertGreater(len(request_body(value)), 16384)
+        loader = MagicMock(side_effect=AssertionError("must not load credential"))
+        with self.assertRaises(ValueError):
+            Runner(configuration(), credential_loader=loader).generate(value)
+        loader.assert_not_called()
+        self.transport.assert_not_called()
+
+    def test_strict_transport_still_rejects_invalid_local_references(self):
+        for refs in (None, ["ref-forged"], ["ref-1", "ref-1"]):
+            with self.subTest(refs=refs):
+                value = fake_proposal(context())
+                if refs is None:
+                    value["proposals"][0].pop("references")
+                else:
+                    value["proposals"][0]["references"] = refs
+                with self.assertRaises(ValueError):
+                    validate_output(value, context())
+                response = envelope()
+                response["output"][0]["content"][0]["text"] = canonical(value)
+                self.response.read.return_value = canonical(response).encode()
+                result = self.worker()
+                self.assertEqual(result["status"], "INVALID_OUTPUT")
+                self.assertEqual(
+                    result["transport_diagnostics"]["transport_schema_version"],
+                    TRANSPORT_SCHEMA_VERSION,
+                )
+
     def setUp(self):
         self.credential = "synthetic-not-a-provider-credential"
         self.transport = self.enterContext(
@@ -140,7 +262,7 @@ class HostedAdapterTests(unittest.TestCase):
         self.assertEqual(
             body["input"],
             [
-                {"role": "developer", "content": PROMPT + canonical(OUTPUT_SCHEMA)},
+                {"role": "developer", "content": PROMPT},
                 {"role": "user", "content": canonical(context())},
             ],
         )
@@ -148,13 +270,27 @@ class HostedAdapterTests(unittest.TestCase):
         self.assertIn("JSON", body["input"][0]["content"])
         self.assertEqual(body["model"], MODEL)
         self.assertEqual(body["reasoning"], {"effort": "none"})
-        self.assertEqual(body["text"], {"format": {"type": "json_object"}})
+        self.assertEqual(
+            body["text"],
+            {
+                "format": {
+                    "type": "json_schema",
+                    "name": "shadow_proposal",
+                    "strict": True,
+                    "schema": provider_schema(),
+                }
+            },
+        )
         self.assertFalse(body["stream"])
         self.assertEqual(
             result["transport_diagnostics"],
             {
                 "payload_version": PAYLOAD_VERSION,
                 "payload_sha256": hashlib.sha256(encoded).hexdigest(),
+                "transport_schema_version": TRANSPORT_SCHEMA_VERSION,
+                "transport_schema_digest": digest(provider_schema()),
+                "catalogue_version": ACTION_CATALOGUE_VERSION,
+                "catalogue_guidance_digest": CATALOGUE_GUIDANCE_DIGEST,
                 "request_id": "req_" + "a" * 32,
                 "http_status": 200,
             },

@@ -188,7 +188,7 @@ class EvaluationPostgresTests(unittest.TestCase):
         from test_investigator_shadow_openai import configuration, envelope
 
         calls = []
-        self.assertEqual(self.manifest["prompt_version"], "shadow-prompt-2")
+        self.assertEqual(self.manifest["prompt_version"], "shadow-prompt-3")
         self.assertEqual(self.manifest["prompt_digest"], ev.digest(ev.PROMPT))
 
         def attempt(config, supplied):
@@ -223,8 +223,10 @@ class EvaluationPostgresTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     body["input"][0]["content"],
-                    ev.PROMPT + ev.canonical(ev.OUTPUT_SCHEMA),
+                    ev.PROMPT,
                 )
+                self.assertEqual(body["text"]["format"]["type"], "json_schema")
+                self.assertIs(body["text"]["format"]["strict"], True)
                 return result
 
         for _ in range(2):
@@ -237,8 +239,18 @@ class EvaluationPostgresTests(unittest.TestCase):
                 attempt=attempt,
             )
             self.assertEqual(report["attempted_cases"], 3)
-            self.assertEqual(report["run"]["prompt_version"], "shadow-prompt-2")
+            self.assertEqual(report["run"]["prompt_version"], "shadow-prompt-3")
             self.assertEqual(report["run"]["prompt_digest"], ev.digest(ev.PROMPT))
+            for row in report["results"]:
+                if row["attempted"]:
+                    self.assertEqual(
+                        row["transport_diagnostics"]["transport_schema_version"],
+                        "shadow-openai-schema-1",
+                    )
+                    self.assertEqual(
+                        row["transport_diagnostics"]["catalogue_version"],
+                        "investigator-action-catalogue-1.0",
+                    )
         self.assertEqual(len(calls), 3)
         self.assertEqual(
             [r["status"] for r in report["results"] if r["attempted"]],

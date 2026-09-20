@@ -37,7 +37,8 @@ dataset digests and split are frozen. Rubrics and judgments never reach the mode
 
 ## Protocol and failure meanings
 
-Responses API JSON mode is used with the original full schema in the unchanged
+Historical protocol (superseded by the offline structured generation revision
+below): Responses API JSON mode was used with the original full schema in the unchanged
 instructions. This does not claim provider-enforced schema adherence: the existing
 closed validator rejects invalid references, fields, content and bounds afterward.
 The schema is NOT loosened to fit a provider-supported JSON Schema subset.
@@ -76,6 +77,56 @@ provider messages are suppressed entirely, including credential/input echoes;
 unknown parameters/headers are suppressed, not copied to reports. This trades
 message detail for safe diagnostics. A structured HTTP rejection does not establish
 zero billing. Existing stop/replay behavior is unchanged for every HTTP failure.
+
+### Offline structured generation revision (2026-09-19)
+
+The final historical response omitted `references` from all three proposals.
+JSON mode enforced JSON syntax, not required fields, and prompt two's citation
+placement wording did not explicitly require the array. All eighteen narrative
+fields passed; the response correctly remains INVALID_OUTPUT. Nothing in this
+revision repairs or accepts that response. All three authorized requests are
+exhausted. This implementation grants NO further inference authorization.
+
+Current hosted payload version: `shadow-openai-structured-2`.
+`text.format` is exactly `{type: "json_schema", name: "shadow_proposal",
+strict: true, schema: provider_schema()}`. `provider_schema()` in
+`olin/investigator_shadow_openai.py` makes a fresh deep copy of the unchanged
+application `OUTPUT_SCHEMA` and performs only these adaptations:
+
+- `schema_version.const` becomes equivalent `type: string, enum: [value]`.
+- Nullable `action_type.enum` additionally specifies `type: [string, null]`.
+- `references.uniqueItems` is omitted from the provider representation because
+  it is not a documented supported keyword. Duplicate rejection remains mandatory
+  in the unchanged local validator. This is not evidence of live provider support.
+
+Keyword audit against the official
+[Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs)
+and [pinned model page](https://developers.openai.com/api/docs/models/gpt-5.4-mini):
+`type` (object/array/string/null), `properties`, `required`,
+`additionalProperties: false`, `items`, `enum`, and `maxItems` are retained.
+All object properties are required; root and proposal objects remain closed.
+`minLength`/`maxLength` are retained for this non-fine-tuned model; the guide's
+additional exclusion of those keywords applies to fine-tuned models. No
+undocumented `uniqueItems`, conditional/composition keywords or `$ref` are sent.
+The mapping test inverts the three adaptations and requires exact equality with
+the original schema; it does not silently drop unknown future constraints.
+
+The trusted developer message contains `shadow-prompt-3`; the unchanged minimized
+context remains the user message. The schema is sent once in `text.format`, not
+duplicated in prose. The entire UTF-8 HTTP body is bounded by the existing 16,384
+input upper-bound units, including schema and catalogue framing. Model, endpoint,
+reasoning effort, output/time limits and all failure/replay behavior are unchanged.
+No JSON-mode fallback, retries, tools or response normalization are introduced.
+Refusals and incomplete responses remain unsuccessful; every completed proposal
+still passes the original membership, duplicates, content, bounds and abstention
+checks. Structured syntax is not economic truth or evidence authority.
+
+Transport schema version `shadow-openai-schema-1`, digest
+`447128f8997c11b7856bf62fda59fff30aab097a0a5d2f625420e15390c5eeba`.
+Worker diagnostics preserve it, payload version/digest, catalogue version and
+guidance digest on both success and failure. Existing manifest/run prompt bindings
+also bind the trusted catalogue guidance. Live compatibility of this exact new
+payload remains untested: no request is authorized by this change.
 
 The founder separately authorized one manual coverage-unknown compatibility
 follow-up linked to the initial stopped run, as request TWO of the original THREE,
