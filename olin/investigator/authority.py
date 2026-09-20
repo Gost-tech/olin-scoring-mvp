@@ -314,10 +314,10 @@ _REQUIRED_DENIES = {
 
 
 def _validate_contract(contract: dict) -> None:
-    if contract.get("contract_version") != "investigator-authority-1.4":
+    if contract.get("contract_version") != "investigator-authority-1.5":
         raise RuntimeError("Unsupported Investigator authority contract")
-    if contract.get("deployment_profile") != "investigator_v1_phase5a":
-        raise RuntimeError("Investigator deployment profile must be Phase 5A")
+    if contract.get("deployment_profile") != "investigator_v1_phase6":
+        raise RuntimeError("Investigator deployment profile must be Phase 6")
     if contract.get("default") != "deny":
         raise RuntimeError("Investigator authority contract must default to deny")
     principals = contract.get("principals")
@@ -341,8 +341,16 @@ def _validate_contract(contract: dict) -> None:
         raise RuntimeError("A forbidden database object is allowlisted")
     if set(allowed_objects) != _PHASE5_OBJECTS:
         raise RuntimeError("Investigator Phase 5A database objects must be exact")
-    if contract.get("allowed_routes") != _PHASE5_ROUTES:
-        raise RuntimeError("Investigator Phase 5A routes must be exact")
+    report_route = "GET /api/cases/{case_id}/report"
+    routes = contract.get("allowed_routes")
+    if (
+        not isinstance(routes, list)
+        or routes.count(report_route) != 1
+        or [route for route in routes if route != report_route] != _PHASE5_ROUTES
+    ):
+        raise RuntimeError(
+            "Investigator Phase 5A routes plus one read-only report route must be exact"
+        )
     if contract.get("allowed_event_types") != _PHASE2_EVENT_TYPES:
         raise RuntimeError("Investigator Phase 2 event types must be exact")
     allowed_environment = contract.get("allowed_environment_variables")

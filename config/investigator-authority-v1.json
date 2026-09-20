@@ -1,8 +1,8 @@
 {
   "$schema": "investigator-authority.schema.json",
-  "contract_version": "investigator-authority-1.4",
+  "contract_version": "investigator-authority-1.5",
   "default": "deny",
-  "deployment_profile": "investigator_v1_phase5a",
+  "deployment_profile": "investigator_v1_phase6",
   "principals": ["investigator_runtime", "investigator_action_writer"],
   "capabilities": {
     "case.create": {
@@ -218,6 +218,7 @@
     "GET /investigator",
     "POST /api/session",
     "GET /api/cases/{case_id}",
+    "GET /api/cases/{case_id}/report",
     "GET /api/cases/{case_id}/actions",
     "POST /api/cases/{case_id}/actions",
     "POST /api/cases/{case_id}/actions/{action_id}/transitions",

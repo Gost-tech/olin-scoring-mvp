@@ -441,6 +441,11 @@ class InvestigatorWorkflowService:
             ).fetchall()
         return [{"action": row[0], "transitions": row[1]} for row in rows]
 
+    def current_report(self, identity: AnalystIdentity, case_id: UUID) -> dict:
+        from .investigator_reports import capture, render
+
+        return render(capture(self, identity, case_id))
+
     def select_action(
         self,
         identity: AnalystIdentity,
@@ -950,6 +955,11 @@ button,input,select,textarea{font:inherit;padding:10px;border:1px solid #9dac9f;
 <section id="login" class="card"><h2>Analyst access</h2><input id="name" placeholder="Analyst name"><input id="token" type="password" placeholder="Development token"><button onclick="login()">Sign in</button></section>
 <section id="workspace" class="hidden"><div class="card"><label>Case UUID <input id="caseId"></label><button onclick="refreshCase()">Open / refresh current case</button><p id="status" class="muted"></p></div>
 <div id="analysis"></div><div class="card"><h2>Human-selected next action</h2><div id="catalogue" class="actions"></div></div><div id="history" class="card"><h2>Action history</h2></div>
+<section class="card"><h2>Analyst Brief and Audit Annex</h2><p>One authorized capture for both outputs. Historical AS OF its server time; refresh for a new check. Downloads cannot be remotely recalled.</p>
+<button onclick="captureReport()">Capture / refresh report pair</button>
+<button onclick="viewReport('brief')">View Analyst Brief</button><button onclick="viewReport('annex')">View Audit Annex</button>
+<button onclick="downloadReport()">Download structured JSON</button><button onclick="printReport()">Print selected report</button>
+<p id="reportStatus"></p><iframe id="reportFrame" title="Read-only analyst report" sandbox="allow-modals allow-same-origin" style="width:100%;height:650px;border:1px solid #ccc"></iframe></section>
 <section class="card"><h2>Shadow research — separate and untrusted</h2><p>Freeze a round BEFORE choosing your initial human action. Then record that action above. Suggestions are withheld by the server until selection. A fake provider is a plumbing demonstration, not model intelligence. Human investigation does not depend on research availability.</p>
 <button onclick="startShadow()">Freeze or resume pre-selection research context</button>
 <button onclick="shadowOperation('generate')">Generate isolated shadow attempt</button>
@@ -959,6 +969,12 @@ button,input,select,textarea{font:inherit;padding:10px;border:1px solid #9dac9f;
 <pre id="shadowResult" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section></section>
 <div id="message"></div></main><script>
 let sessionToken='', currentCase='', currentAnalysis=null;
+let reportPair=null;
+function clearReport(){reportPair=null;document.getElementById('reportFrame').srcdoc='';document.getElementById('reportStatus').textContent='Report unavailable until a fresh capture.'}
+async function captureReport(){clearReport();const caseId=currentCase;try{const r=await api('/api/cases/'+encodeURIComponent(caseId)+'/report');if(caseId!==currentCase)return;reportPair=r;document.getElementById('reportStatus').textContent='Historical AS OF '+r.manifest.checked_at+' · '+r.manifest.report_input_digest;viewReport('brief')}catch(e){clearReport();document.getElementById('reportStatus').textContent='Report unavailable/stale: '+e.message}}
+function viewReport(kind){if(!reportPair||reportPair.manifest.case_id!==currentCase)return;document.getElementById('reportFrame').srcdoc=reportPair.printable_html[kind]}
+function downloadReport(){if(!reportPair||reportPair.manifest.case_id!==currentCase)return;const u=URL.createObjectURL(new Blob([JSON.stringify(reportPair,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='investigator-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+function printReport(){if(reportPair&&reportPair.manifest.case_id===currentCase)document.getElementById('reportFrame').contentWindow.print()}
 let shadowRound='', shadowCase='';
 const shadowPanel=document.getElementById('shadowResult');
 async function startShadow(){shadowPanel.textContent='';try{let r;try{r=await api('/api/cases/'+encodeURIComponent(currentCase)+'/shadow')}catch(_){r=await api('/api/cases/'+encodeURIComponent(currentCase)+'/shadow',{method:'POST',body:JSON.stringify({idempotency_key:crypto.randomUUID()})})}shadowRound=r.round_id;shadowCase=currentCase;shadowPanel.textContent=JSON.stringify(r,null,2)}catch(e){shadowPanel.textContent='Research unavailable: '+e.message}}
@@ -970,7 +986,7 @@ async function api(path, options={}){const headers={'Content-Type':'application/
 function notice(text,bad=false){document.getElementById('message').innerHTML=`<div class="card ${bad?'error':'ok'}">${esc(text)}</div>`}
 async function login(){try{const body=await api('/api/session',{method:'POST',body:JSON.stringify({name:nameInput.value,token:tokenInput.value})});sessionToken=body.access_token;tokenInput.value='';loginPanel.classList.add('hidden');workspacePanel.classList.remove('hidden');renderCatalogue(body.catalogue);notice('Authenticated analyst session.');}catch(e){notice(e.message,true)}}
 function renderCatalogue(items){cataloguePanel.innerHTML=items.map(x=>`<div><strong>${esc(x.unresolved_question)}</strong><p>${esc(x.purpose)}</p><button onclick="selectAction('${esc(x.action_type)}')">Select this action</button></div>`).join('')}
-async function refreshCase(){currentCase=caseInput.value.trim();shadowPanel.textContent='Research display cleared. Reveal rechecks current authority.';statusPanel.textContent='Checking current server-authorized state…';analysisPanel.innerHTML='';try{const body=await api('/api/cases/'+encodeURIComponent(currentCase));currentAnalysis=body;renderAnalysis(body);await refreshHistory();statusPanel.textContent='Checked as of '+body.server_checked_at+'; refresh rechecks authority.';}catch(e){currentAnalysis=null;statusPanel.textContent='Current analysis unavailable.';notice(e.message,true)}}
+async function refreshCase(){clearReport();currentCase=caseInput.value.trim();shadowPanel.textContent='Research display cleared. Reveal rechecks current authority.';statusPanel.textContent='Checking current server-authorized state…';analysisPanel.innerHTML='';try{const body=await api('/api/cases/'+encodeURIComponent(currentCase));currentAnalysis=body;renderAnalysis(body);await refreshHistory();statusPanel.textContent='Checked as of '+body.server_checked_at+'; refresh rechecks authority.';}catch(e){currentAnalysis=null;statusPanel.textContent='Current analysis unavailable.';notice(e.message,true)}}
 function refs(x){return (x.provenance||[]).map(p=>esc(p.reference_id)+' / '+esc(p.source_id)+' / '+esc(p.verification_status)).join('<br>')||'No direct evidence reference (derived rule output).'}
 function values(items,cls){return items.map(x=>`<div class="card ${cls}"><span class="label">${esc(x.value_type)} · ${esc(x.quantity)}</span><div class="value">${esc(x.value)} ${esc(x.unit)}</div><p>${esc(x.period_start)} — ${esc(x.period_end)}</p><small>Meaning: ${esc(x.dimensional_scope)} · rule ${esc(x.rule_id)}</small><details><summary>Evidence and provenance</summary><small>${refs(x)}</small></details></div>`).join('')}
 function renderAnalysis(body){const r=body.reconstruction,b=r.input_assessment,c=body.change_summary;analysisPanel.innerHTML=`<div class="card"><h2>Current case</h2><p><b>${esc(body.case_id)}</b> · snapshot ${esc(b.snapshot_id)}</p><p>Authority revision ${esc(b.authority_revision)} · Phase 3 ${esc(b.phase3_rules_version)} · Phase 4 ${esc(r.rules_version)}</p><p>Server checked as of ${esc(body.server_checked_at)}</p></div><div class="grid">${values(r.observed_values,'observed')}${values(r.claimed_values,'claimed')}${values(r.derived_values,'disagreement')}</div><div class="card"><h2>Coverage</h2>${r.coverage_diagnostics.map(x=>`<p><b>${esc(x.coverage_type)}</b>: ${esc(x.status)} — ${esc(x.why)}</p>`).join('')}</div><div class="card unknown"><h2>Unknowns remain unknown</h2>${r.unresolved_quantities.map(x=>`<p><b>${esc(x.quantity)}</b>: ${esc(x.status)} — ${esc(x.why_unresolved)}</p>`).join('')}</div><div class="card disagreement"><h2>Reconciliation disagreements</h2>${r.contradictions_carried_forward.map(x=>`<p><b>${esc(x.contradiction_type)}</b> · ${esc(x.materiality)} · rule ${esc(x.rule_id)}</p>`).join('')||'<p>None in the current assessment.</p>'}</div><div class="card"><h2>Snapshot-bound change</h2><p>Historical selection snapshot: ${esc(c.historical_selected_snapshot_id||'none')}</p><p>Current snapshot: ${esc(c.current_snapshot_id)}</p><p>Canonical evidence added: ${c.canonical_evidence_added.map(x=>esc(x.reference_id)+' / '+esc(x.proposition_type)+' / '+esc(x.source_id)).join('<br>')||'none'}</p><p>Current values supported by added evidence: ${c.current_values_supported_by_added_evidence.map(esc).join(', ')||'none'}</p><p>Current coverage supported by added evidence: ${c.current_coverage_supported_by_added_evidence.map(esc).join(', ')||'none'}</p><p>Questions still unresolved: ${c.questions_still_unresolved.map(esc).join(', ')||'none listed'}</p><small>${esc(c.historical_notice)}</small></div>`}
@@ -1075,6 +1091,18 @@ def build_handler(
                     ) from None
                 if method == "GET" and len(parts) == 3:
                     self._json(200, service.current_analysis(identity, case_id))
+                    return
+                if method == "GET" and parts[3:] == ["report"]:
+                    if (
+                        urlparse(self.path).query
+                        or self.headers.get("Content-Length", "0") != "0"
+                    ):
+                        raise InvestigatorAppError(
+                            400,
+                            "INVALID_REPORT_INPUT",
+                            "Report capture accepts no caller bindings",
+                        )
+                    self._json(200, service.current_report(identity, case_id))
                     return
                 if len(parts) >= 4 and parts[3] == "shadow":
                     if shadow is None:
