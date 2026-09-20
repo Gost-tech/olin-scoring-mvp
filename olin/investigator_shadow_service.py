@@ -14,6 +14,7 @@ from .investigator_shadow import (
     OUTPUT_SCHEMA,
     PROMPT,
     PROMPT_VERSION,
+    assess_applicability,
     canonical,
     digest,
     project,
@@ -132,7 +133,7 @@ class ShadowResearchService:
             "round_id": record["round_id"],
             "status": "AWAITING_HUMAN_SELECTION",
             "prompt_version": PROMPT_VERSION,
-            "comparison_rule": "ACTION_TYPE_OVERLAP_V1",
+            "comparison_rule": "APPLICABLE_ACTION_TYPE_OVERLAP_V2",
         }
 
     def resume(self, identity, case_id):
@@ -296,8 +297,17 @@ class ShadowResearchService:
         actions = self.workflow.list_actions(identity, case_id)
         human = next(a for a in actions if a["action"]["action_id"] == selected)
         proposed = final["payload"].get("proposal")
+        applicability = (
+            assess_applicability(proposed, record["context"]) if proposed else None
+        )
         proposed_types = (
-            [p["action_type"] for p in proposed["proposals"]] if proposed else []
+            [
+                p["action_type"]
+                for p in applicability["proposals"]
+                if p["status"] == "APPLICABLE"
+            ]
+            if applicability
+            else []
         )
         return {
             "round_id": str(round_id),
@@ -305,9 +315,10 @@ class ShadowResearchService:
             "checked_as_of": checked_at,
             "untrusted": True,
             "result": final["payload"],
+            "action_applicability": applicability,
             "human_action_id": selected,
             "human_action_type": human["action"]["action_type"],
-            "comparison_rule": "ACTION_TYPE_OVERLAP_V1",
+            "comparison_rule": "APPLICABLE_ACTION_TYPE_OVERLAP_V2",
             "agreement": human["action"]["action_type"] in proposed_types
             if proposed
             else None,
@@ -315,7 +326,7 @@ class ShadowResearchService:
             "performed_action_history": human["transitions"],
             "first_disclosed_at": self._event(record, "DISCLOSED")["recorded_at"],
             "reference_manifest": record["manifest"],
-            "limitations": "Agreement is not correctness; unperformed actions have unknown outcomes. Later choices are post-exposure.",
+            "limitations": "Applicable means bounded action/target fit, not acquisition permission or semantic correctness. Model narrative requires review; server capability is reported separately. Agreement is not correctness; unperformed actions have unknown outcomes. Later choices are post-exposure.",
         }
 
     def rate(self, identity, case_id, round_id, usefulness, reason, key):

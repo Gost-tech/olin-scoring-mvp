@@ -1,0 +1,763 @@
+{
+  "provenance": "Exact minimized synthetic contexts and six original proposals from structured batch one at 8eb7c9109398cbb4d181b2943a8c22afeefb1f64. Historical regression data only, never current authorization or generation input.",
+  "cases": [
+    {
+      "case": "coverage-unknown",
+      "context": {
+        "actions": [
+          "REQUEST_ACCOUNT_CHANNEL_RECORD",
+          "CLARIFY_MERCHANT_ASSERTION_SCOPE"
+        ],
+        "facts": [
+          {
+            "assumptions": [],
+            "dimensional_scope": "BANK_VISIBLE",
+            "formula": null,
+            "kind": "observed_values",
+            "period_end": "2026-09-19T03:36:16.132105Z",
+            "period_start": "2026-08-20T03:36:16.132105Z",
+            "quantity": "observable_bank_inflows",
+            "references": [
+              "ref-1"
+            ],
+            "rule_id": "P4-OBSERVED-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "118000",
+            "value_type": "OBSERVED_VALUE"
+          },
+          {
+            "assumptions": [],
+            "dimensional_scope": "BUSINESS_TOTAL",
+            "formula": null,
+            "kind": "claimed_values",
+            "period_end": "2026-09-19T03:36:16.132105Z",
+            "period_start": "2026-08-20T03:36:16.132105Z",
+            "quantity": "total_monthly_revenue",
+            "references": [
+              "ref-2"
+            ],
+            "rule_id": "P4-CLAIMED-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "260000",
+            "value_type": "CLAIMED_VALUE"
+          },
+          {
+            "assumptions": [
+              "Arithmetic gap only; it does not establish missing, false, or sustainable revenue."
+            ],
+            "dimensional_scope": "UNSPECIFIED",
+            "formula": "CLAIMED_MONTHLY_REVENUE - OBSERVABLE_BANK_INFLOWS",
+            "kind": "derived_values",
+            "period_end": "2026-09-19T03:36:16.132105Z",
+            "period_start": "2026-08-20T03:36:16.132105Z",
+            "quantity": "revenue_reconciliation_gap",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-DERIVE-REVENUE-GAP-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "142000",
+            "value_type": "DERIVED_VALUE"
+          },
+          {
+            "coverage_type": "BANK_ACCOUNT_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "COST_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "DEBT_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "PERIOD_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "REVENUE_CHANNEL_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "net_operating_cash_movement",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_debt_service",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_operating_costs",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "operating_margin",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "additional_revenue_channels",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_sustainable_revenue",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "working_capital",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "contradiction_type": "MATERIAL_DISAGREEMENT_DECLARED_REVENUE_EXCEEDS_BANK_VISIBLE_INFLOWS",
+            "kind": "contradictions_carried_forward",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P3-CONTRADICTION-REVENUE-001"
+          }
+        ],
+        "limitations": "Claims are not facts. Gaps are arithmetic, not fraud. Unknown is not zero.",
+        "references": [
+          "ref-1",
+          "ref-2"
+        ],
+        "rules": {
+          "phase3": "investigator-claims-rules-1.0",
+          "phase4": "investigator-economic-reconstruction-rules-1.0"
+        },
+        "schema_version": "shadow-context-1",
+        "subject": "synthetic-business",
+        "synthetic_only": true,
+        "uncertainties": [
+          "BANK_ACCOUNT_COVERAGE",
+          "COST_COVERAGE",
+          "DEBT_COVERAGE",
+          "PERIOD_COVERAGE",
+          "REVENUE_CHANNEL_COVERAGE",
+          "additional_revenue_channels",
+          "net_operating_cash_movement",
+          "operating_margin",
+          "total_debt_service",
+          "total_operating_costs",
+          "total_sustainable_revenue",
+          "working_capital"
+        ]
+      },
+      "input_digest": "8d1ca0432243f6ee6afa077c7421e37f546f5b4a1fe872d1622d71867998841e",
+      "proposal": {
+        "abstention_reason": null,
+        "proposals": [
+          {
+            "action_type": "REQUEST_ACCOUNT_CHANNEL_RECORD",
+            "limitations": "Restricted to account or channel identifiers and the period already at issue. It cannot establish total revenue, sustainability, or completeness beyond the attested coverage.",
+            "question": "Please provide a supported coverage attestation for the bank account and period already under review, with the relevant account or channel identifiers and the scope covered.",
+            "rationale": "The record shows observable bank inflows, a claimed business total, and unresolved coverage questions. A supported coverage attestation could narrow the bank account coverage uncertainty without treating claims as facts.",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "resolving_evidence": "A canonical coverage record from a supported regulated financial source for the subject and period.",
+            "uncertainty": "BANK_ACCOUNT_COVERAGE",
+            "would_establish": "A proposition specific coverage record for the subject and period.",
+            "would_not_establish": "Business total revenue, complete revenue channel coverage, or sustainable revenue."
+          },
+          {
+            "action_type": "CLARIFY_MERCHANT_ASSERTION_SCOPE",
+            "limitations": "Restricted to the merchant’s own attribution of period, scope, and included channels. It does not verify truth or completeness.",
+            "question": "Please clarify the merchant’s asserted revenue scope, including the period covered and which channels are included in the claim.",
+            "rationale": "The claimed revenue and the bank visible inflows are in tension, while the record also flags unknown channel coverage. Merchant clarification can narrow what the claim is intended to include.",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "resolving_evidence": "A merchant or authorized representative statement that specifies the asserted period, scope, and channels.",
+            "uncertainty": "REVENUE_CHANNEL_COVERAGE",
+            "would_establish": "A clearer attributed claim about the scope and included channels.",
+            "would_not_establish": "Verified channel existence, verified amounts, or completeness of revenue."
+          }
+        ],
+        "schema_version": "shadow-proposal-1"
+      },
+      "original_result_sha256": "b526181ccba11accdb5daef79d4b1e7911def93b64abc8fcecef033d156577dd"
+    },
+    {
+      "case": "account-complete",
+      "context": {
+        "actions": [
+          "REQUEST_ACCOUNT_CHANNEL_RECORD",
+          "CLARIFY_MERCHANT_ASSERTION_SCOPE"
+        ],
+        "facts": [
+          {
+            "assumptions": [],
+            "dimensional_scope": "BANK_VISIBLE",
+            "formula": null,
+            "kind": "observed_values",
+            "period_end": "2026-09-19T03:36:16.593701Z",
+            "period_start": "2026-08-20T03:36:16.593701Z",
+            "quantity": "observable_bank_inflows",
+            "references": [
+              "ref-1"
+            ],
+            "rule_id": "P4-OBSERVED-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "118000",
+            "value_type": "OBSERVED_VALUE"
+          },
+          {
+            "assumptions": [],
+            "dimensional_scope": "BUSINESS_TOTAL",
+            "formula": null,
+            "kind": "claimed_values",
+            "period_end": "2026-09-19T03:36:16.593701Z",
+            "period_start": "2026-08-20T03:36:16.593701Z",
+            "quantity": "total_monthly_revenue",
+            "references": [
+              "ref-3"
+            ],
+            "rule_id": "P4-CLAIMED-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "260000",
+            "value_type": "CLAIMED_VALUE"
+          },
+          {
+            "assumptions": [
+              "Arithmetic gap only; it does not establish missing, false, or sustainable revenue."
+            ],
+            "dimensional_scope": "UNSPECIFIED",
+            "formula": "CLAIMED_MONTHLY_REVENUE - OBSERVABLE_BANK_INFLOWS",
+            "kind": "derived_values",
+            "period_end": "2026-09-19T03:36:16.593701Z",
+            "period_start": "2026-08-20T03:36:16.593701Z",
+            "quantity": "revenue_reconciliation_gap",
+            "references": [
+              "ref-1",
+              "ref-3"
+            ],
+            "rule_id": "P4-DERIVE-REVENUE-GAP-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "142000",
+            "value_type": "DERIVED_VALUE"
+          },
+          {
+            "coverage_type": "BANK_ACCOUNT_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": "2026-09-19T03:36:16.593701Z",
+            "period_start": "2026-08-20T03:36:16.593701Z",
+            "references": [
+              "ref-2"
+            ],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "COMPLETE",
+            "why": "Authoritative coverage metadata applies to this subject and period."
+          },
+          {
+            "coverage_type": "COST_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "DEBT_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "PERIOD_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "REVENUE_CHANNEL_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "net_operating_cash_movement",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_debt_service",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_operating_costs",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "operating_margin",
+            "references": [
+              "ref-1",
+              "ref-2",
+              "ref-3"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "additional_revenue_channels",
+            "references": [
+              "ref-1",
+              "ref-2",
+              "ref-3"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_sustainable_revenue",
+            "references": [
+              "ref-1",
+              "ref-2",
+              "ref-3"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "working_capital",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "contradiction_type": "MATERIAL_DISAGREEMENT_DECLARED_REVENUE_EXCEEDS_BANK_VISIBLE_INFLOWS",
+            "kind": "contradictions_carried_forward",
+            "references": [
+              "ref-1",
+              "ref-3"
+            ],
+            "rule_id": "P3-CONTRADICTION-REVENUE-001"
+          }
+        ],
+        "limitations": "Claims are not facts. Gaps are arithmetic, not fraud. Unknown is not zero.",
+        "references": [
+          "ref-1",
+          "ref-2",
+          "ref-3"
+        ],
+        "rules": {
+          "phase3": "investigator-claims-rules-1.0",
+          "phase4": "investigator-economic-reconstruction-rules-1.0"
+        },
+        "schema_version": "shadow-context-1",
+        "subject": "synthetic-business",
+        "synthetic_only": true,
+        "uncertainties": [
+          "COST_COVERAGE",
+          "DEBT_COVERAGE",
+          "PERIOD_COVERAGE",
+          "REVENUE_CHANNEL_COVERAGE",
+          "additional_revenue_channels",
+          "net_operating_cash_movement",
+          "operating_margin",
+          "total_debt_service",
+          "total_operating_costs",
+          "total_sustainable_revenue",
+          "working_capital"
+        ]
+      },
+      "input_digest": "362e9a6da7faeb1d75d5cdfe4b7aa738e646a74c9a6a1c80d16e4d4c5911349c",
+      "proposal": {
+        "abstention_reason": null,
+        "proposals": [
+          {
+            "action_type": "REQUEST_ACCOUNT_CHANNEL_RECORD",
+            "limitations": "Use only supported coverage attestation for the subject and period; do not seek transaction bodies or credentials.",
+            "question": "Please provide a regulated coverage attestation for the subject and period that identifies any bank account or revenue channel coverage record relevant to the claimed revenue and the observed bank inflows.",
+            "rationale": "The bank account coverage is already authoritative, while revenue channel coverage remains unknown and the claimed revenue exceeds the bank visible inflows. A supported coverage record could narrow the channel and period scope without asserting truth about total revenue.",
+            "references": [
+              "ref-2",
+              "ref-1",
+              "ref-3"
+            ],
+            "resolving_evidence": "The record would establish a proposition specific coverage position from canonical authority for the subject and period.",
+            "uncertainty": "REVENUE_CHANNEL_COVERAGE",
+            "would_establish": "A supported coverage record for the identified subject and period.",
+            "would_not_establish": "Business total revenue, complete revenue channel coverage, or sustainable revenue."
+          },
+          {
+            "action_type": "CLARIFY_MERCHANT_ASSERTION_SCOPE",
+            "limitations": "Limit the request to the merchant's own asserted period, scope, and included channels; do not ask for verified evidence.",
+            "question": "Please clarify the merchant's asserted revenue period, scope, and which channels are included in the claimed revenue figure.",
+            "rationale": "The claim is present, but its scope is not yet fully specified. Clarification can narrow what the merchant intends the claim to cover without converting it into verified fact.",
+            "references": [
+              "ref-3"
+            ],
+            "resolving_evidence": "A merchant clarification would record the asserted period and included channels as a claim.",
+            "uncertainty": "additional_revenue_channels",
+            "would_establish": "The merchant's attributed assertion about scope and included channels.",
+            "would_not_establish": "Independent verification, channel completeness, or the truth of the claim."
+          }
+        ],
+        "schema_version": "shadow-proposal-1"
+      },
+      "original_result_sha256": "afb29dfd9d1f1e8f64e6cb9bc4829507f6fa54c7b8e21e3143dfc036af070cec"
+    },
+    {
+      "case": "cost-debt-unknown",
+      "context": {
+        "actions": [
+          "REQUEST_ACCOUNT_CHANNEL_RECORD",
+          "CLARIFY_MERCHANT_ASSERTION_SCOPE"
+        ],
+        "facts": [
+          {
+            "assumptions": [],
+            "dimensional_scope": "BANK_VISIBLE",
+            "formula": null,
+            "kind": "observed_values",
+            "period_end": "2026-09-19T03:36:21.897746Z",
+            "period_start": "2026-08-20T03:36:21.897746Z",
+            "quantity": "observable_bank_inflows",
+            "references": [
+              "ref-2"
+            ],
+            "rule_id": "P4-OBSERVED-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "118000",
+            "value_type": "OBSERVED_VALUE"
+          },
+          {
+            "assumptions": [],
+            "dimensional_scope": "BUSINESS_TOTAL",
+            "formula": null,
+            "kind": "claimed_values",
+            "period_end": "2026-09-19T03:36:21.897746Z",
+            "period_start": "2026-08-20T03:36:21.897746Z",
+            "quantity": "total_monthly_revenue",
+            "references": [
+              "ref-1"
+            ],
+            "rule_id": "P4-CLAIMED-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "260000",
+            "value_type": "CLAIMED_VALUE"
+          },
+          {
+            "assumptions": [
+              "Arithmetic gap only; it does not establish missing, false, or sustainable revenue."
+            ],
+            "dimensional_scope": "UNSPECIFIED",
+            "formula": "CLAIMED_MONTHLY_REVENUE - OBSERVABLE_BANK_INFLOWS",
+            "kind": "derived_values",
+            "period_end": "2026-09-19T03:36:21.897746Z",
+            "period_start": "2026-08-20T03:36:21.897746Z",
+            "quantity": "revenue_reconciliation_gap",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-DERIVE-REVENUE-GAP-001",
+            "rule_version": "investigator-economic-reconstruction-rules-1.0",
+            "unit": "MXN",
+            "value": "142000",
+            "value_type": "DERIVED_VALUE"
+          },
+          {
+            "coverage_type": "BANK_ACCOUNT_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "COST_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "DEBT_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "PERIOD_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "coverage_type": "REVENUE_CHANNEL_COVERAGE",
+            "kind": "coverage_diagnostics",
+            "period_end": null,
+            "period_start": null,
+            "references": [],
+            "rule_id": "P4-COVERAGE-001",
+            "status": "UNKNOWN",
+            "why": "No accepted authoritative proposition establishes this coverage."
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "net_operating_cash_movement",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_debt_service",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_operating_costs",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "operating_margin",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "additional_revenue_channels",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "total_sustainable_revenue",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "CONTRADICTED",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "kind": "unresolved_quantities",
+            "quantity": "working_capital",
+            "references": [],
+            "rule_id": "P4-UNKNOWN-001",
+            "status": "INSUFFICIENT_INPUT",
+            "value_type": "UNKNOWN_VALUE"
+          },
+          {
+            "contradiction_type": "MATERIAL_DISAGREEMENT_DECLARED_REVENUE_EXCEEDS_BANK_VISIBLE_INFLOWS",
+            "kind": "contradictions_carried_forward",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "rule_id": "P3-CONTRADICTION-REVENUE-001"
+          }
+        ],
+        "limitations": "Claims are not facts. Gaps are arithmetic, not fraud. Unknown is not zero.",
+        "references": [
+          "ref-1",
+          "ref-2"
+        ],
+        "rules": {
+          "phase3": "investigator-claims-rules-1.0",
+          "phase4": "investigator-economic-reconstruction-rules-1.0"
+        },
+        "schema_version": "shadow-context-1",
+        "subject": "synthetic-business",
+        "synthetic_only": true,
+        "uncertainties": [
+          "BANK_ACCOUNT_COVERAGE",
+          "COST_COVERAGE",
+          "DEBT_COVERAGE",
+          "PERIOD_COVERAGE",
+          "REVENUE_CHANNEL_COVERAGE",
+          "additional_revenue_channels",
+          "net_operating_cash_movement",
+          "operating_margin",
+          "total_debt_service",
+          "total_operating_costs",
+          "total_sustainable_revenue",
+          "working_capital"
+        ]
+      },
+      "input_digest": "65ec43e6d351f1b37e02dcded49ddc4de7a57bc7de7b140fddc9758034bff6ab",
+      "proposal": {
+        "abstention_reason": null,
+        "proposals": [
+          {
+            "action_type": "REQUEST_ACCOUNT_CHANNEL_RECORD",
+            "limitations": "Confined to supported account and channel coverage for the stated period; no transaction body or unrestricted data.",
+            "question": "Request a coverage attestation for the subject and period that identifies the covered account or channel scope.",
+            "rationale": "A supported attestation could narrow whether the observable inflows are representative of the asserted business activity within the stated period, without treating the current arithmetic gap as proof of missing revenue.",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "resolving_evidence": "A canonical coverage record with subject and period specificity from a supported regulated financial source.",
+            "uncertainty": "BANK_ACCOUNT_COVERAGE",
+            "would_establish": "A proposition-specific coverage record for the subject and period.",
+            "would_not_establish": "Complete revenue, full channel coverage, or any claim of sustainable revenue."
+          },
+          {
+            "action_type": "CLARIFY_MERCHANT_ASSERTION_SCOPE",
+            "limitations": "Confined to the merchant’s own clarification of period, scope, and included channels; no verified-evidence designation.",
+            "question": "Ask the merchant or authorized representative to clarify the scope and period covered by the asserted monthly revenue figure and which channels are included.",
+            "rationale": "The current claim and bank-visible inflows do not resolve whether the assertion refers to the same period and channel scope, so clarification could narrow the meaning of the merchant claim without converting it into verified evidence.",
+            "references": [
+              "ref-1",
+              "ref-2"
+            ],
+            "resolving_evidence": "An attributed clarification stating the asserted period, scope, and included channels.",
+            "uncertainty": "REVENUE_CHANNEL_COVERAGE",
+            "would_establish": "A clearer merchant claim about what was intended by the asserted revenue figure.",
+            "would_not_establish": "Independent verification, completeness, or truth of the claim."
+          }
+        ],
+        "schema_version": "shadow-proposal-1"
+      },
+      "original_result_sha256": "0d18ae5da3ea36df0e3925720ba5102763d98b80c1a7c63ae24d8ed5c4a84ca9"
+    }
+  ]
+}

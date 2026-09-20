@@ -12,7 +12,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-from .investigator_shadow import OUTPUT_SCHEMA, PROMPT, canonical, fake_proposal
+from .investigator_shadow import PROMPT, canonical, fake_proposal, generation_schema
 
 
 class Runner:
@@ -108,7 +108,8 @@ class Runner:
         else:
             # Count input bytes conservatively as a token upper bound. No tokenizer dependency.
             content = canonical(context)
-            system = PROMPT + canonical(OUTPUT_SCHEMA)
+            schema = generation_schema(context)
+            system = PROMPT + canonical(schema)
             if len((content + system).encode()) > self.config["max_input_tokens"]:
                 raise ValueError("approved input-token upper bound exceeded")
             target = urlparse(self.config["endpoint"])
@@ -124,7 +125,7 @@ class Runner:
                             "model": self.model,
                             "stream": False,
                             "think": False,
-                            "format": OUTPUT_SCHEMA,
+                            "format": schema,
                             "messages": [
                                 {"role": "system", "content": system},
                                 {"role": "user", "content": content},

@@ -188,7 +188,7 @@ class EvaluationPostgresTests(unittest.TestCase):
         from test_investigator_shadow_openai import configuration, envelope
 
         calls = []
-        self.assertEqual(self.manifest["prompt_version"], "shadow-prompt-3")
+        self.assertEqual(self.manifest["prompt_version"], "shadow-prompt-4")
         self.assertEqual(self.manifest["prompt_digest"], ev.digest(ev.PROMPT))
 
         def attempt(config, supplied):
@@ -239,17 +239,21 @@ class EvaluationPostgresTests(unittest.TestCase):
                 attempt=attempt,
             )
             self.assertEqual(report["attempted_cases"], 3)
-            self.assertEqual(report["run"]["prompt_version"], "shadow-prompt-3")
+            self.assertEqual(report["run"]["prompt_version"], "shadow-prompt-4")
             self.assertEqual(report["run"]["prompt_digest"], ev.digest(ev.PROMPT))
             for row in report["results"]:
                 if row["attempted"]:
                     self.assertEqual(
                         row["transport_diagnostics"]["transport_schema_version"],
-                        "shadow-openai-schema-1",
+                        "shadow-openai-schema-2",
                     )
                     self.assertEqual(
                         row["transport_diagnostics"]["catalogue_version"],
                         "investigator-action-catalogue-1.0",
+                    )
+                    self.assertEqual(
+                        row["action_applicability"]["version"],
+                        "shadow-action-applicability-1",
                     )
         self.assertEqual(len(calls), 3)
         self.assertEqual(

@@ -114,3 +114,47 @@ Real mode requires explicit synthetic-only operator approval, model, endpoint,
 finite resource/request/token/time budget. No model download or inference is
 authorized merely by installing this candidate. Fake results are plumbing tests,
 not evidence of model intelligence. REAL-MODEL EVALUATION PENDING.
+
+## Case-scoped applicability amendment
+
+`shadow-action-applicability-1` adds a versioned extension to `shadow-context-1`
+without changing persistence, canonical authority, or `shadow-proposal-1` local
+structural validation. Fresh projection, generation schema and post-currentness
+disclosure/evaluator reporting use the same server-owned derivation. Historical
+contexts can be classified offline, but that grants no renewed authorization.
+
+| Existing action | Eligible unresolved target | Bounded effect |
+| --- | --- | --- |
+| REQUEST_ACCOUNT_CHANNEL_RECORD | BANK_ACCOUNT_COVERAGE with one supported observed bank subject/period and no complete same-scope attestation | Bank-account coverage only; not channel completeness, total or sustainable revenue |
+| CLARIFY_MERCHANT_ASSERTION_SCOPE | REVENUE_CHANNEL_COVERAGE or additional_revenue_channels with one supported merchant revenue-claim subject/period | Attributed claim clarification only; not independent channel or amount verification |
+
+Missing/ambiguous scope fails closed. Matching recorded period bounds do not
+establish complete evidence-period coverage. Costs, debt and other uncovered
+targets remain explicitly unsupported by these actions. Acquisition permission
+is not established by research context; applicability never executes an action.
+
+Original structurally VALID proposals are retained. Separate classifications are
+APPLICABLE, NOT_APPLICABLE or REDUNDANT, with reason codes, server-owned scope and
+capability descriptions. Every narrative remains REQUIRES_SEMANTIC_REVIEW.
+`APPLICABLE_ACTION_TYPE_OVERLAP_V2` counts only applicable pairs for agreement;
+agreement still does not establish truth or usefulness. Existing blinded selection
+and fresh disclosure checks remain required. No keyword semantic judge is added.
+
+Generation provenance advances to `shadow-prompt-4`,
+`shadow-openai-structured-3`, and `shadow-openai-schema-2`. The catalogue remains
+`investigator-action-catalogue-1.0`; its bounded descriptions are filtered into
+the context alongside eligible pairs. Provider schema digests are context-specific
+because action enums are narrowed. The full local acceptance schema is unchanged.
+Prior prompts, receipts and outcomes remain historical, unmodified records.
+
+Offline regression uses the six actual structured-batch proposals and exact saved
+contexts. Five action/target pairs are applicable; the account-complete bank action
+targeting revenue-channel coverage is NOT_APPLICABLE (unsupported target and
+already-complete same-scope coverage). This is not semantic approval of the five.
+The coverage-unknown and cost-debt-unknown contexts share the relevant economic
+facts/unknowns; timestamps, aliases and bindings differ, and neither supplies an
+investigation focus. Neither catalogue action directly investigates costs/debt.
+Not choosing a hidden rubric focus is not demonstrated model failure.
+
+This amendment performs no inference. Six historical requests remain exhausted.
+Human ratings remain NOT_REVIEWED and unperformed outcomes UNKNOWN.

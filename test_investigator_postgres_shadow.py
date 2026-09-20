@@ -14,6 +14,7 @@ import test_investigator_postgres_workflow as pg
 from olin.investigator_app import AnalystIdentity, InvestigatorAppError
 from olin.investigator_shadow_runner import Runner
 from olin.investigator_shadow_service import ShadowResearchService
+from test_investigator_shadow_applicability import saved_cases
 
 
 @unittest.skipUnless(pg.POSTGRES_AVAILABLE, "explicitly disposable PostgreSQL required")
@@ -82,6 +83,13 @@ class InvestigatorPostgresShadowTests(unittest.TestCase):
         self.assertEqual(revealed["result"]["provider"], "fake")
         self.assertEqual(revealed["human_action_id"], action["action"]["action_id"])
         self.assertTrue(revealed["agreement"])
+        self.assertEqual(
+            revealed["action_applicability"]["proposals"][0]["status"], "APPLICABLE"
+        )
+        self.assertEqual(
+            revealed["action_applicability"]["proposals"][0]["narrative_semantics"],
+            "REQUIRES_SEMANTIC_REVIEW",
+        )
         self.assertEqual(revealed["unperformed_proposal_outcomes"], "UNKNOWN")
         replay = self.shadow.disclose(self.identity, self.case_id, r)
         self.assertEqual(replay["first_disclosed_at"], revealed["first_disclosed_at"])
@@ -92,6 +100,62 @@ class InvestigatorPostgresShadowTests(unittest.TestCase):
             "UNCERTAIN",
             "Fake output is not intelligence",
             "rating",
+        )
+
+    def test_complete_account_proposal_is_not_applicable_or_agreement(self):
+        current = self.case.service.current_analysis(self.identity, self.case_id)[
+            "reconstruction"
+        ]
+        self.case.operator.useful_coverage(
+            tenant_id=self.identity.tenant_id,
+            case_id=self.case_id,
+            action_id=uuid4(),
+            expected_revision=current["input_assessment"]["authority_revision"],
+        )
+        r = self.create()
+        record = self.shadow._call(self.identity, self.case_id, r)
+        e = record["context"]["action_eligibility"]
+        self.assertNotIn("REQUEST_ACCOUNT_CHANNEL_RECORD", e["capabilities"])
+        self.assertNotIn("REQUEST_ACCOUNT_CHANNEL_RECORD", record["context"]["actions"])
+        with self.assertRaises(InvestigatorAppError):
+            self.shadow.disclose(self.identity, self.case_id, r)
+        self.select()
+        actions_before = self.case.service.list_actions(self.identity, self.case_id)
+        binding_before = self.case.service.current_analysis(
+            self.identity, self.case_id
+        )["reconstruction"]["input_assessment"]
+        # Mocked structural success cannot masquerade as applicable guidance.
+        output = json.loads(json.dumps(saved_cases()[1]["proposal"]))
+        for proposal in output["proposals"]:
+            proposal["references"] = record["context"]["references"]
+        with patch.object(
+            self.runner,
+            "generate",
+            return_value={
+                "proposal": output,
+                "provider": "fake",
+                "model": self.runner.model,
+            },
+        ):
+            self.shadow.generate(self.identity, self.case_id, r)
+        shown = self.shadow.disclose(self.identity, self.case_id, r)
+        self.assertEqual(shown["result"]["status"], "VALID")
+        self.assertEqual(shown["result"]["proposal"], output)
+        self.assertEqual(
+            [p["status"] for p in shown["action_applicability"]["proposals"]],
+            ["NOT_APPLICABLE", "APPLICABLE"],
+        )
+        self.assertFalse(shown["agreement"])
+        self.assertEqual(shown["comparison_rule"], "APPLICABLE_ACTION_TYPE_OVERLAP_V2")
+        self.assertEqual(
+            self.case.service.list_actions(self.identity, self.case_id), actions_before
+        )
+        binding_after = self.case.service.current_analysis(self.identity, self.case_id)[
+            "reconstruction"
+        ]["input_assessment"]
+        self.assertEqual(
+            {k: v for k, v in binding_before.items() if k != "checked_at"},
+            {k: v for k, v in binding_after.items() if k != "checked_at"},
         )
 
     def test_b_context_contains_neither_human_choice_nor_future_evidence(self):

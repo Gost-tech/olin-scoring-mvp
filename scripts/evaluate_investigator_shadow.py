@@ -26,6 +26,7 @@ from olin.investigator_shadow import (
     PROMPT,
     PROMPT_VERSION,
     VERSION,
+    assess_applicability,
     canonical,
     digest,
     project,
@@ -37,7 +38,7 @@ from olin.investigator_shadow_runner import Runner
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "tests/fixtures/shadow_evaluation_v1.json"
 DATASET_SHA = "32978bf2c44fa0fe0eb35ec4c2c8ad35fcd3f336ad6c1e2052cb2701f5c5282c"
-PROMPT_SHA = "ce368f751ad2df77dd9bd2c4d78c9604e518b101cc875a06a2de4ed34d25beeb"
+PROMPT_SHA = "e66a29835c3495f904a1087c2c351250ed6b59e6681ac71bd35e77adcdbfeb59"
 SCHEMA_SHA = "3389c069351f8d3273d4114e44e8b50f5bfd3c1eb962a41a31705a8fcbb58843"
 GAPS = {
     "period-mismatch": (
@@ -550,6 +551,11 @@ def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
                     except Exception:  # noqa: BLE001 - any recheck failure excludes the result
                         result["generation_status"] = result["status"]
                         result["status"] = "STALE_CONTEXT_EXCLUDED"
+                    else:
+                        if result["status"] in {"VALID", "ABSTAINED"}:
+                            result["action_applicability"] = assess_applicability(
+                                result["proposal"], fresh
+                            )
         stop_reason = stop_reason or hosted_stop_reason(config, result)
         save_once(final_path, result)
         results.append(result)

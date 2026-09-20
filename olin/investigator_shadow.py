@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from copy import deepcopy
+from datetime import datetime
 
 VERSION = "shadow-proposal-1"
 CONTEXT_VERSION = "shadow-context-1"
-PROMPT_VERSION = "shadow-prompt-3"
+PROMPT_VERSION = "shadow-prompt-4"
+APPLICABILITY_VERSION = "shadow-action-applicability-1"
 ACTIONS = ("REQUEST_ACCOUNT_CHANNEL_RECORD", "CLARIFY_MERCHANT_ASSERTION_SCOPE")
 TEXT_FIELDS = (
     "question",
@@ -39,6 +42,13 @@ Account coverage is not revenue-channel coverage or sustainable revenue.
 Never assume missing data means zero or adverse quality. No action is executed.
 Preserve the precise reconciliation subtype: a reconciliation difference is not
 proof that a merchant claim is false or that fraud occurred.
+Use only action/target pairs in action_eligibility. Its server-owned effects are
+the capability limits, not evidence truth or permission to acquire evidence.
+An attributed clarification can narrow a claim without verifying its target.
+If no pair applies, abstain explicitly; do not manufacture a supported action.
+Matching recorded periods do not establish complete period coverage, and unknown
+period coverage does not establish a period mismatch. Narrative meaning still
+requires semantic review even when an action/target pair is applicable.
 """
 
 
@@ -101,11 +111,11 @@ CATALOGUE_GUIDANCE[ACTIONS[1]]["supported_scope"] = (
     "completeness or truth."
 )
 CATALOGUE_GUIDANCE_DIGEST = digest(CATALOGUE_GUIDANCE)
-PROMPT += "Trusted bounded action catalogue " + canonical(
+PROMPT += "Trusted capability projection bindings " + canonical(
     {
         "version": ACTION_CATALOGUE_VERSION,
         "guidance_digest": CATALOGUE_GUIDANCE_DIGEST,
-        "actions": CATALOGUE_GUIDANCE,
+        "applicability_version": APPLICABILITY_VERSION,
     }
 )
 
@@ -142,6 +152,172 @@ OUTPUT_SCHEMA = {
         },
     },
 }
+
+
+def action_eligibility(context: dict) -> dict:
+    """Pure capability check, NOT authorization; callers must use current wrappers.
+
+    All projected facts belong to the bound case subject. No caller-provided
+    eligibility/action list can override these derived pairs. No text classifier.
+    """
+    facts = context["facts"]
+    if not isinstance(facts, list) or any(not isinstance(f, dict) for f in facts):
+        raise ValueError("projected fact objects required")
+    unresolved = set(context["uncertainties"])
+
+    def scope(kind, quantity, value_type, dimension):
+        periods = set()
+        for fact in facts:
+            if (
+                fact.get("kind"),
+                fact.get("quantity"),
+                fact.get("value_type"),
+                fact.get("dimensional_scope"),
+            ) != (kind, quantity, value_type, dimension):
+                continue
+            start, end = fact.get("period_start"), fact.get("period_end")
+            try:
+                a = datetime.fromisoformat(start.replace("Z", "+00:00"))
+                b = datetime.fromisoformat(end.replace("Z", "+00:00"))
+                if a.tzinfo is None or b.tzinfo is None or a >= b:
+                    return None
+            except (AttributeError, TypeError, ValueError):
+                return None
+            periods.add((start, end))
+        if len(periods) != 1:
+            return None
+        start, end = next(iter(periods))
+        return {"subject": context["subject"], "period_start": start, "period_end": end}
+
+    bank_scope = scope(
+        "observed_values", "observable_bank_inflows", "OBSERVED_VALUE", "BANK_VISIBLE"
+    )
+    claim_scope = scope(
+        "claimed_values", "total_monthly_revenue", "CLAIMED_VALUE", "BUSINESS_TOTAL"
+    )
+    complete = bool(bank_scope) and any(
+        f.get("kind") == "coverage_diagnostics"
+        and f.get("coverage_type") == "BANK_ACCOUNT_COVERAGE"
+        and f.get("status") == "COMPLETE"
+        and all(f.get(k) == bank_scope[k] for k in ("period_start", "period_end"))
+        for f in facts
+    )
+    pairs = []
+    if bank_scope and not complete and "BANK_ACCOUNT_COVERAGE" in unresolved:
+        pairs.append(
+            {
+                "action_type": ACTIONS[0],
+                "target": "BANK_ACCOUNT_COVERAGE",
+                "effect": "BANK_ACCOUNT_COVERAGE_ONLY",
+                "scope": bank_scope,
+            }
+        )
+    if claim_scope:
+        for target in ("REVENUE_CHANNEL_COVERAGE", "additional_revenue_channels"):
+            if target in unresolved:
+                pairs.append(
+                    {
+                        "action_type": ACTIONS[1],
+                        "target": target,
+                        "effect": "ATTRIBUTED_CLAIM_CLARIFICATION_ONLY",
+                        "scope": claim_scope,
+                    }
+                )
+    applicable_actions = {p["action_type"] for p in pairs}
+    return {
+        "version": APPLICABILITY_VERSION,
+        "pairs": pairs,
+        "capabilities": {
+            a: deepcopy(CATALOGUE_GUIDANCE[a])
+            for a in ACTIONS
+            if a in applicable_actions
+        },
+        "uncovered_targets": sorted(unresolved - {p["target"] for p in pairs}),
+        "bank_scope": bank_scope,
+        "bank_account_complete_same_scope": complete,
+        "claim_scope": claim_scope,
+        "acquisition_permission": "NOT_ESTABLISHED_BY_RESEARCH_CONTEXT",
+        "execution_authorized": False,
+    }
+
+
+def assess_applicability(value: object, context: dict) -> dict:
+    """Separate structural acceptance from deterministic fit and unreviewed prose.
+
+    Preserves every proposal; historical callers obtain diagnostics, not renewed
+    authority. Application disclosure separately revalidates the current binding.
+    """
+    output = validate_output(value, context)
+    eligibility = action_eligibility(context)
+    rows = []
+    for index, p in enumerate(output["proposals"]):
+        action, target = p["action_type"], p["uncertainty"]
+        pair = next(
+            (
+                x
+                for x in eligibility["pairs"]
+                if (x["action_type"], x["target"]) == (action, target)
+            ),
+            None,
+        )
+        reasons = []
+        if action == ACTIONS[0]:
+            if target != "BANK_ACCOUNT_COVERAGE":
+                reasons.append("UNSUPPORTED_ACTION_TARGET")
+            if eligibility["bank_scope"] is None:
+                reasons.append("SUPPORTED_BANK_SUBJECT_PERIOD_UNAVAILABLE")
+            if eligibility["bank_account_complete_same_scope"]:
+                reasons.append("ACCOUNT_COVERAGE_ALREADY_COMPLETE_SAME_SCOPE")
+        elif action == ACTIONS[1]:
+            if target not in {
+                "REVENUE_CHANNEL_COVERAGE",
+                "additional_revenue_channels",
+            }:
+                reasons.append("UNSUPPORTED_ACTION_TARGET")
+            if eligibility["claim_scope"] is None:
+                reasons.append("SUPPORTED_MERCHANT_CLAIM_SCOPE_UNAVAILABLE")
+        else:
+            reasons.append("RESEARCH_HYPOTHESIS_NOT_AN_ACTION")
+        status = "APPLICABLE" if pair else "NOT_APPLICABLE"
+        if not pair and reasons == ["ACCOUNT_COVERAGE_ALREADY_COMPLETE_SAME_SCOPE"]:
+            status = "REDUNDANT"
+        if not pair and not reasons:
+            reasons.append("NO_SUPPORTED_UNRESOLVED_TARGET")
+        rows.append(
+            {
+                "proposal_index": index,
+                "proposal_digest": digest(p),
+                "action_type": action,
+                "target": target,
+                "status": status,
+                "reason_codes": reasons or [pair["effect"]],
+                "server_effect": pair["effect"] if pair else None,
+                "server_scope": pair["scope"] if pair else None,
+                "server_capability": deepcopy(CATALOGUE_GUIDANCE.get(action)),
+                "narrative_semantics": "REQUIRES_SEMANTIC_REVIEW",
+                "execution_authorized": False,
+            }
+        )
+    return {
+        "version": APPLICABILITY_VERSION,
+        "structural_validation": "VALID",
+        "proposals": rows,
+        "uncovered_targets": eligibility["uncovered_targets"],
+        "permission": eligibility["acquisition_permission"],
+        "overall": "HAS_APPLICABLE_PAIRS"
+        if any(r["status"] == "APPLICABLE" for r in rows)
+        else "NO_APPLICABLE_PROPOSALS",
+    }
+
+
+def generation_schema(context: dict) -> dict:
+    """Narrow generation choices only; OUTPUT_SCHEMA/local acceptance unchanged."""
+    schema = deepcopy(OUTPUT_SCHEMA)
+    allowed = {p["action_type"] for p in action_eligibility(context)["pairs"]}
+    schema["properties"]["proposals"]["items"]["properties"]["action_type"]["enum"] = [
+        a for a in ACTIONS if a in allowed
+    ] + [None]
+    return schema
 
 
 def project(reconstruction: dict) -> tuple[dict, dict]:
@@ -216,6 +392,8 @@ def project(reconstruction: dict) -> tuple[dict, dict]:
         },
         "limitations": "Claims are not facts. Gaps are arithmetic, not fraud. Unknown is not zero.",
     }
+    context["action_eligibility"] = action_eligibility(context)
+    context["actions"] = list(context["action_eligibility"]["capabilities"])
     if len(canonical(context).encode()) > 24000:
         raise ValueError("research context exceeds bounded size")
     return context, {alias: ref for ref, alias in aliases.items()}
@@ -289,7 +467,9 @@ def _validate_text(text):
 
 def fake_proposal(context: dict) -> dict:
     """Deterministic plumbing fake, deliberately not a model-quality baseline."""
-    if "BANK_ACCOUNT_COVERAGE" not in context["uncertainties"]:
+    if not any(
+        p["action_type"] == ACTIONS[0] for p in action_eligibility(context)["pairs"]
+    ):
         return {
             "schema_version": VERSION,
             "proposals": [],

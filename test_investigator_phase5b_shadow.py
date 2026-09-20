@@ -28,10 +28,21 @@ def context():
     return {
         "schema_version": "shadow-context-1",
         "synthetic_only": True,
+        "subject": "synthetic-business",
         "uncertainties": ["BANK_ACCOUNT_COVERAGE"],
         "references": ["ref-1"],
         "actions": list(ACTIONS),
-        "facts": [],
+        "facts": [
+            {
+                "kind": "observed_values",
+                "quantity": "observable_bank_inflows",
+                "value_type": "OBSERVED_VALUE",
+                "dimensional_scope": "BANK_VISIBLE",
+                "period_start": "2026-01-01T00:00:00Z",
+                "period_end": "2026-01-31T00:00:00Z",
+                "references": ["ref-1"],
+            }
+        ],
     }
 
 
@@ -45,7 +56,7 @@ class ShadowSchemaTests(unittest.TestCase):
             "could clarify its scope without establishing total revenue."
         )
         self.assertEqual(validate_output(value, context()), value)
-        self.assertEqual(PROMPT_VERSION, "shadow-prompt-3")
+        self.assertEqual(PROMPT_VERSION, "shadow-prompt-4")
         for instruction in (
             "ONLY in the dedicated references array",
             "no digits",

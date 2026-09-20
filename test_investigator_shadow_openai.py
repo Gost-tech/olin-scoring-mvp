@@ -154,7 +154,7 @@ class HostedAdapterTests(unittest.TestCase):
 
     def test_entire_structured_body_is_bounded_before_credential_loading(self):
         value = context()
-        value["facts"] = ["synthetic text " * 1000]
+        value["facts"] = [{"why": "synthetic text " * 1300}]
         self.assertGreater(len(request_body(value)), 16384)
         loader = MagicMock(side_effect=AssertionError("must not load credential"))
         with self.assertRaises(ValueError):
@@ -277,7 +277,7 @@ class HostedAdapterTests(unittest.TestCase):
                     "type": "json_schema",
                     "name": "shadow_proposal",
                     "strict": True,
-                    "schema": provider_schema(),
+                    "schema": provider_schema(context()),
                 }
             },
         )
@@ -288,7 +288,7 @@ class HostedAdapterTests(unittest.TestCase):
                 "payload_version": PAYLOAD_VERSION,
                 "payload_sha256": hashlib.sha256(encoded).hexdigest(),
                 "transport_schema_version": TRANSPORT_SCHEMA_VERSION,
-                "transport_schema_digest": digest(provider_schema()),
+                "transport_schema_digest": digest(provider_schema(context())),
                 "catalogue_version": ACTION_CATALOGUE_VERSION,
                 "catalogue_guidance_digest": CATALOGUE_GUIDANCE_DIGEST,
                 "request_id": "req_" + "a" * 32,
@@ -315,7 +315,7 @@ class HostedAdapterTests(unittest.TestCase):
 
     def test_non_ascii_context_is_sent_as_utf8_not_http_client_latin1(self):
         value = context()
-        value["facts"].append("cobertura — información sintética 漢字")
+        value["facts"].append({"why": "cobertura — información sintética 漢字"})
         runner = Runner(configuration(), credential_loader=lambda: self.credential)
         runner.generate(value)
         body = self.transport.return_value.request.call_args.kwargs["body"]
@@ -415,7 +415,7 @@ class HostedAdapterTests(unittest.TestCase):
             runner.generate(context())
         self.assertEqual(self.transport.call_count, 3)
         oversized = context()
-        oversized["facts"] = ["x" * 17000]
+        oversized["facts"] = [{"why": "x" * 17000}]
         with self.assertRaises(ValueError):
             Runner(configuration(), credential_loader=lambda: self.credential).generate(
                 oversized

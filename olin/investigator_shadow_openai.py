@@ -21,24 +21,25 @@ from .investigator_shadow import (
     PROMPT,
     canonical,
     digest,
+    generation_schema,
     validate_output,
 )
 
 AMENDMENT = "shadow-hosted-1"
 MODEL = "gpt-5.4-mini-2026-03-17"
 ENDPOINT = "https://api.openai.com/v1/responses"
-PAYLOAD_VERSION = "shadow-openai-structured-2"
-TRANSPORT_SCHEMA_VERSION = "shadow-openai-schema-1"
+PAYLOAD_VERSION = "shadow-openai-structured-3"
+TRANSPORT_SCHEMA_VERSION = "shadow-openai-schema-2"
 
 
-def provider_schema():
+def provider_schema(context=None):
     """Fixed, loss-explicit adaptation of the application contract, not a compiler.
 
     uniqueItems is not in the documented provider subset; local validation still
     enforces uniqueness. Singleton enum expresses const; nullable enum gets an
     explicit type. All remaining application schema constraints are retained.
     """
-    schema = deepcopy(OUTPUT_SCHEMA)
+    schema = deepcopy(OUTPUT_SCHEMA) if context is None else generation_schema(context)
     version = schema["properties"]["schema_version"].pop("const")
     schema["properties"]["schema_version"].update(type="string", enum=[version])
     fields = schema["properties"]["proposals"]["items"]["properties"]
@@ -250,7 +251,7 @@ def request_body(context):
                     "type": "json_schema",
                     "name": "shadow_proposal",
                     "strict": True,
-                    "schema": provider_schema(),
+                    "schema": provider_schema(context),
                 }
             },
         }
@@ -271,7 +272,7 @@ def generate(config, context, credential_loader, observer, diagnostics=None):
         payload_version=PAYLOAD_VERSION,
         payload_sha256=hashlib.sha256(body).hexdigest(),
         transport_schema_version=TRANSPORT_SCHEMA_VERSION,
-        transport_schema_digest=digest(provider_schema()),
+        transport_schema_digest=digest(provider_schema(context)),
         catalogue_version=ACTION_CATALOGUE_VERSION,
         catalogue_guidance_digest=CATALOGUE_GUIDANCE_DIGEST,
     )
