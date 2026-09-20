@@ -37,7 +37,7 @@ from olin.investigator_shadow_runner import Runner
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "tests/fixtures/shadow_evaluation_v1.json"
 DATASET_SHA = "32978bf2c44fa0fe0eb35ec4c2c8ad35fcd3f336ad6c1e2052cb2701f5c5282c"
-PROMPT_SHA = "ccba763aae3b8216fbd8100d8eea4234bc86ac4d990dda10599a04dc3be61d61"
+PROMPT_SHA = "fbd240ab7a898b687f15551811db04c4d08a8ae515dad67df7a1816e015438d4"
 SCHEMA_SHA = "3389c069351f8d3273d4114e44e8b50f5bfd3c1eb962a41a31705a8fcbb58843"
 GAPS = {
     "period-mismatch": (
@@ -403,6 +403,8 @@ def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
     if (
         manifest["tenant_id"] != str(identity.tenant_id)
         or manifest["dataset_sha256"] != DATASET_SHA
+        or manifest["prompt_version"] != PROMPT_VERSION
+        or manifest["prompt_digest"] != PROMPT_SHA
     ):
         raise ValueError("evaluation manifest principal/version mismatch")
     run = {
@@ -410,6 +412,8 @@ def _evaluate_locked(workflow, identity, directory, mode, config, attempt):
         "config": config,
         "candidate_sha": candidate_sha(),
         "manifest_digest": digest(manifest),
+        "prompt_version": PROMPT_VERSION,
+        "prompt_digest": PROMPT_SHA,
     }
     run_file = directory / "run.json"
     if run_file.exists():

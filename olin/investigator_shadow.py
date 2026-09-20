@@ -8,7 +8,7 @@ import re
 
 VERSION = "shadow-proposal-1"
 CONTEXT_VERSION = "shadow-context-1"
-PROMPT_VERSION = "shadow-prompt-1"
+PROMPT_VERSION = "shadow-prompt-2"
 ACTIONS = ("REQUEST_ACCOUNT_CHANNEL_RECORD", "CLARIFY_MERCHANT_ASSERTION_SCOPE")
 TEXT_FIELDS = (
     "question",
@@ -24,6 +24,13 @@ Use only supplied uncertainty IDs, reference aliases and catalogue action types.
 Do not invent amounts, certainty, permissions, verification, credit conclusions,
 tools or executable instructions. No numerical predictions. Abstain when no
 admissible question exists. Concise evidence-linked rationales, not chain of thought.
+Put reference aliases ONLY in the dedicated references array; every alias must
+come from the supplied context. Narrative fields and abstention_reason must contain
+no digits. Do not repeat identifiers, numbered lists, numeric dates or financial
+amounts in narrative fields. Explain evidence relationships in words, carrying
+the actual citations in the structured references array. Do not spell out invented
+financial amounts to evade validation. The digit filter is a formatting constraint,
+not proof of factual correctness.
 Account coverage is not revenue-channel coverage or sustainable revenue.
 Never assume missing data means zero or adverse quality. No action is executed.
 """

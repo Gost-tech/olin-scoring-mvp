@@ -188,6 +188,8 @@ class EvaluationPostgresTests(unittest.TestCase):
         from test_investigator_shadow_openai import configuration, envelope
 
         calls = []
+        self.assertEqual(self.manifest["prompt_version"], "shadow-prompt-2")
+        self.assertEqual(self.manifest["prompt_digest"], ev.digest(ev.PROMPT))
 
         def attempt(config, supplied):
             calls.append(supplied)
@@ -209,13 +211,21 @@ class EvaluationPostgresTests(unittest.TestCase):
                 transport.return_value.getresponse.return_value.read.return_value = (
                     ev.canonical(response).encode()
                 )
-                return ev.worker(
+                result = ev.worker(
                     {
                         "config": config,
                         "context": supplied,
                         "credential_file": "/mock-only",
                     }
                 )
+                body = json.loads(
+                    transport.return_value.request.call_args.kwargs["body"]
+                )
+                self.assertEqual(
+                    body["input"][0]["content"],
+                    ev.PROMPT + ev.canonical(ev.OUTPUT_SCHEMA),
+                )
+                return result
 
         for _ in range(2):
             report = ev.evaluate(
@@ -227,6 +237,8 @@ class EvaluationPostgresTests(unittest.TestCase):
                 attempt=attempt,
             )
             self.assertEqual(report["attempted_cases"], 3)
+            self.assertEqual(report["run"]["prompt_version"], "shadow-prompt-2")
+            self.assertEqual(report["run"]["prompt_digest"], ev.digest(ev.PROMPT))
         self.assertEqual(len(calls), 3)
         self.assertEqual(
             [r["status"] for r in report["results"] if r["attempted"]],
@@ -236,6 +248,26 @@ class EvaluationPostgresTests(unittest.TestCase):
             self.assertNotIn("split", supplied)
             self.assertNotIn("human_selection", supplied)
             self.assertNotIn("expected", supplied)
+
+    def test_previous_prompt_manifest_cannot_authorize_new_prompt_inference(self):
+        directory = ev.private_directory(self.path / "old-prompt")
+        old = dict(
+            self.manifest,
+            prompt_version="shadow-prompt-1",
+            prompt_digest="ccba763aae3b8216fbd8100d8eea4234bc86ac4d990dda10599a04dc3be61d61",
+        )
+        ev.save_once(directory / "manifest.json", old)
+        attempt = MagicMock()
+        with self.assertRaisesRegex(ValueError, "version mismatch"):
+            ev.evaluate(
+                self.fixture.service,
+                self.fixture.identity,
+                directory,
+                mode="dry-run",
+                attempt=attempt,
+            )
+        attempt.assert_not_called()
+        self.assertEqual(list(directory.glob("*.started.json")), [])
 
     def test_hosted_interrupted_attempt_never_repeats_or_falls_back(self):
         from test_investigator_shadow_openai import configuration

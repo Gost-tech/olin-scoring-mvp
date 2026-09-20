@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch
 
 from olin.investigator_shadow import (
     ACTIONS,
+    PROMPT,
+    PROMPT_VERSION,
     TEXT_FIELDS,
     VERSION,
     canonical,
@@ -34,6 +36,44 @@ def context():
 
 
 class ShadowSchemaTests(unittest.TestCase):
+    def test_citation_contract_keeps_aliases_structured_not_narrative(self):
+        # Synthetic engineering fixture, not a repaired or newly generated response.
+        value = fake_proposal(context())
+        value["proposals"][0]["references"] = ["ref-1"]
+        value["proposals"][0]["rationale"] = (
+            "The cited observation leaves account coverage unknown; an account record "
+            "could clarify its scope without establishing total revenue."
+        )
+        self.assertEqual(validate_output(value, context()), value)
+        self.assertEqual(PROMPT_VERSION, "shadow-prompt-2")
+        for instruction in (
+            "ONLY in the dedicated references array",
+            "no digits",
+            "Do not spell out invented",
+            "not proof of factual correctness",
+        ):
+            self.assertIn(instruction, PROMPT)
+        for field in (*TEXT_FIELDS, "abstention_reason"):
+            for text in (
+                "See ref-1 for the observation.",
+                "Revenue is 999.",
+                "x" * 501,
+                "Approve the loan.",
+                "Run `curl`.",
+            ):
+                with self.subTest(field=field, text=text):
+                    bad = copy.deepcopy(value)
+                    if field == "abstention_reason":
+                        bad["proposals"] = []
+                        bad[field] = text
+                    else:
+                        bad["proposals"][0][field] = text
+                    with self.assertRaises(ValueError):
+                        validate_output(bad, context())
+        value["proposals"][0]["references"] = ["ref-999"]
+        with self.assertRaisesRegex(ValueError, "fabricated"):
+            validate_output(value, context())
+
     def test_original_text_bounds_for_every_field_and_abstention(self):
         samples = [
             ("a" * 499, True),

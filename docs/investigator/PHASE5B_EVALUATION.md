@@ -4,13 +4,44 @@ Optional hosted transport: see [PHASE5B_HOSTED_CONNECTION.md](PHASE5B_HOSTED_CON
 for the explicitly disabled-by-default `shadow-hosted-1` extension, dedicated
 worker-only credential custody, three-request cap and spending/transmission
 approval requirements. The original local-adapter protocol below remains valid;
-the extension does not alter frozen rubrics, prompt, schema or coverage.
+the extension does not alter frozen rubrics, schema or coverage. The separately
+authorized prompt revision below supersedes the original prompt freeze only.
 
 This is a synthetic research evaluator, not a model-quality result, canonical
 writer extension, bank pilot, or new provider. The Phase 5B authority amendment
-is unchanged. No model installation, download or inference is authorized here.
-The raw-length repair enforces the existing schema; prompt/schema versions stay
+is unchanged. The original implementation granted no model installation, download
+or inference approval. Its raw-length repair kept the original prompt/schema versions:
 `shadow-prompt-1`, `shadow-context-1`, `shadow-proposal-1`.
+
+## Authorized development prompt revision: shadow-prompt-2
+
+The founder authorized a citation-format correction after the second real request
+returned HTTP 200/completed but INVALID_OUTPUT. Only its first proposal's rationale
+failed: structured aliases were repeated in free text, where their digits violate
+the unchanged validator. Other narrative fields, references, actions and structure
+passed offline checks. This was not a provider failure or invented financial amount.
+That response stays INVALID_OUTPUT; no historical artifact is repaired or accepted.
+
+`shadow-prompt-2` requires supplied aliases only in the references array, no digits
+or identifiers/numbered lists/numeric dates/amounts in narrative or abstention text,
+and evidence relationships expressed in words. It prohibits spelling invented
+amounts out to evade validation. This formatting constraint is not factual proof.
+All prior permission, uncertainty and evidence limitations remain unchanged.
+
+Prompt one digest: `ccba763aae3b8216fbd8100d8eea4234bc86ac4d990dda10599a04dc3be61d61`.
+Prompt two digest: `fbd240ab7a898b687f15551811db04c4d08a8ae515dad67df7a1816e015438d4`.
+Exact prior prompt remains in git at `5049afacb86f83aac731cfd74773288f1e8a2b82`.
+Prior private manifests and receipts retain their original versions and digests.
+Fresh preparation and matching prompt version/digest are required; old manifests
+cannot authorize the revised prompt. Run records explicitly bind prompt provenance.
+Schema/context/dataset, split and rubrics, validator, model and transport stay fixed.
+
+This is a development revision informed by an observed failure, NOT an untouched
+evaluation of the originally frozen prompt. The founder authorizes only one final
+coverage-unknown request, cumulative THREE of THREE, under the original USD1 cap.
+Retain all prior receipts and the unknown-cost first-attempt reservation. A private
+linked continuation records code/prompt/input digests and fresh-context differences.
+Other eligible cases remain untested. No more inference after this final attempt.
 
 ## Frozen coverage manifest
 
