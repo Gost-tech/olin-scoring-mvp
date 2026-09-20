@@ -46,6 +46,9 @@ a fresh capture has a new server time and need not have the same digest.
 Brief observations, claims, arithmetic, unknowns and precise disagreements stay
 distinct. The annex retains reference-only evidence/source/consent/verification,
 lineage/supersession, reconstruction formulas/assumptions and human history.
+Tenant-scoped historical snapshot invalidations are captured under the same
+fence with reference, reason, time and actor metadata only; they never reactivate
+the invalidated snapshot or authorize a current report.
 There are no raw document bodies, model responses, research ratings or new
 signatures. Current evidence linked to an accepted action is reported as newly
 supported only for its proposition/verification status; administrative status

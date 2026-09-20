@@ -99,6 +99,52 @@ class ReportPostgresTests(unittest.TestCase):
         with self.assertRaises(InvestigatorAppError):
             self.service.current_report(self.identity, self.case_id)
 
+    def test_historical_invalidation_is_audit_only_not_current_authority(self):
+        from datetime import datetime, timezone
+
+        old = self.service.current_report(self.identity, self.case_id)["manifest"]
+        with (
+            self.case._connect(self.case.runtime_role)() as runtime,
+            runtime.transaction(),
+        ):
+            self.case.operator._runtime_context(runtime, self.identity.tenant_id)
+            runtime.execute(
+                "SELECT investigator.invalidate_snapshot(%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    self.identity.tenant_id,
+                    self.case_id,
+                    UUID(old["snapshot_id"]),
+                    old["event_cutoff"],
+                    "PROVENANCE_FAILURE",
+                    "synthetic-review-reference",
+                    datetime.now(timezone.utc),
+                    "report-invalidation",
+                ),
+            )
+        with self.assertRaises(InvestigatorAppError):
+            self.service.current_report(self.identity, self.case_id)
+        with (
+            self.case._connect(self.case.runtime_role)() as runtime,
+            runtime.transaction(),
+        ):
+            self.case.operator._runtime_context(runtime, self.identity.tenant_id)
+            runtime.execute(
+                "SELECT snapshot_id FROM investigator.create_snapshot_v2(%s,%s,%s,%s)",
+                (
+                    self.identity.tenant_id,
+                    self.case_id,
+                    old["event_cutoff"] + 1,
+                    "report-replacement-snapshot",
+                ),
+            )
+        pair = self.service.current_report(self.identity, self.case_id)
+        self.assertNotEqual(pair["manifest"]["snapshot_id"], old["snapshot_id"])
+        historical = pair["annex"]["historical_snapshot_invalidations"]
+        self.assertEqual(len(historical), 1)
+        self.assertEqual(historical[0]["snapshot_id"], old["snapshot_id"])
+        self.assertEqual(historical[0]["reason_code"], "PROVENANCE_FAILURE")
+        self.assertNotIn("authentication_reference", historical[0])
+
     def test_connections_closed_before_render(self):
         connections = []
         originals = [

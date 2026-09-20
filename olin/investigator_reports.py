@@ -142,6 +142,32 @@ def capture(service, identity, case_id):
                     "FROM investigator.case_snapshot WHERE tenant_id=%s AND case_id=%s AND snapshot_id=%s",
                     (identity.tenant_id, case_id, snapshot_id),
                 ).fetchone()
+                invalidations = runtime.execute(
+                    "SELECT invalidation_id::text,snapshot_id::text,invalidation_event_id::text,"
+                    "reason_code,reason_reference,invalidated_at,invalidated_by_actor_type,"
+                    "invalidated_by_actor_reference FROM investigator.case_snapshot_invalidation "
+                    "WHERE tenant_id=%s AND case_id=%s ORDER BY invalidated_at,invalidation_id",
+                    (identity.tenant_id, case_id),
+                ).fetchall()
+                invalidations = [
+                    dict(
+                        zip(
+                            (
+                                "invalidation_id",
+                                "snapshot_id",
+                                "invalidation_event_id",
+                                "reason_code",
+                                "reason_reference",
+                                "invalidated_at",
+                                "actor_type",
+                                "actor_reference",
+                            ),
+                            (*item[:5], item[5].isoformat(), *item[6:]),
+                            strict=True,
+                        )
+                    )
+                    for item in invalidations
+                ]
             gate = PostgresReasoningSnapshotGate(
                 runtime_connection=runtime,
                 evidence_authority=PostgresCanonicalEvidenceReadPort(
@@ -214,6 +240,7 @@ def capture(service, identity, case_id):
                         "reconstruction": reconstruction,
                         "evidence": evidence,
                         "action_history": history,
+                        "historical_snapshot_invalidations": invalidations,
                         "bank_question": "NOT PROVIDED",
                         "bank_disposition": "NOT PROVIDED",
                         "bank_reasons": "NOT PROVIDED",
@@ -299,10 +326,16 @@ def render(frozen):
         "notice": NOTICE,
         **{
             k: record[k]
-            for k in ("reconstruction", "evidence", "action_history", "human_signoffs")
+            for k in (
+                "reconstruction",
+                "evidence",
+                "action_history",
+                "human_signoffs",
+                "historical_snapshot_invalidations",
+            )
         },
         "eligibility": "Evidence accepted as usable through the current Phase 3/4 boundary AS OF checked_at; not continuing authority",
-        "corrections": "Supersession/lineage metadata appears in evidence references where recorded. No current snapshot invalidation passed the boundary; no inference about unrecorded corrections.",
+        "corrections": "Supersession/lineage metadata appears in evidence references where recorded. Historical snapshot invalidations are audit metadata, not renewed authority. No current snapshot invalidation passed the boundary; no inference about unrecorded corrections.",
     }
     return {
         "manifest": manifest,
