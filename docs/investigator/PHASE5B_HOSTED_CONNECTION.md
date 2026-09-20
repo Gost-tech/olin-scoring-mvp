@@ -1,7 +1,8 @@
 # Phase 5B hosted connection — shadow-hosted-1
 
-Implementation and mocked validation only. **No transmission or spending approval
-has been granted. Real-model evaluation is NOT EXECUTED.** This supplements the
+Original adapter acceptance record, before separately authorized execution:
+implementation and mocked validation only; no transmission/spending approval or
+real-model execution in that implementation session. This supplements the
 accepted engineering baseline `90993ac594376e866e1a1bdc104caec4fa23b2ec` without
 reopening its validator/evaluator acceptance.
 
@@ -54,7 +55,39 @@ is recorded on valid completion; unavailable usage/cost remains unknown. Raw
 responses are bounded private research artifacts; an echoed full credential is
 suppressed before artifact capture. No provider error text is printed to logs.
 
-## Proposed budget (NOT approved)
+### Controlled compatibility correction (2026-09-19)
+
+Transport payload version `shadow-openai-messages-1` puts the unchanged
+`PROMPT + canonical(OUTPUT_SCHEMA)` into ONE developer input message and the
+unchanged minimized context into ONE user input message. No duplicate top-level
+instructions, answer hints, prompt/schema changes or inference-setting changes.
+The canonical HTTP body is explicitly UTF-8 bytes; its SHA-256 and transport
+version are recorded separately from the unchanged research input digest.
+The [official JSON-mode guide](https://developers.openai.com/api/docs/guides/structured-outputs)
+requires a JSON instruction in a conversation message and demonstrates input
+messages. This layout avoids relying on a separate `instructions` field satisfying
+the JSON-mode input check. The historical HTTP 400 retained insufficient provider
+diagnostics to establish its cause; layout remains a compatibility hypothesis,
+not a retrospective confirmed diagnosis.
+
+Private worker diagnostics retain bounded HTTP status, allowlisted error code/type
+and known request parameter, plus a format-validated `x-request-id`. Free-form
+provider messages are suppressed entirely, including credential/input echoes;
+unknown parameters/headers are suppressed, not copied to reports. This trades
+message detail for safe diagnostics. A structured HTTP rejection does not establish
+zero billing. Existing stop/replay behavior is unchanged for every HTTP failure.
+
+The founder separately authorized one manual coverage-unknown compatibility
+follow-up linked to the initial stopped run, as request TWO of the original THREE,
+not a new budget. Preserve the original run unchanged. Reserve $0.304608 for its
+unknown-cost first attempt and another $0.304608 for the follow-up ($0.609216
+aggregate), within the original $1.00 ceiling. Use fresh canonical preparation,
+a separately attributed private continuation record and `max_requests=1`; no
+request for another case, restart of the stopped run, or automatic retry is allowed.
+Approval and linked artifact hashes belong in the private execution record. This
+documentation records authorization, not successful inference or product validation.
+
+## Original proposed budget (approval recorded separately)
 
 Official documentation checked 2026-09-19:
 

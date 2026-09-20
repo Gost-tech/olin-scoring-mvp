@@ -5,9 +5,11 @@ No ambient credential lookup, SDK retries, tools, or database imports.
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import json
 import os
+import re
 import stat
 from decimal import Decimal
 
@@ -16,6 +18,7 @@ from .investigator_shadow import OUTPUT_SCHEMA, PROMPT, canonical, validate_outp
 AMENDMENT = "shadow-hosted-1"
 MODEL = "gpt-5.4-mini-2026-03-17"
 ENDPOINT = "https://api.openai.com/v1/responses"
+PAYLOAD_VERSION = "shadow-openai-messages-1"
 # Standard USD rates checked 2026-09-19; no cache discount assumed.
 INPUT_RATE = Decimal("0.75")
 OUTPUT_RATE = Decimal("4.50")
@@ -30,8 +33,17 @@ class HostedFailure(Exception):
         self.details = details or {}
 
 
-def http_failure(http_status, raw):
-    """Closed categories only; no messages, parameters or unknown codes retained.
+def request_id(value):
+    """Accept only the bounded provider request-ID format, never arbitrary headers."""
+    return (
+        value
+        if isinstance(value, str) and re.fullmatch(r"req_[0-9a-f]{32}", value)
+        else None
+    )
+
+
+def http_failure(http_status, raw, provider_request_id=None):
+    """Closed metadata only; provider messages and unknown parameters are suppressed.
 
     https://developers.openai.com/api/docs/guides/error-codes
     A bare 429 is not proof of exhausted funds. All HTTP failures stop this run.
@@ -48,6 +60,12 @@ def http_failure(http_status, raw):
         "model_not_found",
         "rate_limit_exceeded",
         "slow_down",
+        "invalid_value",
+        "invalid_json",
+        "invalid_parameter",
+        "unsupported_parameter",
+        "unsupported_value",
+        "missing_required_parameter",
     }
     types = {
         "insufficient_quota",
@@ -66,6 +84,25 @@ def http_failure(http_status, raw):
     code, kind = error.get("code"), error.get("type")
     code = code if isinstance(code, str) and code in codes else None
     kind = kind if isinstance(kind, str) and kind in types else None
+    param = error.get("param")
+    parameters = {
+        "model",
+        "input",
+        "input[0].content",
+        "input[1].content",
+        "instructions",
+        "text",
+        "text.format",
+        "text.format.type",
+        "max_output_tokens",
+        "reasoning",
+        "reasoning.effort",
+        "store",
+        "stream",
+        "background",
+        "service_tier",
+    }
+    param = param if isinstance(param, str) and param in parameters else None
     status = "TRANSPORT_FAILURE_AMBIGUOUS"
     if http_status == 401:
         status = "AUTHENTICATION_FAILED"
@@ -84,6 +121,11 @@ def http_failure(http_status, raw):
             else None,
             "error_code": code,
             "error_type": kind,
+            "error_param": param,
+            "request_id": request_id(provider_request_id),
+            # Never retain free-form provider messages: they may echo partial inputs
+            # or credentials in forms that substring redaction cannot safely cover.
+            "message_disposition": "SUPPRESSED",
         },
     )
 
@@ -160,45 +202,65 @@ def read_dedicated_credential(path):
     return value
 
 
-def generate(config, context, credential_loader, observer):
+def request_body(context):
+    """Frozen research content; versioned transport layout, explicitly UTF-8."""
+    return canonical(
+        {
+            "model": MODEL,
+            "store": False,
+            "stream": False,
+            "background": False,
+            "service_tier": "default",
+            "input": [
+                {"role": "developer", "content": PROMPT + canonical(OUTPUT_SCHEMA)},
+                {"role": "user", "content": canonical(context)},
+            ],
+            "max_output_tokens": 1024,
+            "reasoning": {"effort": "none"},
+            # Provider JSON mode is not closed-schema validation or authority.
+            "text": {"format": {"type": "json_object"}},
+        }
+    ).encode("utf-8")
+
+
+def generate(config, context, credential_loader, observer, diagnostics=None):
     """Exactly one HTTPS request; no redirects, retries, fallback or polling."""
     if credential_loader is None:
         raise ValueError("dedicated isolated credential custody required")
     content, instructions = canonical(context), PROMPT + canonical(OUTPUT_SCHEMA)
     if len((content + instructions).encode()) > config["max_input_tokens"]:
         raise ValueError("approved input byte upper bound exceeded")
+    body = request_body(context)
+    if diagnostics is None:
+        diagnostics = {}
+    diagnostics.clear()  # Never attribute a prior request ID to a later failure.
+    diagnostics.update(
+        payload_version=PAYLOAD_VERSION,
+        payload_sha256=hashlib.sha256(body).hexdigest(),
+    )
     credential = credential_loader()
     transport = http.client.HTTPSConnection("api.openai.com", 443, timeout=30)
     try:
         transport.request(
             "POST",
             "/v1/responses",
-            body=canonical(
-                {
-                    "model": MODEL,
-                    "store": False,
-                    "stream": False,
-                    "background": False,
-                    "service_tier": "default",
-                    "instructions": instructions,
-                    "input": content,
-                    "max_output_tokens": 1024,
-                    "reasoning": {"effort": "none"},
-                    # JSON mode avoids changing the frozen schema to fit the provider's
-                    # schema subset. Full closed validation remains mandatory locally.
-                    "text": {"format": {"type": "json_object"}},
-                }
-            ),
+            body=body,
             headers={
                 "Authorization": "Bearer " + credential,
                 "Content-Type": "application/json",
             },
         )
         response = transport.getresponse()
+        diagnostics["request_id"] = request_id(response.getheader("x-request-id"))
+        diagnostics["http_status"] = (
+            response.status
+            if type(response.status) is int and 100 <= response.status <= 599
+            else None
+        )
         raw = response.read(32001)
         if response.status != 200:
             # Error bodies may echo credentials; only allowlisted metadata exits.
-            raise http_failure(response.status, raw)
+            raise http_failure(response.status, raw, diagnostics["request_id"])
         # Never persist an echoed credential, including error-response bodies.
         if credential.encode() in raw:
             raise HostedFailure("REDACTED_PROVIDER_RESPONSE")

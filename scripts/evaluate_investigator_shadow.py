@@ -313,6 +313,11 @@ def worker(payload):
         "cost": None,
         "endpoint_computation_stopped": "UNKNOWN",
         "failure_details": failure_details,
+        **(
+            {"transport_diagnostics": dict(runner.transport_diagnostics)}
+            if runner.mode == "openai"
+            else {}
+        ),
     }
 
 

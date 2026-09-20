@@ -271,6 +271,7 @@ class EvaluationPostgresTests(unittest.TestCase):
         from test_investigator_shadow_openai import configuration
 
         scenarios = [
+            (400, "unsupported_parameter", "TRANSPORT_FAILURE_AMBIGUOUS"),
             (401, "invalid_api_key", "AUTHENTICATION_FAILED"),
             (403, None, "ACCESS_DENIED"),
             (404, "model_not_found", "ACCESS_DENIED"),
@@ -307,10 +308,13 @@ class EvaluationPostgresTests(unittest.TestCase):
                 ):
                     response = transport.return_value.getresponse.return_value
                     response.status = http
+                    response.getheader.return_value = "req_" + "b" * 32
                     response.read.return_value = ev.canonical(
                         {
                             "error": {
                                 "code": code,
+                                "type": "invalid_request_error",
+                                "param": "text.format.type",
                                 "message": "synthetic-test-only-credential",
                             }
                         }
@@ -329,6 +333,10 @@ class EvaluationPostgresTests(unittest.TestCase):
                         self.assertEqual(report["attempted_cases"], 1)
                     self.assertEqual(transport.return_value.request.call_count, 1)
                 self.assertEqual(report["results"][0]["status"], expected)
+                if http == 400:
+                    details = report["results"][0]["failure_details"]
+                    self.assertEqual(details["error_param"], "text.format.type")
+                    self.assertEqual(details["request_id"], "req_" + "b" * 32)
                 for case in ("account-complete", "cost-debt-unknown"):
                     result = next(
                         r for r in report["results"] if r["rubric_id"] == case

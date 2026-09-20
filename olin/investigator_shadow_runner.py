@@ -21,6 +21,7 @@ class Runner:
         # Optional private evaluation sink, never a model tool or public log.
         self.response_observer = response_observer
         self.credential_loader = credential_loader
+        self.transport_diagnostics = {}
         self.lock = threading.Lock()
         self.used = 0
         self.mode = config.get("mode")
@@ -98,7 +99,11 @@ class Runner:
             from .investigator_shadow_openai import generate
 
             proposal, usage = generate(
-                self.config, context, self.credential_loader, self.response_observer
+                self.config,
+                context,
+                self.credential_loader,
+                self.response_observer,
+                self.transport_diagnostics,
             )
         else:
             # Count input bytes conservatively as a token upper bound. No tokenizer dependency.
@@ -162,6 +167,11 @@ class Runner:
             "usage": usage,
             "cost": None,
             "latency_ms": round((time.monotonic() - started) * 1000),
+            **(
+                {"transport_diagnostics": dict(self.transport_diagnostics)}
+                if self.mode == "openai"
+                else {}
+            ),
         }
 
 

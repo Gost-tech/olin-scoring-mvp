@@ -1,5 +1,6 @@
 """Hosted adapter contract: synthetic mocks ONLY; no real credential or network."""
 
+import hashlib
 import json
 import os
 import tempfile
@@ -12,8 +13,10 @@ from olin.investigator_shadow_openai import (
     AMENDMENT,
     ENDPOINT,
     MODEL,
+    PAYLOAD_VERSION,
     REQUEST_RESERVE_USD,
     read_dedicated_credential,
+    request_body,
 )
 from olin.investigator_shadow_runner import Runner
 from scripts import evaluate_investigator_shadow as ev
@@ -70,6 +73,7 @@ class HostedAdapterTests(unittest.TestCase):
         )
         self.response = self.transport.return_value.getresponse.return_value
         self.response.status = 200
+        self.response.getheader.return_value = "req_" + "a" * 32
         self.response.read.return_value = canonical(envelope()).encode()
 
     def worker(self):
@@ -130,9 +134,31 @@ class HostedAdapterTests(unittest.TestCase):
         self.transport.assert_called_once_with("api.openai.com", 443, timeout=30)
         request = self.transport.return_value.request.call_args
         self.assertEqual(request.args, ("POST", "/v1/responses"))
-        body = json.loads(request.kwargs["body"])
-        self.assertEqual(body["input"], canonical(context()))
-        self.assertEqual(body["instructions"], PROMPT + canonical(OUTPUT_SCHEMA))
+        encoded = request.kwargs["body"]
+        self.assertIsInstance(encoded, bytes)
+        body = json.loads(encoded.decode("utf-8"))
+        self.assertEqual(
+            body["input"],
+            [
+                {"role": "developer", "content": PROMPT + canonical(OUTPUT_SCHEMA)},
+                {"role": "user", "content": canonical(context())},
+            ],
+        )
+        self.assertNotIn("instructions", body)
+        self.assertIn("JSON", body["input"][0]["content"])
+        self.assertEqual(body["model"], MODEL)
+        self.assertEqual(body["reasoning"], {"effort": "none"})
+        self.assertEqual(body["text"], {"format": {"type": "json_object"}})
+        self.assertFalse(body["stream"])
+        self.assertEqual(
+            result["transport_diagnostics"],
+            {
+                "payload_version": PAYLOAD_VERSION,
+                "payload_sha256": hashlib.sha256(encoded).hexdigest(),
+                "request_id": "req_" + "a" * 32,
+                "http_status": 200,
+            },
+        )
         self.assertEqual(body["max_output_tokens"], 1024)
         self.assertFalse(body["store"])
         self.assertFalse(body["background"])
@@ -147,9 +173,103 @@ class HostedAdapterTests(unittest.TestCase):
             "split",
             "credential_file",
         ):
-            self.assertNotIn(word, request.kwargs["body"])
+            self.assertNotIn(word.encode(), encoded)
         self.assertNotIn(self.credential, canonical(result))
         self.assertEqual(result["usage"], {"input_tokens": 100, "output_tokens": 50})
+
+    def test_non_ascii_context_is_sent_as_utf8_not_http_client_latin1(self):
+        value = context()
+        value["facts"].append("cobertura — información sintética 漢字")
+        runner = Runner(configuration(), credential_loader=lambda: self.credential)
+        runner.generate(value)
+        body = self.transport.return_value.request.call_args.kwargs["body"]
+        self.assertEqual(body, request_body(value))
+        self.assertEqual(
+            json.loads(body.decode("utf-8"))["input"][1]["content"], canonical(value)
+        )
+
+    def test_safe_parameter_request_id_and_message_suppression(self):
+        self.response.status = 400
+        self.response.read.return_value = canonical(
+            {
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "unsupported_parameter",
+                    "param": "text.format.type",
+                    "message": "Authorization: Bearer "
+                    + self.credential
+                    + canonical(context()),
+                }
+            }
+        ).encode()
+        result = self.worker()
+        self.assertEqual(result["status"], "TRANSPORT_FAILURE_AMBIGUOUS")
+        self.assertEqual(
+            result["failure_details"],
+            {
+                "http_status": 400,
+                "error_type": "invalid_request_error",
+                "error_code": "unsupported_parameter",
+                "error_param": "text.format.type",
+                "request_id": "req_" + "a" * 32,
+                "message_disposition": "SUPPRESSED",
+            },
+        )
+        self.assertEqual(result["raw_response_base64"], [])
+        for forbidden in (self.credential, "Authorization", canonical(context())):
+            self.assertNotIn(forbidden, canonical(result))
+        self.assertIsNone(result["usage"])
+        self.assertIsNone(result["cost"])
+        self.assertEqual(
+            ev.hosted_stop_reason(configuration(), result), result["status"]
+        )
+
+    def test_next_request_transport_failure_does_not_retain_prior_request_id(self):
+        runner = Runner(configuration(), credential_loader=lambda: self.credential)
+        runner.generate(context())
+        self.transport.return_value.request.side_effect = TimeoutError()
+        with self.assertRaises(TimeoutError):
+            runner.generate(context())
+        self.assertNotIn("request_id", runner.transport_diagnostics)
+        self.assertNotIn("http_status", runner.transport_diagnostics)
+
+    def test_malformed_diagnostics_and_echoes_fail_closed(self):
+        self.response.status = 400
+        for raw in (
+            b"not-json",
+            b"[]",
+            b"null",
+            b"\xff",
+            b"x" * 32001,
+            canonical({"error": {"code": [], "type": {}, "param": ["input"]}}).encode(),
+            canonical(
+                {
+                    "error": {
+                        "code": self.credential,
+                        "type": canonical(context()),
+                        "param": "Authorization: Bearer " + self.credential,
+                    }
+                }
+            ).encode(),
+        ):
+            for header in (
+                None,
+                self.credential,
+                "req_" + "a" * 129,
+                "req_" + "a" * 32 + "\n",
+            ):
+                with self.subTest(
+                    body_size=len(raw), header_type=type(header).__name__
+                ):
+                    self.response.read.return_value = raw
+                    self.response.getheader.return_value = header
+                    result = self.worker()
+                    self.assertEqual(result["status"], "TRANSPORT_FAILURE_AMBIGUOUS")
+                    self.assertIsNone(result["failure_details"]["request_id"])
+                    self.assertIsNone(result["failure_details"]["error_param"])
+                    self.assertEqual(result["raw_response_base64"], [])
+                    self.assertNotIn(self.credential, canonical(result))
+                    self.assertNotIn(canonical(context()), canonical(result))
 
     def test_bounded_requests_and_input_without_retries(self):
         runner = Runner(configuration(), credential_loader=lambda: self.credential)
