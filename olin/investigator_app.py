@@ -967,10 +967,30 @@ button,input,select,textarea{font:inherit;padding:10px;border:1px solid #9dac9f;
 <button onclick="shadowOperation('history')">Research history and performed outcome</button>
 <button onclick="rateShadow()">Record research usefulness</button>
 <pre id="shadowResult" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section></section>
+<section class="card"><h2>Synthetic feedback and reported outcomes</h2><p>Attributed annotations only: not evidence, bank-owned events or report sign-offs. Unknown occurrence time stays UNKNOWN. Pre-exposure baseline: NOT ESTABLISHED.</p>
+<button onclick="loadFeedback()">Read feedback history</button><button onclick="loadCohorts()">View declared cohort</button>
+<label>Kind <select id="fbKind"><option>FEEDBACK</option><option>EXTERNAL_OUTCOME</option></select></label>
+<label>Observation <select id="fbStatus"><option>OBSERVED</option><option>PENDING</option><option>UNKNOWN</option><option>UNAVAILABLE</option><option>NOT_APPLICABLE</option><option>WINDOW_INCOMPLETE</option></select></label>
+<label>Own judgment <select id="fbJudgment"><option>UNCERTAIN</option><option>USEFUL</option><option>NOT_USEFUL</option></select></label>
+<label>Explanation <textarea id="fbExplanation" maxlength="1000"></textarea></label>
+<label>Action in captured report (optional UUID) <input id="fbAction"></label>
+<label>Reported source description (external only) <input id="fbSource" maxlength="500"></label>
+<label>Source reference (external only) <input id="fbReference" maxlength="240"></label>
+<label>Reported occurrence ISO time, blank = UNKNOWN <input id="fbOccurred"></label>
+<label>Correction reason <input id="fbCorrection" maxlength="500"></label>
+<button onclick="submitFeedback()">Record annotation</button><button onclick="resetFeedback()">New annotation</button>
+<p id="fbMessage"></p><div id="fbHistory"></div><pre id="cohortView" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section>
 <div id="message"></div></main><script>
 let sessionToken='', currentCase='', currentAnalysis=null;
 let reportPair=null;
-function clearReport(){reportPair=null;document.getElementById('reportFrame').srcdoc='';document.getElementById('reportStatus').textContent='Report unavailable until a fresh capture.'}
+let feedbackHistory=[], feedbackCorrection=null, feedbackRequest=null, feedbackRequestCase='';
+const fb=id=>document.getElementById(id);
+function resetFeedback(){if(feedbackRequest){fb('fbMessage').textContent='Pending request may have committed. Retry it in case '+feedbackRequestCase+' before starting another annotation.';return}feedbackCorrection=null;fb('fbMessage').textContent='New annotation requires a captured report.'}
+function clearFeedbackView(){feedbackHistory=[];feedbackCorrection=null;fb('fbHistory').replaceChildren();fb('fbMessage').textContent=feedbackRequest?'Pending request retained for case '+feedbackRequestCase:'Feedback view cleared; reload authorized history.'}
+async function loadFeedback(){const requestedCase=currentCase;try{const r=await api('/api/cases/'+encodeURIComponent(requestedCase)+'/feedback');if(requestedCase!==currentCase)return;feedbackHistory=r.effective_records;fb('fbHistory').replaceChildren();const p=document.createElement('pre');p.style.whiteSpace='pre-wrap';p.textContent=JSON.stringify(r,null,2);fb('fbHistory').append(p);for(const item of feedbackHistory){const b=document.createElement('button');b.textContent='Correct '+item.record_id+' version '+item.version;b.onclick=()=>{if(feedbackRequest){fb('fbMessage').textContent='Retry the pending request first';return}feedbackCorrection=item;fb('fbKind').value=item.kind;fb('fbStatus').value=item.payload.observation_status;fb('fbJudgment').value=item.payload.judgment||'UNCERTAIN';fb('fbExplanation').value=item.payload.explanation;fb('fbSource').value=item.payload.source_description||'';fb('fbReference').value=item.payload.source_reference||'';fb('fbOccurred').value=item.payload.occurred_at||'';fb('fbAction').value=item.payload.action_id||'';fb('fbMessage').textContent='Correcting historical record '+item.record_id};fb('fbHistory').append(b)}}catch(e){if(requestedCase===currentCase)fb('fbHistory').textContent='History unavailable: '+e.message}}
+async function loadCohorts(){try{fb('cohortView').textContent=JSON.stringify(await api('/api/cohorts'),null,2)}catch(e){fb('cohortView').textContent='Cohort unavailable: '+e.message}}
+async function submitFeedback(){try{if(feedbackRequest&&feedbackRequestCase!==currentCase)throw Error('Return to pending request case '+feedbackRequestCase);if(!feedbackRequest){const correction=feedbackCorrection;if(correction&&correction.case_id!==currentCase)throw Error('Open the correction case');if(!correction&&(!reportPair||reportPair.manifest.case_id!==currentCase))throw Error('Capture the report first');const kind=fb('fbKind').value,status=fb('fbStatus').value;feedbackRequestCase=currentCase;feedbackRequest={kind,receipt:correction?correction.correction_receipt:reportPair.feedback_receipt,action_id:correction?correction.payload.action_id:(fb('fbAction').value.trim()||null),observation_status:status,judgment:kind==='FEEDBACK'&&status==='OBSERVED'?fb('fbJudgment').value:null,explanation:fb('fbExplanation').value,source_description:kind==='EXTERNAL_OUTCOME'?fb('fbSource').value:null,source_reference:kind==='EXTERNAL_OUTCOME'?fb('fbReference').value:null,occurred_at:fb('fbOccurred').value.trim()||null,predecessor:correction?correction.record_id:null,expected_version:correction?correction.version:0,correction_reason:correction?fb('fbCorrection').value:null,idempotency_key:crypto.randomUUID()};}const response=await fetch('/api/cases/'+encodeURIComponent(feedbackRequestCase)+'/feedback',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+sessionToken},body:JSON.stringify(feedbackRequest)});const result=await response.json();if(!response.ok){if(response.status<500){feedbackRequest=null;feedbackRequestCase=''}throw Error(result.message||'Request rejected')}feedbackRequest=null;feedbackCorrection=null;fb('fbMessage').textContent='Recorded attributed annotation, not verified evidence.';await loadFeedback();await loadCohorts()}catch(e){fb('fbMessage').textContent='Not confirmed: '+e.message+'. An ambiguous request is retained for an identical retry.'}}
+function clearReport(){clearFeedbackView();reportPair=null;document.getElementById('reportFrame').srcdoc='';document.getElementById('reportStatus').textContent='Report unavailable until a fresh capture.'}
 async function captureReport(){clearReport();const caseId=currentCase;try{const r=await api('/api/cases/'+encodeURIComponent(caseId)+'/report');if(caseId!==currentCase)return;reportPair=r;document.getElementById('reportStatus').textContent='Historical AS OF '+r.manifest.checked_at+' · '+r.manifest.report_input_digest;viewReport('brief')}catch(e){clearReport();document.getElementById('reportStatus').textContent='Report unavailable/stale: '+e.message}}
 function viewReport(kind){if(!reportPair||reportPair.manifest.case_id!==currentCase)return;document.getElementById('reportFrame').srcdoc=reportPair.printable_html[kind]}
 function downloadReport(){if(!reportPair||reportPair.manifest.case_id!==currentCase)return;const u=URL.createObjectURL(new Blob([JSON.stringify(reportPair,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='investigator-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
@@ -1004,6 +1024,7 @@ def build_handler(
     authenticator: InvestigatorAuthenticator,
     service: InvestigatorWorkflowService,
     shadow=None,
+    feedback=None,
 ) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "OlinInvestigator/1"
@@ -1082,6 +1103,13 @@ def build_handler(
                 )
                 return
             identity = self._identity()
+            if parts == ["api", "cohorts"] and method == "GET":
+                if feedback is None:
+                    raise InvestigatorAppError(
+                        503, "FEEDBACK_DISABLED", "Feedback not configured"
+                    )
+                self._json(200, feedback.cohorts(identity))
+                return
             if len(parts) >= 3 and parts[:2] == ["api", "cases"]:
                 try:
                     case_id = UUID(parts[2])
@@ -1102,7 +1130,24 @@ def build_handler(
                             "INVALID_REPORT_INPUT",
                             "Report capture accepts no caller bindings",
                         )
-                    self._json(200, service.current_report(identity, case_id))
+                    self._json(
+                        200,
+                        feedback.report(identity, case_id)
+                        if feedback
+                        else service.current_report(identity, case_id),
+                    )
+                    return
+                if parts[3:] == ["feedback"] and method in {"GET", "POST"}:
+                    if feedback is None:
+                        raise InvestigatorAppError(
+                            503, "FEEDBACK_DISABLED", "Feedback not configured"
+                        )
+                    self._json(
+                        200,
+                        feedback.history(identity, case_id)
+                        if method == "GET"
+                        else feedback.append(identity, case_id, self._body()),
+                    )
                     return
                 if len(parts) >= 4 and parts[3] == "shadow":
                     if shadow is None:
@@ -1290,8 +1335,17 @@ def main() -> None:
                 os.environ.get("OLIN_INVESTIGATOR_SHADOW_SYNTHETIC_CASES", "[]")
             ),
         )
+    feedback = None
+    if os.environ.get("OLIN_INVESTIGATOR_FEEDBACK_DATABASE_URL"):
+        from .investigator_feedback import FeedbackService
+
+        feedback = FeedbackService(
+            service,
+            _connect("OLIN_INVESTIGATOR_FEEDBACK_DATABASE_URL"),
+            authenticator._secret,
+        )
     server = ThreadingHTTPServer(
-        (args.host, args.port), build_handler(authenticator, service, shadow)
+        (args.host, args.port), build_handler(authenticator, service, shadow, feedback)
     )
     try:
         server.serve_forever()

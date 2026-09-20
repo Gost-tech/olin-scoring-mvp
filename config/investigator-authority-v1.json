@@ -1,8 +1,8 @@
 {
   "$schema": "investigator-authority.schema.json",
-  "contract_version": "investigator-authority-1.5",
+  "contract_version": "investigator-authority-1.6",
   "default": "deny",
-  "deployment_profile": "investigator_v1_phase6",
+  "deployment_profile": "investigator_v1_phase7",
   "principals": ["investigator_runtime", "investigator_action_writer"],
   "capabilities": {
     "case.create": {
@@ -219,6 +219,9 @@
     "POST /api/session",
     "GET /api/cases/{case_id}",
     "GET /api/cases/{case_id}/report",
+    "GET /api/cases/{case_id}/feedback",
+    "POST /api/cases/{case_id}/feedback",
+    "GET /api/cohorts",
     "GET /api/cases/{case_id}/actions",
     "POST /api/cases/{case_id}/actions",
     "POST /api/cases/{case_id}/actions/{action_id}/transitions",
@@ -234,6 +237,7 @@
     "OLIN_INVESTIGATOR_AUTH_AUDIENCE",
     "OLIN_INVESTIGATOR_AUTH_ISSUER",
     "OLIN_INVESTIGATOR_ACTION_DATABASE_URL",
+    "OLIN_INVESTIGATOR_FEEDBACK_DATABASE_URL",
     "OLIN_INVESTIGATOR_CANONICAL_READER_DATABASE_URL",
     "OLIN_INVESTIGATOR_DATABASE_URL",
     "OLIN_INVESTIGATOR_SESSION_SECRET",

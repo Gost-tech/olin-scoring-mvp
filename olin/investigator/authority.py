@@ -314,10 +314,10 @@ _REQUIRED_DENIES = {
 
 
 def _validate_contract(contract: dict) -> None:
-    if contract.get("contract_version") != "investigator-authority-1.5":
+    if contract.get("contract_version") != "investigator-authority-1.6":
         raise RuntimeError("Unsupported Investigator authority contract")
-    if contract.get("deployment_profile") != "investigator_v1_phase6":
-        raise RuntimeError("Investigator deployment profile must be Phase 6")
+    if contract.get("deployment_profile") != "investigator_v1_phase7":
+        raise RuntimeError("Investigator deployment profile must be Phase 7")
     if contract.get("default") != "deny":
         raise RuntimeError("Investigator authority contract must default to deny")
     principals = contract.get("principals")
@@ -342,11 +342,22 @@ def _validate_contract(contract: dict) -> None:
     if set(allowed_objects) != _PHASE5_OBJECTS:
         raise RuntimeError("Investigator Phase 5A database objects must be exact")
     report_route = "GET /api/cases/{case_id}/report"
+    feedback_routes = {
+        "GET /api/cases/{case_id}/feedback",
+        "POST /api/cases/{case_id}/feedback",
+        "GET /api/cohorts",
+    }
     routes = contract.get("allowed_routes")
     if (
         not isinstance(routes, list)
         or routes.count(report_route) != 1
-        or [route for route in routes if route != report_route] != _PHASE5_ROUTES
+        or any(routes.count(route) != 1 for route in feedback_routes)
+        or [
+            route
+            for route in routes
+            if route != report_route and route not in feedback_routes
+        ]
+        != _PHASE5_ROUTES
     ):
         raise RuntimeError(
             "Investigator Phase 5A routes plus one read-only report route must be exact"
@@ -365,7 +376,9 @@ def _validate_contract(contract: dict) -> None:
         raise TypeError("Investigator allowed environment names are invalid")
     forbidden_names = set(surfaces.get("environment_variables", []))
     forbidden_prefixes = tuple(surfaces.get("environment_prefixes", []))
-    if set(allowed_environment) != _PHASE0_ENVIRONMENT:
+    if set(allowed_environment) != _PHASE0_ENVIRONMENT | {
+        "OLIN_INVESTIGATOR_FEEDBACK_DATABASE_URL"
+    }:
         raise RuntimeError("Investigator Phase 5A environment allowlist must be exact")
     for name in allowed_environment:
         if name in forbidden_names or name.startswith(forbidden_prefixes):

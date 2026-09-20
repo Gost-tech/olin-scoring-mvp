@@ -58,6 +58,9 @@ jobs:
       - name: Run pilot safety suite
         id: pilot_safety
         run: python -m unittest discover -v
+      - name: Run required Investigator Phase 7 feedback and cohort suite
+        id: feedback_cohort
+        run: python -m unittest -v test_investigator_postgres_feedback
       - name: Run required Investigator Phase 5B research suite
         id: shadow_research
         run: python -m unittest -v test_investigator_postgres_shadow
@@ -81,6 +84,7 @@ jobs:
             steps.shadow_research.outcome == 'success' &&
             steps.shadow_evaluation.outcome == 'success' &&
             steps.pilot_safety.outcome == 'success'
+            && steps.feedback_cohort.outcome == 'success'
           }}
         run: python -m olin.synthetic_portfolio --cases 1000 --seed 42
 
