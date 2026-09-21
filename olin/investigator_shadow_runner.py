@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from .investigator_shadow import PROMPT, canonical, fake_proposal, generation_schema
+from .investigator_shadow_openai import HostedFailure
 
 
 class Runner:
@@ -178,6 +179,21 @@ class Runner:
 
 def build_handler(runner: Runner, token: str):
     class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            # Readiness never loads a credential or spends an inference request.
+            if self.path != "/ready" or not hmac.compare_digest(
+                self.headers.get("Authorization", ""), "Bearer " + token
+            ):
+                self.send_error(404)
+                return
+            body = canonical({"provider": runner.mode, "model": runner.model}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_POST(self):
             if self.path != "/generate" or not hmac.compare_digest(
                 self.headers.get("Authorization", ""), "Bearer " + token
@@ -191,8 +207,22 @@ def build_handler(runner: Runner, token: str):
                 result = runner.generate(json.loads(self.rfile.read(length)))
                 body = canonical(result).encode()
                 self.send_response(200)
+            except HostedFailure as exc:
+                # Closed categories only. A failure consumes this attempt; it does
+                # not establish zero billing or permission to retry.
+                status = (
+                    exc.status
+                    if exc.status in {"REFUSAL", "INVALID_OUTPUT"}
+                    else "FAILED"
+                )
+                body = canonical({"failure": status}).encode()
+                self.send_response(200)
             except TimeoutError:
                 body = b'{"failure":"TIMEOUT"}'
+                self.send_response(200)
+            except (ValueError, KeyError, TypeError):
+                # No valid bounded result was produced; never echo provider text.
+                body = b'{"failure":"INVALID_OUTPUT"}'
                 self.send_response(200)
             except Exception:  # noqa: BLE001 - never log input/provider bodies
                 body = b'{"failure":"FAILED"}'
@@ -209,20 +239,40 @@ def build_handler(runner: Runner, token: str):
     return Handler
 
 
-def main():
-    # Operator starts with env -i. Reject inherited custody, without printing values.
-    if any(
-        any(
-            word in key
-            for word in ("DATABASE", "DSN", "BELVO", "STP_", "OPENAI", "ANTHROPIC")
-        )
-        for key in os.environ
-    ):
+def runner_from_environment(environment):
+    # Closed process custody. A path is not a credential or execution approval.
+    if set(environment) - {
+        "PATH",
+        "PYTHONPATH",
+        "LANG",
+        "LC_CTYPE",
+        "__CF_USER_TEXT_ENCODING",  # macOS-injected locale metadata, not custody
+        "PYTHONUNBUFFERED",
+        "OLIN_SHADOW_RUNNER_CONFIG",
+        "OLIN_SHADOW_RUNNER_TOKEN",
+        "OLIN_SHADOW_CREDENTIAL_FILE",
+    }:
         raise RuntimeError("runner environment contains forbidden custody")
+    config = json.loads(environment.get("OLIN_SHADOW_RUNNER_CONFIG", "{}"))
+    path = environment.get("OLIN_SHADOW_CREDENTIAL_FILE")
+    loader = None
+    if config.get("mode") == "openai":
+        if not path or not os.path.isabs(path):
+            raise ValueError("absolute runner-only credential path required")
+        from .investigator_shadow_openai import read_dedicated_credential
+
+        loader = lambda: read_dedicated_credential(path)
+    elif path is not None:
+        raise ValueError("credential custody requires explicit hosted mode")
+    return Runner(config, credential_loader=loader)
+
+
+def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--host", choices=["127.0.0.1"], default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8087)
     args = parser.parse_args()
-    runner = Runner(json.loads(os.environ.get("OLIN_SHADOW_RUNNER_CONFIG", "{}")))
+    runner = runner_from_environment(os.environ)
     token = os.environ.get("OLIN_SHADOW_RUNNER_TOKEN", "")
     if len(token) < 24:
         raise RuntimeError("dedicated runner transport token required")

@@ -1,6 +1,6 @@
 {
   "$schema": "investigator-authority.schema.json",
-  "contract_version": "investigator-authority-1.6",
+  "contract_version": "investigator-authority-1.7",
   "default": "deny",
   "deployment_profile": "investigator_v1_phase7",
   "principals": ["investigator_runtime", "investigator_action_writer"],
@@ -215,6 +215,12 @@
     "caller_trust_labels": ["verified", "trusted", "authoritative", "issuer_validated", "source_verified", "official", "validated", "independent", "independence_status", "semantic_lineage_id", "economic_event_id", "derived_from_evidence_id", "independence_attestation_id"]
   },
   "allowed_routes": [
+    "GET /api/cases/{case_id}/shadow",
+    "POST /api/cases/{case_id}/shadow",
+    "POST /api/cases/{case_id}/shadow/{round_id}/generate",
+    "POST /api/cases/{case_id}/shadow/{round_id}/disclose",
+    "POST /api/cases/{case_id}/shadow/{round_id}/rate",
+    "POST /api/cases/{case_id}/shadow/{round_id}/history",
     "GET /investigator",
     "POST /api/session",
     "GET /api/cases/{case_id}",
@@ -229,6 +235,12 @@
   ],
   "allowed_event_types": ["CASE_CREATED", "INVESTIGATION_EVENT_RECORDED", "CASE_SNAPSHOT_INVALIDATED", "EVIDENCE_ACCEPTED", "EVIDENCE_BECAME_UNUSABLE", "CONSENT_STATE_CHANGED"],
   "allowed_environment_variables": [
+    "OLIN_INVESTIGATOR_RESEARCH_DATABASE_URL",
+    "OLIN_INVESTIGATOR_SHADOW_RUNNER_URL",
+    "OLIN_INVESTIGATOR_SHADOW_RUNNER_TOKEN",
+    "OLIN_INVESTIGATOR_SHADOW_PROVIDER",
+    "OLIN_INVESTIGATOR_SHADOW_MODEL",
+    "OLIN_INVESTIGATOR_SHADOW_SYNTHETIC_CASES",
     "HOME",
     "HOSTNAME",
     "LANG",

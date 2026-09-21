@@ -1,5 +1,14 @@
 # Phase 5B hosted connection — shadow-hosted-1
 
+Current application integration amendment: `shadow-application-hosted-1` in
+PHASE5B_SHADOW_RESEARCH.md narrowly permits the existing isolated loopback runner
+to identify as OpenAI. The original evaluator-only statements below are historical.
+Neither the amendment nor launcher configuration is spending/transmission approval.
+The existing hosted configuration still requires actual separate approvals and
+bounded resources. No additional request is authorized; historical usage is6/6.
+Only the runner receives `OLIN_SHADOW_CREDENTIAL_FILE` (absolute path, not secret).
+The analyst receives only loopback identity/token and the separate research DSN.
+
 Original adapter acceptance record, before separately authorized execution:
 implementation and mocked validation only; no transmission/spending approval or
 real-model execution in that implementation session. This supplements the

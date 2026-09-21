@@ -138,5 +138,23 @@ reports before feedback; the prior displayed report is cleared on refresh.
 Record explicitly synthetic judgments,
 external source descriptions, corrections and inspect the cohort. Leave the third
 member unobserved. No shell commands are needed during that analyst journey.
-Shadow AI is not started by this launcher. Hosted analyst integration remains a
-separate release gap; no inference is authorized by setup.
+By default Shadow AI is not started. Optional `--shadow-mode fake --shadow-port
+8769` starts the existing isolated runner with its explicitly fake identity, using
+the same setup command above. Freeze a research round BEFORE selecting a human
+action; generate/reveal only after selection, inspect research-only/untrusted and
+applicability labels, then execute only the human action. The fake demonstrates
+integration, not intelligence. No hosted call is authorized by setup.
+
+Optional `--shadow-mode openai --shadow-port 8769` requires the existing bounded
+non-secret `OLIN_SHADOW_RUNNER_CONFIG` JSON with actual new approval references,
+plus runner-only `OLIN_SHADOW_CREDENTIAL_FILE` containing an absolute path. Supply
+these through the local operator's secure environment setup, not shell arguments
+or browser configuration. Do not reuse exhausted historical approvals. The parent
+passes the path only; only the runner opens it lazily. The app receives no path,
+configuration JSON or provider key. No credential is needed for fake mode.
+
+Authenticated `/ready` verifies the optional runner's exact provider/model without
+generating or loading a credential. If it cannot start, READY's `shadow` field is
+UNAVAILABLE while human services remain usable; research attempts fail honestly.
+No hosted/fake substitution or automatic restart occurs. Optional runner exit does
+not tear down human services. All owned children are reaped at launcher shutdown.

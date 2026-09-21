@@ -6,7 +6,7 @@
   "required": ["contract_version", "default", "deployment_profile", "principals", "capabilities", "forbidden_surfaces", "allowed_routes", "allowed_event_types", "allowed_environment_variables", "prohibited_environment_variables", "allowed_database_objects"],
   "properties": {
     "$schema": {"type": "string"},
-    "contract_version": {"const": "investigator-authority-1.6"},
+    "contract_version": {"const": "investigator-authority-1.7"},
     "default": {"const": "deny"},
     "deployment_profile": {"const": "investigator_v1_phase7"},
     "principals": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},

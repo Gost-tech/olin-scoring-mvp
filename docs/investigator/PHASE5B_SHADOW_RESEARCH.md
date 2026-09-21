@@ -1,5 +1,37 @@
 # Phase 5B isolated synthetic shadow research — version 1
 
+## Guarded connected V1 amendment — shadow-application-hosted-1
+
+The optional connected launcher now supports `--shadow-mode fake` or explicitly
+approved `--shadow-mode openai`; default `none` remains human-only. This supersedes
+the original local-only application transport restriction below, not its reasoning,
+evidence or money denials. Authority1.7 adds only the six existing authenticated
+research routes (create/resume/generate/disclose/rate/history) and six coordinator
+settings. Database grants, principals and ordinary `ai.invoke` / `provider.call`
+denials are unchanged. Migration0007's isolated research role remains the writer.
+
+The application talks only to its token-authenticated loopback runner and pins
+provider/model identity. Only the separate runner can invoke the existing hosted
+adapter. It has a closed environment and no database/action/evidence credentials.
+`OLIN_SHADOW_CREDENTIAL_FILE` carries an absolute path only to the runner, never
+the analyst child, config JSON or process arguments. Its lazy loader uses the
+existing owner-only regular-file/no-symlink check when generation is requested.
+Readiness does not open that file or invoke inference. No ambient key lookup.
+These process environments are not proof of OS/filesystem/network isolation.
+
+Frozen pre-selection contexts, durable human binding, fresh disclosure, bounded
+local validation and applicability remain unchanged. Runner failure leaves the
+human/report/feedback services running; research fails explicitly without fallback.
+STARTED/AMBIGUOUS recovery never reinfers automatically. A new runner process is
+not a renewed spending approval; the existing per-process cap is not a global
+billing ledger. Launch neither authorizes inference nor starts it automatically.
+All six historical requests remain exhausted. This integration is tested only
+with labelled fake results and mocked HTTPS, not a real provider credential.
+
+Generation remains shadow-prompt-4 / shadow-openai-structured-3 /
+shadow-openai-schema-2 with existing applicability. No semantic quality or live
+compatibility improvement is established by this wiring.
+
 The optional evaluator-only hosted extension is separately specified in
 [PHASE5B_HOSTED_CONNECTION.md](PHASE5B_HOSTED_CONNECTION.md), amendment
 `shadow-hosted-1`. It does not change the application/default denial below or

@@ -138,6 +138,73 @@ def start_child(module, port, env):
     )
 
 
+def shadow_configuration(mode):
+    """Validate opt-in configuration without reading any credential file."""
+    if mode == "none":
+        return None
+    if mode == "fake":
+        return {"mode": "fake"}
+    from olin.investigator_shadow_openai import validate_config
+
+    config = json.loads(os.environ.get("OLIN_SHADOW_RUNNER_CONFIG", "{}"))
+    validate_config(config)
+    path = os.environ.get("OLIN_SHADOW_CREDENTIAL_FILE", "")
+    if not os.path.isabs(path):
+        raise StartupFailure("Absolute runner-only credential path required")
+    return config
+
+
+def shadow_environments(fixture, app, cases, port, config):
+    token = secrets.token_urlsafe(48)
+    runner = {
+        "PATH": os.environ["PATH"],
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
+        "OLIN_SHADOW_RUNNER_CONFIG": json.dumps(config),
+        "OLIN_SHADOW_RUNNER_TOKEN": token,
+    }
+    if config["mode"] == "openai":
+        runner["OLIN_SHADOW_CREDENTIAL_FILE"] = os.environ[
+            "OLIN_SHADOW_CREDENTIAL_FILE"
+        ]
+    app.update(
+        {
+            "OLIN_INVESTIGATOR_RESEARCH_DATABASE_URL": fixture.base._dsn(
+                "olin_research_t_" + fixture.base.tenant.hex
+            ),
+            "OLIN_INVESTIGATOR_SHADOW_RUNNER_URL": f"http://127.0.0.1:{port}",
+            "OLIN_INVESTIGATOR_SHADOW_RUNNER_TOKEN": token,
+            "OLIN_INVESTIGATOR_SHADOW_PROVIDER": config["mode"],
+            "OLIN_INVESTIGATOR_SHADOW_MODEL": config.get(
+                "model", "deterministic-fake-1"
+            ),
+            "OLIN_INVESTIGATOR_SHADOW_SYNTHETIC_CASES": json.dumps(
+                list(cases.values())
+            ),
+        }
+    )
+    return runner
+
+
+def wait_shadow_ready(child, port, token, identity, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if child.poll() is not None:
+            raise StartupFailure("Shadow runner exited before readiness")
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=0.5)
+        try:
+            conn.request("GET", "/ready", headers={"Authorization": "Bearer " + token})
+            response = conn.getresponse()
+            body = response.read(1025)
+            if response.status == 200 and json.loads(body) == identity:
+                return
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
+        finally:
+            conn.close()
+        time.sleep(0.05)
+    raise StartupFailure("Shadow runner readiness timed out")
+
+
 def wait_ready(child, port, *, token=None, timeout=10):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -242,7 +309,11 @@ def cleanup_fixture(conn, fixture):
 
 
 def run(args):
+    mode = getattr(args, "shadow_mode", "none")
+    config = shadow_configuration(mode)
     check_ports(args.port, args.operator_port)
+    if config and args.shadow_port in {args.port, args.operator_port}:
+        raise StartupFailure("Shadow port must be separate")
     conn = preflight_database()
     fixture = FeedbackPostgresTests
     children = []
@@ -275,6 +346,30 @@ def run(args):
             args.operator_port,
             token=operator_env["OLIN_SYNTHETIC_OPERATOR_TOKEN"],
         )
+        shadow_status = "DISABLED"
+        if config:
+            runner_env = shadow_environments(
+                fixture, app_env, cases, args.shadow_port, config
+            )
+            try:
+                check_ports(args.shadow_port)
+                runner = start_child(
+                    "olin.investigator_shadow_runner", args.shadow_port, runner_env
+                )
+                children.append(runner)
+                wait_shadow_ready(
+                    runner,
+                    args.shadow_port,
+                    runner_env["OLIN_SHADOW_RUNNER_TOKEN"],
+                    {
+                        "provider": config["mode"],
+                        "model": app_env["OLIN_INVESTIGATOR_SHADOW_MODEL"],
+                    },
+                )
+                shadow_status = "READY_RESEARCH_ONLY_" + config["mode"].upper()
+            except (StartupFailure, OSError):
+                # No fallback, restart, or inference probe; human services remain usable.
+                shadow_status = "UNAVAILABLE"
         app = start_child("olin.investigator_app", args.port, app_env)
         children.append(app)
         wait_ready(app, args.port)
@@ -288,11 +383,12 @@ def run(args):
                     "cases": cases,
                     "cohort_id": cohort["cohort_id"],
                     "url": f"http://127.0.0.1:{args.port}",
+                    "shadow": shadow_status,
                 }
             ),
             flush=True,
         )
-        while all(child.poll() is None for child in children):
+        while operator.poll() is None and app.poll() is None:
             time.sleep(0.2)
         raise StartupFailure("Connected service exited; stopping owned services")
     finally:
@@ -314,6 +410,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8767)
     parser.add_argument("--operator-port", type=int, default=8768)
+    parser.add_argument(
+        "--shadow-mode", choices=("none", "fake", "openai"), default="none"
+    )
+    parser.add_argument("--shadow-port", type=int, default=8769)
     args = parser.parse_args()
     if not pg.POSTGRES_AVAILABLE or not pg.DISPOSABLE:
         raise RuntimeError(

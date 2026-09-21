@@ -1,6 +1,6 @@
 # Olin Shadow MVP — état canonique
 
-## Investigator development status — 20 September 2026
+## Investigator development status — 21 September 2026
 
 Phase 6 bounded synthetic development ACCEPTED by Brice's conditional sign-off,
 satisfied in the final scoped acceptance check at
@@ -12,8 +12,10 @@ correction. The acceptance check reused that evidence; it did not rerun suites.
 
 Accepted development: deterministic Phase0–4 foundations, bounded synthetic
 human investigation and paired read-only Phase6 reports. Phase5B is research-only:
-model narrative usefulness/representative cases and guarded hosted analyst
-integration remain unvalidated. Inference allowance is exhausted at6/6.
+model narrative usefulness/representative cases remain unvalidated. Guarded hosted
+analyst wiring now reuses the isolated runner; it is tested with mocked HTTPS and
+the explicitly fake browser path, NOT live hosted application inference. Latest
+generation changes have not been evaluated live. Inference remains exhausted6/6.
 Phase7 attributable annotations/cohorts ACCEPTED at
 `04bdccdca483d6f42a02990c159288753b846e61` by Brice's conditional sign-off,
 satisfied by the scoped acceptance check. Prior CI35544712410 passed507 discovery
@@ -23,9 +25,10 @@ candidate validation/browser evidence is reported separately, not a new phase or
 reopening Phase7 acceptance.
 
 Deferred release checks: generic catalogue wording tied to260,000MXN; targeted
-monthly-normalization convention review (not a confirmed defect); hosted shadow
-integration if retained in V1; representative-case/model-semantic validation;
+monthly-normalization convention review (not a confirmed defect); separately
+authorized live hosted application validation; representative-case/model-semantic validation;
 real evidence intake, accountable operating ownership and bank prerequisites.
+Development-scale whole-history reads still need an operating-scale decision.
 Production SSO, hosting, data permissions, retention/deletion and bank usefulness
 are not approved. The legacy roadmap below and blueprint's bank-owned outcomes
 describe separate/future capabilities: they do not authorize Phase7 to authenticate

@@ -313,8 +313,26 @@ _REQUIRED_DENIES = {
 }
 
 
+RESEARCH_ROUTES = {
+    "GET /api/cases/{case_id}/shadow",
+    "POST /api/cases/{case_id}/shadow",
+    *{
+        "POST /api/cases/{case_id}/shadow/{round_id}/" + operation
+        for operation in ("generate", "disclose", "rate", "history")
+    },
+}
+RESEARCH_ENVIRONMENT = {
+    "OLIN_INVESTIGATOR_RESEARCH_DATABASE_URL",
+    "OLIN_INVESTIGATOR_SHADOW_RUNNER_URL",
+    "OLIN_INVESTIGATOR_SHADOW_RUNNER_TOKEN",
+    "OLIN_INVESTIGATOR_SHADOW_PROVIDER",
+    "OLIN_INVESTIGATOR_SHADOW_MODEL",
+    "OLIN_INVESTIGATOR_SHADOW_SYNTHETIC_CASES",
+}
+
+
 def _validate_contract(contract: dict) -> None:
-    if contract.get("contract_version") != "investigator-authority-1.6":
+    if contract.get("contract_version") != "investigator-authority-1.7":
         raise RuntimeError("Unsupported Investigator authority contract")
     if contract.get("deployment_profile") != "investigator_v1_phase7":
         raise RuntimeError("Investigator deployment profile must be Phase 7")
@@ -351,11 +369,11 @@ def _validate_contract(contract: dict) -> None:
     if (
         not isinstance(routes, list)
         or routes.count(report_route) != 1
-        or any(routes.count(route) != 1 for route in feedback_routes)
+        or any(routes.count(route) != 1 for route in feedback_routes | RESEARCH_ROUTES)
         or [
             route
             for route in routes
-            if route != report_route and route not in feedback_routes
+            if route != report_route and route not in feedback_routes | RESEARCH_ROUTES
         ]
         != _PHASE5_ROUTES
     ):
@@ -376,7 +394,7 @@ def _validate_contract(contract: dict) -> None:
         raise TypeError("Investigator allowed environment names are invalid")
     forbidden_names = set(surfaces.get("environment_variables", []))
     forbidden_prefixes = tuple(surfaces.get("environment_prefixes", []))
-    if set(allowed_environment) != _PHASE0_ENVIRONMENT | {
+    if set(allowed_environment) != _PHASE0_ENVIRONMENT | RESEARCH_ENVIRONMENT | {
         "OLIN_INVESTIGATOR_FEEDBACK_DATABASE_URL"
     }:
         raise RuntimeError("Investigator Phase 5A environment allowlist must be exact")

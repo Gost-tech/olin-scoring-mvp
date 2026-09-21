@@ -40,7 +40,7 @@ class ShadowTransport:
             raise ValueError("dedicated runner token required")
         self.port = target.port or 8087
         self.token = token
-        if provider not in {"fake", "ollama"} or not model:
+        if provider not in {"fake", "ollama", "openai"} or not model:
             raise ValueError("explicit runner identity required")
         self.mode, self.model = provider, model
 
@@ -250,7 +250,7 @@ class ShadowResearchService:
             if "failure" in result:
                 final = {
                     "status": result["failure"]
-                    if result["failure"] in {"TIMEOUT", "REFUSAL"}
+                    if result["failure"] in {"TIMEOUT", "REFUSAL", "INVALID_OUTPUT"}
                     else "FAILED",
                     "proposal": None,
                 }

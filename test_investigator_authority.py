@@ -68,7 +68,11 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
     def test_contract_and_schema_are_valid_json(self):
         contract = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["contract_version"], "investigator-authority-1.6")
+        self.assertEqual(contract["contract_version"], "investigator-authority-1.7")
+        self.assertEqual(
+            schema["properties"]["contract_version"]["const"],
+            contract["contract_version"],
+        )
         self.assertEqual(contract["default"], "deny")
         self.assertEqual(schema["properties"]["default"]["const"], "deny")
         self.assertEqual(len(contract["principals"]), len(set(contract["principals"])))
@@ -86,6 +90,12 @@ class InvestigatorAuthorityContractTests(unittest.TestCase):
                         "GET /api/cases/{case_id}/feedback",
                         "POST /api/cases/{case_id}/feedback",
                         "GET /api/cohorts",
+                        "GET /api/cases/{case_id}/shadow",
+                        "POST /api/cases/{case_id}/shadow",
+                        "POST /api/cases/{case_id}/shadow/{round_id}/generate",
+                        "POST /api/cases/{case_id}/shadow/{round_id}/disclose",
+                        "POST /api/cases/{case_id}/shadow/{round_id}/rate",
+                        "POST /api/cases/{case_id}/shadow/{round_id}/history",
                     }
                 ]
             ),
