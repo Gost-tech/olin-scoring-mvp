@@ -82,6 +82,9 @@ class HostedWorkflowTests(unittest.TestCase):
         ):
             demo.run(args)
         self.assertEqual(start.call_count, 3)
+        self.assertFalse(
+            any("SHADOW" in key or "RESEARCH" in key for key in start.call_args.args[2])
+        )
         self.assertEqual(json.loads(output.call_args.args[0])["shadow"], "UNAVAILABLE")
         self.assertEqual(stop.call_args.args[0], [operator, runner, app])
 

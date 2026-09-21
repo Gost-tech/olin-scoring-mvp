@@ -370,6 +370,14 @@ def run(args):
             except (StartupFailure, OSError):
                 # No fallback, restart, or inference probe; human services remain usable.
                 shadow_status = "UNAVAILABLE"
+                # Never send context/token to a port whose owned runner failed
+                # readiness (including an occupied port belonging to another process).
+                for key in list(app_env):
+                    if (
+                        key.startswith("OLIN_INVESTIGATOR_SHADOW_")
+                        or key == "OLIN_INVESTIGATOR_RESEARCH_DATABASE_URL"
+                    ):
+                        del app_env[key]
         app = start_child("olin.investigator_app", args.port, app_env)
         children.append(app)
         wait_ready(app, args.port)

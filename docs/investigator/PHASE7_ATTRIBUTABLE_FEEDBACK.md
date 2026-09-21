@@ -155,6 +155,8 @@ configuration JSON or provider key. No credential is needed for fake mode.
 
 Authenticated `/ready` verifies the optional runner's exact provider/model without
 generating or loading a credential. If it cannot start, READY's `shadow` field is
-UNAVAILABLE while human services remain usable; research attempts fail honestly.
+UNAVAILABLE while human services remain usable; the app's research settings are
+removed so disabled controls cannot send context/token to an unready or occupied
+port. Research attempts fail honestly.
 No hosted/fake substitution or automatic restart occurs. Optional runner exit does
 not tear down human services. All owned children are reaped at launcher shutdown.
