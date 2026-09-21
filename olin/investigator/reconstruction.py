@@ -25,7 +25,7 @@ from .claims import (
 from .evidence_boundary import EvidenceBoundaryError, ReasoningReadySnapshot
 
 PHASE4_SCHEMA_VERSION = "investigator-economic-reconstruction-1"
-PHASE4_RULES_VERSION = "investigator-economic-reconstruction-rules-1.0"
+PHASE4_RULES_VERSION = "investigator-economic-reconstruction-rules-1.1"
 
 _ARITHMETIC_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN, traps=[])
 _MAX_DECIMAL_CHARACTERS = 128
@@ -370,23 +370,23 @@ _NORMALIZATION_RULES = {
         1,
         "DAILY_VALUE * 30",
         "P4-NORMALIZE-DAILY-TO-MONTHLY-001",
-        "30-day standard month",
+        "Strict 30-day equivalent at the source-period average daily rate; not an observed calendar-month total",
     ),
     "weekly_operating_costs": (
-        52,
-        12,
+        30,
         7,
-        "WEEKLY_VALUE * 52 / 12",
-        "P4-NORMALIZE-WEEKLY-TO-MONTHLY-001",
-        "52-week year divided by 12 months",
+        7,
+        "WEEKLY_VALUE * 30 / 7",
+        "P4-NORMALIZE-WEEKLY-TO-MONTHLY-002",
+        "Strict 30-day equivalent at the source-period average daily rate; seven-day source, not an observed calendar-month total",
     ),
     "annual_operating_costs": (
-        1,
-        12,
+        30,
         365,
-        "ANNUAL_VALUE / 12",
-        "P4-NORMALIZE-ANNUAL-TO-MONTHLY-001",
-        "annual value divided by 12 months",
+        365,
+        "ANNUAL_VALUE * 30 / 365",
+        "P4-NORMALIZE-ANNUAL-TO-MONTHLY-002",
+        "Strict 30-day equivalent at the source-period average daily rate; fixed 365-day source, not a calendar year or observed calendar-month total",
     ),
 }
 

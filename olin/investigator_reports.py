@@ -7,7 +7,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-TEMPLATE_VERSION = "investigator-report-template-1"
+TEMPLATE_VERSION = "investigator-report-template-2"
 INPUT_VERSION = "investigator-report-input-1"
 MAX_REPORT_INPUT_BYTES = 2_097_152
 ACTION_FIELDS = frozenset(
@@ -412,6 +412,11 @@ def _brief_html(brief):
                 listing(
                     [
                         f"{v['quantity']}: {v['value']} {v['unit']} ({v['period_start']} to {v['period_end']}); scope {v['dimensional_scope']}; rule {v['rule_id']}"
+                        + (
+                            "; " + "; ".join(v.get("assumptions", []))
+                            if v.get("assumptions")
+                            else ""
+                        )
                         for v in brief[key]
                     ]
                 )

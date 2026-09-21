@@ -1,5 +1,16 @@
 # Phase 5B isolated synthetic shadow research — version 1
 
+Current evidence update: one separately founder-authorized hosted application
+request at d9806918c68761c30ba9ec7d5324445dd2be4905 completed with a structurally
+valid abstention. Guarded disclosure/blinding/currentness and development credential
+custody passed. Cumulative calls seven; no remaining inference authorization.
+MODEL SEMANTIC LIMITATION — RECORDED: the abstention denied the supplied merchant
+assertion and blurred applicability with acquisition permission. This does not
+invalidate permitted abstention or establish usefulness. The execution session's
+private evidence is output/hosted-app-live1; no new request in release closure.
+Older six-call/not-live statements below describe their original implementation
+sessions, not the current status. Prompt/schema/applicability are unchanged.
+
 ## Guarded connected V1 amendment — shadow-application-hosted-1
 
 The optional connected launcher now supports `--shadow-mode fake` or explicitly

@@ -37,7 +37,9 @@ server checked_at. Connections close before deterministic rendering. Bounds and
 timeouts inherit the existing canonical snapshot and reasoning contracts. Captured
 serialized input is limited to two MiB; oversize fails without truncation.
 
-Template: `investigator-report-template-1`. A report-input digest binds the
+Template: `investigator-report-template-2` adds escaped arithmetic assumptions to
+the concise Brief so strict30-day equivalents cannot appear to be calendar-month
+observations. Prior template1 artifacts remain unchanged. A report-input digest binds the
 complete captured record. Rendering the same record/template is deterministic;
 a fresh capture has a new server time and need not have the same digest.
 

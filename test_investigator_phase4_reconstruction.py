@@ -600,8 +600,8 @@ class Phase4EconomicReconstructionTests(unittest.TestCase):
     def test_explicit_normalization_is_deterministic_and_provenance_bound(self):
         cases = (
             ("daily_operating_costs", "1000", "30000", 1),
-            ("weekly_operating_costs", "12000", "52000", 7),
-            ("annual_operating_costs", "120000", "10000", 365),
+            ("weekly_operating_costs", "12000", "51428.57142857142857142857143", 7),
+            ("annual_operating_costs", "120000", "9863.013698630136986301369863", 365),
         )
         for index, (proposition_type, value, expected, source_days) in enumerate(
             cases, start=360

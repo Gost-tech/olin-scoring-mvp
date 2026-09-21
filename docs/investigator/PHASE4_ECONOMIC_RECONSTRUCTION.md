@@ -99,15 +99,29 @@ Likewise, an operating-cost observation whose accepted dimensional scope is
 
 V1 supports only three explicit verified-cost normalizations:
 
-- daily to monthly: multiply by 30, using a stated 30-day standard month;
-- weekly to monthly: multiply by 52 and divide by 12;
-- annual to monthly: divide by 12.
+- daily: `DAILY_VALUE * 30`;
+- weekly: `WEEKLY_VALUE * 30 / 7`;
+- annual: `ANNUAL_VALUE * 30 / 365`.
+
+Release-closure determination: **STRICT 30-DAY EQUIVALENT**, rules
+`investigator-economic-reconstruction-rules-1.1`. All three use the source-period
+average daily rate over exactly thirty days, not a forecast or observed calendar
+month. Weekly/annual normalization rule IDs advance from001 to002. Historical
+rules1.0 used52/12 and1/12 despite the same30-day output; historical artifacts are
+not rewritten. The 28-significant-digit Decimal context remains unchanged.
 
 The proposition types are respectively `daily_operating_costs`,
 `weekly_operating_costs`, and `annual_operating_costs`. The unit is preserved; no
 currency conversion occurs. V1 accepts only exact one-day, seven-day, and 365-day
 source periods respectively, and emits the normalized monthly equivalent over an
-explicit 30-day target period beginning at the source-period start. Phase 4 does
+explicit 30-day target period beginning at the source-period start. The legacy
+machine quantity `normalized_monthly_operating_costs` and TO-MONTHLY rule-name
+segments remain compatibility identifiers, not calendar-month claims. Visible
+assumptions explicitly label the strict30-day equivalent in the app, Brief and
+Annex. A366-day annual/calendar period is not silently accepted; the rule requires
+365 elapsed days, independent of leap-year boundaries. Direct monthly observations
+retain their supplied periods/value types and are never silently combined with
+normalized equivalents. Phase 4 does
 not normalize incompatible periods, gross versus net, tax treatment, or business
 versus personal flows.
 

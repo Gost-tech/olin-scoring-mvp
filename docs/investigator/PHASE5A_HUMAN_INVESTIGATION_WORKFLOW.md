@@ -26,6 +26,13 @@ Catalogue version `investigator-action-catalogue-1.0` permits:
 
 1. Request a missing account/payment-channel coverage record.
 2. Clarify the period and scope of the merchant revenue assertion.
+
+V1 release cleanup removes the fixture amount from the second action's display
+question. Catalogue1.0 is retained: this is amount-neutral wording, not a change
+to action identifiers, questions, prerequisites, effects or executable semantics.
+Migration0006 pins the existing semantic version; no migration/grant change is
+needed. Historical selections retain their original wording and selection digest.
+
 The append-only lifecycle is `SELECTED -> REQUESTED -> RESPONSE_RECEIVED`, then
 either `EVIDENCE_ACCEPTED`, `COMPLETED_UNRESOLVED`, `STOPPED`, or `ESCALATED`.
 This bounded catalogue cannot mark a question resolved: the supported coverage

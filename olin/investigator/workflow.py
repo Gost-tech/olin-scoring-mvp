@@ -113,7 +113,7 @@ _CATALOGUE = {
         question_id="merchant-revenue-claim-scope",
         unresolved_question=(
             "What exact period, business scope, and channels does the merchant's "
-            "260,000 MXN revenue assertion describe?"
+            "revenue assertion describe?"
         ),
         purpose="Clarify the meaning of an attributed merchant assertion.",
         permitted_data_scope=(

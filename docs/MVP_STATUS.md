@@ -14,8 +14,19 @@ Accepted development: deterministic Phase0–4 foundations, bounded synthetic
 human investigation and paired read-only Phase6 reports. Phase5B is research-only:
 model narrative usefulness/representative cases remain unvalidated. Guarded hosted
 analyst wiring now reuses the isolated runner; it is tested with mocked HTTPS and
-the explicitly fake browser path, NOT live hosted application inference. Latest
-generation changes have not been evaluated live. Inference remains exhausted6/6.
+the explicitly fake browser path. Subsequently one separately founder-authorized
+real request passed through the guarded application at
+`d9806918c68761c30ba9ec7d5324445dd2be4905`: OpenAI/gpt-5.4-mini-2026-03-17,
+HTTP completed, structurally valid ABSTAINED; disclosure, blinding, currentness
+and development process/environment custody passed. This is reused execution-session
+evidence (`output/hosted-app-live1`), not new execution in the release closure.
+Cumulative requests: seven; all authorizations exhausted. AI USEFULNESS and
+CREDIT PERFORMANCE: NOT ESTABLISHED; unperformed outcomes UNKNOWN.
+
+MODEL SEMANTIC LIMITATION — RECORDED: the abstention claimed no merchant assertion
+was present despite claimed revenue and claim/action eligibility in the saved
+input; it also blurred applicability and acquisition permission. Safe abstention
+is permitted and is not an authority defect. No prompt tuning or forced proposal.
 Phase7 attributable annotations/cohorts ACCEPTED at
 `04bdccdca483d6f42a02990c159288753b846e61` by Brice's conditional sign-off,
 satisfied by the scoped acceptance check. Prior CI35544712410 passed507 discovery
@@ -24,9 +35,11 @@ connected-launcher operator gap is repaired by the scoped launcher wiring; its
 candidate validation/browser evidence is reported separately, not a new phase or
 reopening Phase7 acceptance.
 
-Deferred release checks: generic catalogue wording tied to260,000MXN; targeted
-monthly-normalization convention review (not a confirmed defect); separately
-authorized live hosted application validation; representative-case/model-semantic validation;
+Synthetic V1 closure candidate: amount-neutral catalogue wording; strict30-day
+cost equivalence under Phase4rules1.1; report-template2 displays assumptions.
+Conditional founder release acceptance is recorded against the final exact SHA
+in the release handoff only after all gates pass. No production acceptance.
+Remaining research/external work: representative-case/model-semantic validation;
 real evidence intake, accountable operating ownership and bank prerequisites.
 Development-scale whole-history reads still need an operating-scale decision.
 Production SSO, hosting, data permissions, retention/deletion and bank usefulness

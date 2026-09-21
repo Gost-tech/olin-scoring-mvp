@@ -68,9 +68,7 @@ def digest(value: object) -> str:
 
 # Frozen projection of server-owned catalogue metadata, drift-tested against the
 # source catalogue without importing workflow/evidence modules into the runner.
-# Never include a case-specific question
-# (the existing merchant question includes a fixture amount). Purpose describes
-# the question topic without leaking that fixture's expected answer.
+# Purpose describes the question topic; display wording is not model guidance.
 ACTION_CATALOGUE_VERSION = "investigator-action-catalogue-1.0"
 CATALOGUE_GUIDANCE = {
     ACTIONS[0]: {

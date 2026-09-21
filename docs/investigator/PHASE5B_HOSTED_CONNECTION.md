@@ -1,5 +1,13 @@
 # Phase 5B hosted connection — shadow-hosted-1
 
+Current execution evidence: one separately approved real guarded application
+request at d9806918c68761c30ba9ec7d5324445dd2be4905 returned a valid ABSTAINED result.
+Disclosure, blinding, currentness and development environment custody passed;
+model semantic concerns remain recorded in MVP_STATUS.md and output/hosted-app-live1.
+Cumulative requests seven, authorization exhausted. The historical six-call and
+evaluator-only wording below remains attributed to its original session, not a
+restriction overriding shadow-application-hosted-1. No new inference is authorized.
+
 Current application integration amendment: `shadow-application-hosted-1` in
 PHASE5B_SHADOW_RESEARCH.md narrowly permits the existing isolated loopback runner
 to identify as OpenAI. The original evaluator-only statements below are historical.
