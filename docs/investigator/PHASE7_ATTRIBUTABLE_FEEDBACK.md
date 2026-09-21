@@ -1,6 +1,11 @@
 # Phase 7 — bounded synthetic annotations and declared cohorts
 
-Status: implementation candidate, not development acceptance or bank approval.
+Status: bounded synthetic development ACCEPTED by Brice at
+`04bdccdca483d6f42a02990c159288753b846e61` after the scoped acceptance check.
+That check reused focused-review/CI35544712410 evidence (507 discovery including
+104 database tests), and separately exercised feedback/report/cohort controls.
+It found a connected-launcher operator configuration gap, not a Phase7 authority
+defect. The integration repair below does not grant bank/production approval.
 
 ## Reuse and gaps
 
@@ -88,21 +93,50 @@ rectification, deletion or legal obligations; those require separate approval.
 ## Disposable demonstration
 
 Use existing PostgreSQL16 and the locked Python environment with psycopg. Prepare
-an empty UTF-8 database named `phase7_investigator_test`, then run:
+an empty UTF-8 database named `phase7_investigator_test` on a dedicated disposable
+PostgreSQL16 cluster (no existing OLIN fixture roles or concurrent users), then run:
 
 ```sh
 OLIN_INVESTIGATOR_TEST_ADMIN_DSN='host=127.0.0.1 port=55443 dbname=phase7_investigator_test' \
 OLIN_INVESTIGATOR_TEST_DISPOSABLE=YES PYTHONPATH=. \
-python scripts/run_investigator_feedback_demo.py --port 8767
+python scripts/run_investigator_feedback_demo.py --port 8767 --operator-port 8768
 ```
 
 This development-only operator uses existing canonical fixtures and migrations
-through0008, freezes three explicit members and starts a separate least-privilege
-analyst child without setup/evidence-writer/model credentials. Do not share the
-database with tests or another service. It prints only synthetic case/cohort IDs
-and the loopback URL. Stop with Ctrl-C to tear down its disposable fixture schemas.
+through0008, freezes three explicit members and starts TWO separate loopback
+processes: the existing synthetic operator and least-privilege analyst app. The
+useful case starts with UNKNOWN account coverage; setup does not pre-accept the
+coverage response. The operator receives only tenant runtime/evidence-authority
+connections. The app receives its runtime/action/reader/feedback connections and
+the dedicated local operator URL/token, never admin/canonical-writer/cohort/model
+credentials. Both child environments are explicit; no inherited provider secrets.
+
+Before any fixture mutation, the launcher requires explicit disposable YES,
+an explicit127.0.0.1 host/port and *_investigator_test database, PostgreSQL16,
+UTF8, empty user schemas/relations/routines, no OLIN roles or concurrent sessions.
+DSN fields are limited to host/port/dbname/user/password. Unset libpq PG* overrides;
+they are rejected rather than letting hostaddr/service redirect fixture setup.
+Both distinct unprivileged ports must be free. Do not share the database/cluster
+with tests or another service. No database is created or dropped by this launcher.
+
+READY is printed only after bounded HTTP readiness: authenticated unknown-fixture
+operator request (409, no evidence mutation) and app GET shell (200). Only synthetic
+IDs/loopback URL are printed; child output/errors are suppressed and startup errors
+are redacted. No false success fallback is added. Unexpected child exit stops its
+peer. Ctrl-C/SIGTERM stops/reaps owned children before fixture teardown; repeated
+signals cannot interrupt cleanup. Partial startup uses the same cleanup. If child
+termination cannot be confirmed, schemas are preserved rather than dropped under
+a running service. Cleanup is restricted to initially absent fixture schemas and
+known migration/generated roles, never a database or unrelated process.
 Log in as `SYNTHETIC-analyst` / `synthetic-feedback-demo-only` (public fixture values,
 not provider credentials). Use the printed useful/uncertain/unobserved case IDs.
-Capture each report before initial feedback; record explicitly synthetic judgments,
+Open the useful case; select account coverage, Mark requested, Simulate supported
+response, then Complete unresolved. The canonical operator alone accepts the
+proposition; refresh must show a new snapshot and account coverage COMPLETE while
+channel coverage/sustainable revenue remain unknown. Capture the updated paired
+reports before feedback; the prior displayed report is cleared on refresh.
+Record explicitly synthetic judgments,
 external source descriptions, corrections and inspect the cohort. Leave the third
 member unobserved. No shell commands are needed during that analyst journey.
+Shadow AI is not started by this launcher. Hosted analyst integration remains a
+separate release gap; no inference is authorized by setup.

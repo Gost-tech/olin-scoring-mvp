@@ -14,7 +14,13 @@ Accepted development: deterministic Phase0–4 foundations, bounded synthetic
 human investigation and paired read-only Phase6 reports. Phase5B is research-only:
 model narrative usefulness/representative cases and guarded hosted analyst
 integration remain unvalidated. Inference allowance is exhausted at6/6.
-Phase7 attributable annotations/cohorts are under implementation, NOT accepted.
+Phase7 attributable annotations/cohorts ACCEPTED at
+`04bdccdca483d6f42a02990c159288753b846e61` by Brice's conditional sign-off,
+satisfied by the scoped acceptance check. Prior CI35544712410 passed507 discovery
+tests including104 PostgreSQL tests; acceptance reused that evidence. The separate
+connected-launcher operator gap is repaired by the scoped launcher wiring; its
+candidate validation/browser evidence is reported separately, not a new phase or
+reopening Phase7 acceptance.
 
 Deferred release checks: generic catalogue wording tied to260,000MXN; targeted
 monthly-normalization convention review (not a confirmed defect); hosted shadow
